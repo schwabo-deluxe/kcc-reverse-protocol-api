@@ -1,0 +1,19 @@
+{
+  "Url": "wss://10.20.220.33/ws",
+  "User": "dein-benutzer",
+  "Password": null,
+  "AllowUntrustedCertificate": true,
+  "Database": "kcc-telegrams.db",
+  "PollIntervalSeconds": 3,
+  "BatchSize": 500,
+  "Filter": {
+    "MinDataLength": 1,
+    "IgnoreAllZeroData": true,
+    "ConnectionWhitelist": [],
+    "ConnectionBlacklist": [],
+    "Directions": [],
+    "DataMatchRegex": null,
+    "DataIgnoreRegex": null,
+    "FilterEmptyDataOnServer": true
+  }
+}

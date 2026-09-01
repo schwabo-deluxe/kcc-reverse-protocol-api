@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{164415E4-80DD-4060-9A88-A0EE8F108F5F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kcc.Recorder", "src\Kcc.Recorder\Kcc.Recorder.csproj", "{56F53B71-8217-42B1-A0EA-A608C39259A9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{7D9A7F74-B0A8-43F3-9464-BF578D46FF3B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kcc.Recorder.Tests", "tests\Kcc.Recorder.Tests\Kcc.Recorder.Tests.csproj", "{EF7D1148-E4C4-4297-B063-B66C940790EB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{56F53B71-8217-42B1-A0EA-A608C39259A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56F53B71-8217-42B1-A0EA-A608C39259A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56F53B71-8217-42B1-A0EA-A608C39259A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56F53B71-8217-42B1-A0EA-A608C39259A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF7D1148-E4C4-4297-B063-B66C940790EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF7D1148-E4C4-4297-B063-B66C940790EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF7D1148-E4C4-4297-B063-B66C940790EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF7D1148-E4C4-4297-B063-B66C940790EB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{56F53B71-8217-42B1-A0EA-A608C39259A9} = {164415E4-80DD-4060-9A88-A0EE8F108F5F}
+		{EF7D1148-E4C4-4297-B063-B66C940790EB} = {7D9A7F74-B0A8-43F3-9464-BF578D46FF3B}
+	EndGlobalSection
+EndGlobal

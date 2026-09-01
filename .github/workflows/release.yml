@@ -1,0 +1,56 @@
+name: Release
+
+# Ein Tag wie v1.2.3 baut die Windows-EXE und hängt sie an ein Release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Version aus dem Tag ableiten
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: dotnet test --configuration Release
+
+      - name: Self-contained Single-File-EXE bauen
+        run: |
+          dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj \
+            --configuration Release \
+            --runtime win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${{ steps.version.outputs.version }} \
+            --output publish
+
+      - name: Paket schnüren
+        run: |
+          mkdir -p artifacts
+          cp kcc.example.json publish/
+          cp README.md publish/
+          cd publish
+          zip -r "../artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip" kcc.exe kcc.example.json README.md
+          cd ../artifacts
+          sha256sum "kcc-${{ steps.version.outputs.version }}-win-x64.zip" > SHA256SUMS.txt
+
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip
+            artifacts/SHA256SUMS.txt
+          generate_release_notes: true

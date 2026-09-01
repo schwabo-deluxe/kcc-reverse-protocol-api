@@ -1,0 +1,13 @@
+bin/
+obj/
+publish/
+artifacts/
+
+# Enthält Zugangsdaten — nur kcc.example.json gehört ins Repo.
+kcc.json
+
+# Aufgezeichnete Telegramme
+*.db
+*.db-wal
+*.db-shm
+*.csv
