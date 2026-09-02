@@ -78,6 +78,44 @@ public class TelegramUtilizationTests
     }
 
     [Fact]
+    public void Rastert_den_Verlauf_in_Fuenf_Minuten_Eimer()
+    {
+        // Fenster 12:00–13:00, Raster 5 min: zwei Telegramme im Eimer 12:00, eines um 12:55.
+        var window = new[]
+        {
+            T(1, 59, "DA21"),
+            T(2, 57, "DA21"),
+            T(3, 3, "DA21"),
+        };
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, now: Now,
+            bucketMinutes: 5);
+
+        Assert.Equal(5, u.BucketMinutes);
+        var series = Point(u, "DA21").Series;
+        Assert.Equal(12, series.Count);
+        Assert.Equal(Now.AddMinutes(-60), series[0].At);
+        Assert.Equal(2, series[0].Count);
+        Assert.Equal(24, series[0].Uph);   // 2 je 5 min = 24/h
+        Assert.Equal(0, series[1].Count);
+        Assert.Equal(1, series[11].Count);
+        Assert.Equal(3, series.Sum(b => b.Count));
+    }
+
+    [Fact]
+    public void Rastert_auch_bei_unteilbarem_Fenster_lueckenlos()
+    {
+        var u = TelegramUtilization.Compute(
+            [T(1, 1, "DA21")], TelegramFormat.Default, windowMinutes: 7, targetUph: 200, now: Now,
+            bucketMinutes: 5);
+
+        var series = Point(u, "DA21").Series;
+        Assert.Equal(2, series.Count);
+        Assert.Equal(1, series.Sum(b => b.Count));
+    }
+
+    [Fact]
     public void Nimmt_eigene_Punktliste_und_leeres_Fenster()
     {
         var u = TelegramUtilization.Compute(

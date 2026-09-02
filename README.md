@@ -118,7 +118,8 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /` | Dashboard (eine HTML-Datei, pollt `/api/kpis` jede Minute) |
 | `GET /api/kpis?minutes=60` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=60&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
-| `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert) |
+| `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt) |
+| `GET /api/utilization?minutes=60&target=200&bucket=5` | Dieselbe Auswertung als JSON |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId` |
 
 `minutes` wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,

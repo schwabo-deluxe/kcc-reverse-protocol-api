@@ -29,6 +29,16 @@ public static class UtilizationDashboard
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
           .tile .value { font-size: 26px; font-weight: 600; margin-top: 6px; }
           .tile .sub { color: #9aa4b2; font-size: 12px; margin-top: 4px; }
+          .spark { margin-top: 10px; display: block; width: 100%; height: 54px; overflow: visible; }
+          .spark .grid { stroke: #2a2f37; stroke-width: 1; }
+          .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
+          .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+          .spark .dot { r: 2.5; }
+          .spark .hit { fill: transparent; }
+          .spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
+          .axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
+          #tip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s; background: #10141a; border: 1px solid #2a2f37; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
+          #tip b { font-weight: 600; }
           .bar { height: 6px; background: #10141a; border-radius: 99px; margin-top: 10px; overflow: hidden; }
           .bar > i { display: block; height: 100%; border-radius: 99px; }
           table { width: 100%; border-collapse: collapse; margin-top: 22px; background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; overflow: hidden; }
@@ -44,10 +54,12 @@ public static class UtilizationDashboard
           <h1>Auslastung (TSPORD)</h1>
           <label>Fenster (min) <input type="number" id="minutes" value="60" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
+          <label>Raster (min) <input type="number" id="bucket" value="5" min="1" max="120"></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>
           <div class="tiles" id="tiles"></div>
+          <div id="tip" role="status"></div>
           <table>
             <thead><tr>
               <th>Ressourcenpunkt</th><th>TSPORD</th><th>UPH/h</th>
@@ -66,14 +78,53 @@ public static class UtilizationDashboard
           return '#5ccb7e';
         }
 
+        // Verlauf als Sparkline: gemeinsame Y-Skala über alle Punkte, damit die Kacheln
+        // untereinander vergleichbar bleiben. Gestrichelt: der Richtwert.
+        function spark(point, scaleMax, target) {
+          const w = 240, h = 54, s = point.series;
+          if (s.length < 2) return '<svg class="spark" viewBox="0 0 240 54"></svg>';
+
+          const x = i => (i / (s.length - 1)) * w;
+          const y = v => h - (Math.min(v, scaleMax) / scaleMax) * h;
+          const line = s.map((b, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(b.uph).toFixed(1)}`).join(' ');
+          const stroke = color(point.percent);
+          const targetY = y(target);
+
+          const dots = s.map((b, i) =>
+            `<circle class="dot" cx="${x(i).toFixed(1)}" cy="${y(b.uph).toFixed(1)}" fill="${stroke}" ` +
+            `opacity="0" data-i="${i}"></circle>`).join('');
+
+          return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+                       data-point="${point.resourcePoint}">
+            <line class="grid" x1="0" y1="${h}" x2="${w}" y2="${h}"></line>
+            ${targetY >= 0 ? `<line class="target" x1="0" y1="${targetY.toFixed(1)}" x2="${w}" y2="${targetY.toFixed(1)}"></line>` : ''}
+            <path class="line" d="${line}" stroke="${stroke}"></path>
+            ${dots}
+            <line class="cursor" y1="0" y2="${h}"></line>
+            <rect class="hit" x="0" y="0" width="${w}" height="${h}"></rect>
+          </svg>`;
+        }
+
+        let current = null;
+
         function render(data) {
+          current = data;
           $('target').value = data.targetUph;
+          $('bucket').value = data.bucketMinutes;
+
+          // Eine Skala für alle Kacheln — mindestens bis zum Richtwert.
+          const peak = Math.max(
+            data.targetUph,
+            ...data.points.flatMap(p => p.series.map(b => b.uph)));
+
           $('tiles').innerHTML = data.points.map(p => `
             <div class="tile">
               <div class="label">${p.resourcePoint}</div>
               <div class="value" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
               <div class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</div>
               <div class="bar"><i style="width:${Math.min(100, p.percent)}%;background:${color(p.percent)}"></i></div>
+              ${spark(p, peak, data.targetUph)}
+              <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
             </div>`).join('');
 
           $('rows').innerHTML = data.points.map(p => `
@@ -88,14 +139,55 @@ public static class UtilizationDashboard
 
           $('meta').classList.remove('err');
           $('meta').textContent =
-            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Stand ${new Date().toLocaleTimeString('de-DE')}`;
+            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Raster ${data.bucketMinutes} min` +
+            ` · Stand ${new Date().toLocaleTimeString('de-DE')}`;
         }
+
+        // Ein Hover-Handler für alle Sparklines: nächstliegender Stützpunkt, Fadenkreuz, Tooltip.
+        function nearest(svg, clientX) {
+          const box = svg.getBoundingClientRect();
+          const point = current?.points.find(p => p.resourcePoint === svg.dataset.point);
+          if (!point || point.series.length < 2 || box.width === 0) return null;
+
+          const ratio = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
+          const i = Math.round(ratio * (point.series.length - 1));
+          return { point, i, bucket: point.series[i] };
+        }
+
+        document.addEventListener('mousemove', e => {
+          const svg = e.target.closest?.('.spark');
+          const hit = svg ? nearest(svg, e.clientX) : null;
+          document.querySelectorAll('.spark .dot').forEach(d => d.setAttribute('opacity', '0'));
+          document.querySelectorAll('.spark .cursor').forEach(c => c.style.visibility = 'hidden');
+
+          if (!hit) { $('tip').style.opacity = 0; return; }
+
+          const dot = svg.querySelector(`.dot[data-i="${hit.i}"]`);
+          if (dot) dot.setAttribute('opacity', '1');
+          const cursor = svg.querySelector('.cursor');
+          if (cursor && dot) {
+            cursor.setAttribute('x1', dot.getAttribute('cx'));
+            cursor.setAttribute('x2', dot.getAttribute('cx'));
+            cursor.style.visibility = 'visible';
+          }
+
+          const at = new Date(hit.bucket.at);
+          const tip = $('tip');
+          tip.innerHTML =
+            `<b>${hit.point.resourcePoint}</b> · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
+            `<br>${fmt(hit.bucket.uph)} UPH/h · ${hit.bucket.count} Telegramme`;
+          tip.style.opacity = 1;
+          tip.style.left = Math.min(window.innerWidth - 180, e.clientX + 12) + 'px';
+          tip.style.top = (e.clientY + 14) + 'px';
+        });
 
         async function load() {
           const minutes = Math.min(1440, Math.max(1, parseInt($('minutes').value, 10) || 60));
           const target = Math.max(1, parseFloat($('target').value) || 200);
           try {
-            const res = await fetch(`api/utilization?minutes=${minutes}&target=${target}`, { cache: 'no-store' });
+            const bucket = Math.min(120, Math.max(1, parseInt($('bucket').value, 10) || 5));
+            const res = await fetch(
+              `api/utilization?minutes=${minutes}&target=${target}&bucket=${bucket}`, { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             render(await res.json());
           } catch (e) {
@@ -104,7 +196,7 @@ public static class UtilizationDashboard
           }
         }
 
-        for (const id of ['minutes', 'target']) $(id).addEventListener('change', load);
+        for (const id of ['minutes', 'target', 'bucket']) $(id).addEventListener('change', load);
         load();
         setInterval(load, 60000);
         </script>

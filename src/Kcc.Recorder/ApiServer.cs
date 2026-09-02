@@ -13,7 +13,7 @@ namespace Kcc.Recorder;
 ///   <item><c>GET /api/kpis?minutes=60</c> — Kennzahlen über das Zeitfenster</item>
 ///   <item><c>GET /api/telegrams?minutes=60&amp;limit=2000</c> — Telegramme des Zeitfensters</item>
 ///   <item><c>GET /auslastung</c> — Auslastung der Ressourcenpunkte</item>
-///   <item><c>GET /api/utilization?minutes=60&amp;target=200</c> — Auslastung als JSON</item>
+///   <item><c>GET /api/utilization?minutes=60&amp;target=200&amp;bucket=5</c> — Auslastung als JSON</item>
 ///   <item><c>GET /health</c></item>
 /// </list>
 /// </summary>
@@ -93,7 +93,7 @@ public static class ApiServer
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
                     break;
                 case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx), Target(ctx, config)));
+                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx), Target(ctx, config), Bucket(ctx)));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -129,11 +129,12 @@ public static class ApiServer
     }
 
     static TelegramUtilization Utilization(
-        KccConfig config, TelegramFormat format, int minutes, double target)
+        KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes)
     {
         using var store = new TelegramStore(config.Database);
         return TelegramUtilization.Compute(
-            ReadWindow(store, minutes, out _), format, minutes, target, DateTime.Now, config.ResourcePoints);
+            ReadWindow(store, minutes, out _), format, minutes, target, DateTime.Now,
+            config.ResourcePoints, bucketMinutes);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -175,6 +176,9 @@ public static class ApiServer
 
     static int Limit(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);
+
+    static int Bucket(HttpListenerContext ctx) =>
+        Clamp(ctx.Request.QueryString["bucket"], fallback: 5, min: 1, max: 120);
 
     static double Target(HttpListenerContext ctx, KccConfig config) =>
         double.TryParse(ctx.Request.QueryString["target"],
