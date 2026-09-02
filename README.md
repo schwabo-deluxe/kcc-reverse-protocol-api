@@ -26,6 +26,7 @@ versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme h
 | `kcc query --take 100 [--json]` | Einmalabfrage auf stdout — zum Abgleich mit dem Web-Grid |
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
+| `kcc serve [--listen http://…/]` | Lese-API + Dashboard starten (Standard: `ApiUrl`) |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -96,6 +97,31 @@ nur aus dem 16 Zeichen langen Kopf plus Füllbytes bestehen — echte Nutztelegr
 (`…TSPORD0150…`, `…RPFREE0150…`, `…0150…END.`) tragen dagegen alle das Feld `0150`. So landen nur
 Telegramme mit tatsächlichem Inhalt in der Datenbank. Auf `null` setzen, um wieder alles
 aufzuzeichnen.
+
+## Dashboard / API
+
+`kcc serve` startet eine kleine **Lese-API** (auf `HttpListener`, keine zusätzliche Abhängigkeit)
+samt eingebettetem Dashboard. Sie liest dieselbe SQLite-Datei wie der Recorder — `kcc record` und
+`kcc serve` laufen also parallel in zwei Prozessen.
+
+```
+kcc serve                       # http://localhost:8080/  (aus ApiUrl)
+kcc serve --listen http://localhost:9000/
+```
+
+| Endpunkt | Zweck |
+|---|---|
+| `GET /` | Dashboard (eine HTML-Datei, pollt `/api/kpis` jede Minute) |
+| `GET /api/kpis?minutes=60` | Kennzahlen über das Zeitfenster |
+| `GET /api/telegrams?minutes=60&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
+| `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId` |
+
+`minutes` wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
+Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Lag des jüngsten Telegramms, aktive
+Verbindungen sowie Verteilung nach Richtung, Verbindung und `MessageCode`.
+
+`http://localhost:PORT/` läuft unter Windows ohne Sonderrechte. Für `http://+:PORT/` oder einen
+festen Hostnamen ist einmalig `netsh http add urlacl url=http://+:PORT/ user=<DOMAIN\User>` nötig.
 
 ## Wie es funktioniert
 

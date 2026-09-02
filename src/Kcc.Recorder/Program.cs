@@ -39,6 +39,7 @@ try
         "record" => await RecordAsync(config, cancellation.Token),
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
         "prune" => Prune(config, cli),
+        "serve" => await ServeAsync(config, cli, cancellation.Token),
         "export" => Export(config, cli),
         _ => UnknownCommand(cli.Command),
     };
@@ -179,6 +180,15 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
     return 0;
 }
 
+async Task<int> ServeAsync(KccConfig config, CommandLine cli, CancellationToken ct)
+{
+    if (cli.GetString("listen") is { } apiUrl)
+        config.ApiUrl = apiUrl;
+
+    await ApiServer.RunAsync(config, Log, ct);
+    return 0;
+}
+
 int Prune(KccConfig config, CommandLine cli)
 {
     var days = cli.GetInt("days") ?? config.RetentionDays;
@@ -275,6 +285,7 @@ static void PrintUsage() => Console.WriteLine(
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
+      serve   [--listen http://…/]     Lese-API + Dashboard starten (Standard: ApiUrl)
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
 

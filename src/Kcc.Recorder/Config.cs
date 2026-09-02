@@ -67,6 +67,12 @@ public sealed class KccConfig
     /// </summary>
     public int RetentionDays { get; set; } = 365;
 
+    /// <summary>
+    /// Adresse für <c>kcc serve</c> (Lese-API + Dashboard). HttpListener-Präfix;
+    /// <c>http://localhost:PORT/</c> braucht unter Windows keine Rechte.
+    /// </summary>
+    public string ApiUrl { get; set; } = "http://localhost:8080/";
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 
