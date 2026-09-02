@@ -37,6 +37,12 @@ public static class UtilizationDashboard
           .spark .hit { fill: transparent; }
           .spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
           .axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
+          .grp { margin-bottom: 24px; }
+          .grp-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 2px 10px; }
+          .grp-name { font-size: 13px; font-weight: 600; color: #cdd6e0; text-transform: uppercase; letter-spacing: .04em; }
+          .grp-sum { font-size: 12px; font-variant-numeric: tabular-nums; }
+          tr.grp td { background: #171b21; font-weight: 600; }
+          td.sub-row { padding-left: 24px; color: #cdd6e0; }
           #tip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s; background: #10141a; border: 1px solid #2a2f37; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
           #tip b { font-weight: 600; }
           .bar { height: 6px; background: #10141a; border-radius: 99px; margin-top: 10px; overflow: hidden; }
@@ -125,25 +131,44 @@ public static class UtilizationDashboard
             data.targetUph,
             ...data.points.flatMap(p => p.series.map(b => b.uph)));
 
-          $('tiles').innerHTML = data.points.map(p => `
+          const byName = n => data.points.find(p => p.resourcePoint === n);
+
+          const tile = p => `
             <div class="tile">
-              <div class="label">${p.resourcePoint}</div>
+              <div class="label">${p.label || p.resourcePoint}</div>
               <div class="value" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
               <div class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</div>
               <div class="bar"><i style="width:${Math.min(100, p.percent)}%;background:${color(p.percent)}"></i></div>
               ${spark(p, peak, data.targetUph)}
               <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
-            </div>`).join('');
+            </div>`;
 
-          $('rows').innerHTML = data.points.map(p => `
-            <tr>
-              <td>${p.resourcePoint}</td>
-              <td>${p.count}</td>
-              <td>${fmt(p.uph)}</td>
-              <td style="color:${color(p.percent)}">${fmt(p.percent)} %</td>
-              <td class="${p.errors ? 'err' : ''}">${p.errors}</td>
-              <td>${p.latestAt ? new Date(p.latestAt).toLocaleTimeString('de-DE') : '–'}</td>
-            </tr>`).join('');
+          // Kacheln nach Gruppe gebündelt.
+          $('tiles').innerHTML = data.groups.map(g => `
+            <section class="grp">
+              <div class="grp-h">
+                <span class="grp-name">${g.name}</span>
+                <span class="grp-sum" style="color:${color(g.percent)}">
+                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH/h · ${g.count} Telegramme</span>
+              </div>
+              <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>
+            </section>`).join('');
+
+          // Tabelle: je Gruppe eine Summenzeile, darunter die Punkte.
+          $('rows').innerHTML = data.groups.map(g => `
+            <tr class="grp">
+              <td>${g.name}</td><td>${g.count}</td><td>${fmt(g.uph)}</td>
+              <td style="color:${color(g.percent)}">Ø ${fmt(g.percent)} %</td>
+              <td class="${g.errors ? 'err' : ''}">${g.errors}</td><td></td>
+            </tr>
+            ${g.points.map(n => byName(n)).map(p => `
+              <tr>
+                <td class="sub-row">${p.label || p.resourcePoint}</td>
+                <td>${p.count}</td><td>${fmt(p.uph)}</td>
+                <td style="color:${color(p.percent)}">${fmt(p.percent)} %</td>
+                <td class="${p.errors ? 'err' : ''}">${p.errors}</td>
+                <td>${p.latestAt ? new Date(p.latestAt).toLocaleTimeString('de-DE') : '–'}</td>
+              </tr>`).join('')}`).join('');
 
           $('meta').classList.remove('err');
           $('meta').textContent =

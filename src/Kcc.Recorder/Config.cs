@@ -35,6 +35,26 @@ public sealed class FilterConfig
 }
 
 /// <summary>
+/// Ein Ressourcenpunkt der Auslastungsauswertung. In <c>appsettings.json</c> entweder als
+/// Objekt <c>{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG 2" }</c> oder als
+/// bloßer String <c>"MA72"</c> (Gruppe/Label leer).
+/// </summary>
+public sealed class ResourcePointConfig
+{
+    /// <summary>Code wie im Telegramm-Feld <c>ResourcePoint</c>, z. B. <c>MA72</c>.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>Gruppe zur Strukturierung im Dashboard. Leer ⇒ „Ohne Gruppe".</summary>
+    public string? Group { get; set; }
+
+    /// <summary>Klartext fürs Dashboard. Leer ⇒ <see cref="Name"/>.</summary>
+    public string? Label { get; set; }
+
+    public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
+    public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
+}
+
+/// <summary>
 /// Gesamtkonfiguration. Wird aus <c>appsettings.json</c> gebunden und von lokaler Datei,
 /// Umgebungsvariablen und Kommandozeile überschrieben — siehe <see cref="Load"/>.
 /// </summary>
@@ -91,8 +111,11 @@ public sealed class KccConfig
     /// <summary>Richtwert in Einheiten pro Stunde, auf den sich die Auslastung in Prozent bezieht.</summary>
     public double UtilizationTargetUph { get; set; } = 200;
 
-    /// <summary>Ressourcenpunkte der Auslastungsauswertung. Leer = eingebaute Liste.</summary>
-    public List<string> ResourcePoints { get; set; } = [];
+    /// <summary>
+    /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.
+    /// Leer ⇒ eingebaute Liste (<see cref="TelegramUtilization.DefaultResourcePoints"/>).
+    /// </summary>
+    public List<ResourcePointConfig> ResourcePoints { get; set; } = [];
 
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;

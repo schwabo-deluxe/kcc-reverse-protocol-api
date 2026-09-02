@@ -17,6 +17,12 @@ public sealed record ResourcePointUtilization
 {
     public required string ResourcePoint { get; init; }
 
+    /// <summary>Klartext-Bezeichnung fürs Dashboard (Fallback: <see cref="ResourcePoint"/>).</summary>
+    public required string Label { get; init; }
+
+    /// <summary>Gruppe zur Strukturierung im Dashboard.</summary>
+    public required string Group { get; init; }
+
     /// <summary>Anzahl der <c>TSPORD</c>-Telegramme dieses Punkts im Fenster.</summary>
     public required int Count { get; init; }
 
@@ -33,6 +39,25 @@ public sealed record ResourcePointUtilization
     public required IReadOnlyList<UtilizationBucket> Series { get; init; }
 }
 
+/// <summary>Zusammenfassung einer Gruppe von Ressourcenpunkten.</summary>
+public sealed record UtilizationGroup
+{
+    public required string Name { get; init; }
+    public required int Count { get; init; }
+    public required double Uph { get; init; }
+
+    /// <summary>Mittlere Auslastung der Punkte dieser Gruppe in Prozent.</summary>
+    public required double Percent { get; init; }
+
+    public required int Errors { get; init; }
+
+    /// <summary>Namen der Punkte dieser Gruppe, in Eingabereihenfolge.</summary>
+    public required IReadOnlyList<string> Points { get; init; }
+
+    /// <summary>Summierter Verlauf über alle Punkte der Gruppe.</summary>
+    public required IReadOnlyList<UtilizationBucket> Series { get; init; }
+}
+
 /// <summary>
 /// Auslastung je Ressourcenpunkt, gemessen an den Auftragstelegrammen (<c>MessageCode</c>
 /// <c>TSPORD</c>). Reine Funktion über einem Zeitfenster — die API und die Tests rechnen damit
@@ -43,10 +68,20 @@ public sealed record TelegramUtilization
     /// <summary>Auf diesen <c>MessageCode</c> stützt sich die Messung.</summary>
     public const string MessageCode = "TSPORD";
 
-    /// <summary>Ressourcenpunkte, die das Dashboard standardmäßig ausweist.</summary>
-    public static readonly IReadOnlyList<string> DefaultResourcePoints =
+    /// <summary>Ressourcenpunkte samt Gruppe, die das Dashboard ohne Konfiguration ausweist.</summary>
+    public static readonly IReadOnlyList<ResourcePointConfig> DefaultResourcePoints =
     [
-        "DA21", "LB41", "EA21", "LD51", "MFA1", "MA72", "MB72", "MC72", "MD72", "ME71", "EB31",
+        new() { Name = "MA72", Group = "Auslagerung RBG" },
+        new() { Name = "MB72", Group = "Auslagerung RBG" },
+        new() { Name = "MC72", Group = "Auslagerung RBG" },
+        new() { Name = "MD72", Group = "Auslagerung RBG" },
+        new() { Name = "DA21", Group = "Fördertechnik" },
+        new() { Name = "LB41", Group = "Fördertechnik" },
+        new() { Name = "EA21", Group = "Fördertechnik" },
+        new() { Name = "LD51", Group = "Fördertechnik" },
+        new() { Name = "MFA1", Group = "Fördertechnik" },
+        new() { Name = "ME71", Group = "Fördertechnik" },
+        new() { Name = "EB31", Group = "Fördertechnik" },
     ];
 
     public required int WindowMinutes { get; init; }
@@ -64,6 +99,9 @@ public sealed record TelegramUtilization
 
     public required IReadOnlyList<ResourcePointUtilization> Points { get; init; }
 
+    /// <summary>Dieselben Punkte nach <see cref="ResourcePointConfig.Group"/> zusammengefasst.</summary>
+    public required IReadOnlyList<UtilizationGroup> Groups { get; init; }
+
     /// <param name="windowEnd">
     /// Rechter Rand des Fensters — üblicherweise der Zeitstempel des jüngsten Telegramms, nicht
     /// die Host-Uhr, damit das Fenster unabhängig von der Zeitzone der Anlage sitzt.
@@ -74,17 +112,27 @@ public sealed record TelegramUtilization
         int windowMinutes,
         double targetUph,
         DateTime windowEnd,
-        IReadOnlyList<string>? resourcePoints = null,
+        IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         int bucketMinutes = 5)
     {
         var now = windowEnd;
-        var points = resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints;
+
+        // Nur Einträge mit Namen; je Name der erste gewinnt, Reihenfolge bleibt erhalten.
+        var defs = (resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints)
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+        if (defs.Count == 0)
+            defs = DefaultResourcePoints.ToList();
+
+        var names = defs.Select(d => d.Name).ToList();
         var messageCode = FieldIndex(format, "MessageCode");
         var resourcePoint = FieldIndex(format, "ResourcePoint");
         var errorCode = FieldIndex(format, "ErrorCode");
 
-        var stats = points.ToDictionary(
-            p => p,
+        var stats = names.ToDictionary(
+            n => n,
             _ => (Count: 0, Errors: 0, Latest: (DateTime?)null),
             StringComparer.OrdinalIgnoreCase);
 
@@ -92,7 +140,7 @@ public sealed record TelegramUtilization
         var bucketWidth = Math.Max(1, bucketMinutes);
         var bucketCount = Math.Max(1, (int)Math.Ceiling(windowMinutes / (double)bucketWidth));
         var from = now.AddMinutes(-windowMinutes);
-        var buckets = points.ToDictionary(p => p, _ => new int[bucketCount], StringComparer.OrdinalIgnoreCase);
+        var buckets = names.ToDictionary(n => n, _ => new int[bucketCount], StringComparer.OrdinalIgnoreCase);
 
         var orders = 0;
         foreach (var telegram in window)
@@ -120,34 +168,69 @@ public sealed record TelegramUtilization
 
         var hours = windowMinutes / 60d;
         var bucketHours = bucketWidth / 60d;
+
+        UtilizationBucket Bucket(int count, int i) => new()
+        {
+            At = from.AddMinutes(i * bucketWidth),
+            Count = count,
+            Uph = Math.Round(count / bucketHours, 1),
+        };
+
+        var pointResults = defs.Select(d =>
+        {
+            var name = d.Name;
+            var s = stats[name];
+            var uph = hours > 0 ? s.Count / hours : 0;
+            return new ResourcePointUtilization
+            {
+                ResourcePoint = name,
+                Label = d.DisplayLabel,
+                Group = d.GroupOrDefault,
+                Count = s.Count,
+                Uph = Math.Round(uph, 1),
+                Percent = targetUph > 0 ? Math.Round(uph / targetUph * 100, 1) : 0,
+                Errors = s.Errors,
+                LatestAt = s.Latest,
+                Series = buckets[name].Select(Bucket).ToList(),
+            };
+        }).ToList();
+
+        // Gruppen in der Reihenfolge ihres ersten Auftretens.
+        var groupOrder = defs.Select(d => d.GroupOrDefault).Distinct().ToList();
+        var groups = groupOrder.Select(gName =>
+        {
+            var members = defs.Where(d => d.GroupOrDefault == gName).Select(d => d.Name).ToList();
+            var count = members.Sum(n => stats[n].Count);
+            var uph = hours > 0 ? count / hours : 0;
+            var sumBuckets = new int[bucketCount];
+            foreach (var n in members)
+                for (var i = 0; i < bucketCount; i++)
+                    sumBuckets[i] += buckets[n][i];
+
+            return new UtilizationGroup
+            {
+                Name = gName,
+                Count = count,
+                Uph = Math.Round(uph, 1),
+                Percent = targetUph > 0 && members.Count > 0
+                    ? Math.Round(uph / (targetUph * members.Count) * 100, 1)
+                    : 0,
+                Errors = members.Sum(n => stats[n].Errors),
+                Points = members,
+                Series = sumBuckets.Select(Bucket).ToList(),
+            };
+        }).ToList();
+
         return new TelegramUtilization
         {
             WindowMinutes = windowMinutes,
-            From = now.AddMinutes(-windowMinutes),
+            From = from,
             To = now,
             TargetUph = targetUph,
             TotalOrders = orders,
             BucketMinutes = bucketWidth,
-            Points = points.Select(p =>
-            {
-                var s = stats[p];
-                var uph = hours > 0 ? s.Count / hours : 0;
-                return new ResourcePointUtilization
-                {
-                    ResourcePoint = p,
-                    Count = s.Count,
-                    Uph = Math.Round(uph, 1),
-                    Percent = targetUph > 0 ? Math.Round(uph / targetUph * 100, 1) : 0,
-                    Errors = s.Errors,
-                    LatestAt = s.Latest,
-                    Series = buckets[p].Select((count, i) => new UtilizationBucket
-                    {
-                        At = from.AddMinutes(i * bucketWidth),
-                        Count = count,
-                        Uph = Math.Round(count / bucketHours, 1),
-                    }).ToList(),
-                };
-            }).ToList(),
+            Points = pointResults,
+            Groups = groups,
         };
     }
 

@@ -22,6 +22,9 @@ public class TelegramUtilizationTests
     static ResourcePointUtilization Point(TelegramUtilization u, string name) =>
         u.Points.Single(p => p.ResourcePoint == name);
 
+    static ResourcePointConfig RP(string name, string? group = null, string? label = null) =>
+        new() { Name = name, Group = group, Label = label };
+
     [Fact]
     public void Rechnet_Menge_auf_UPH_und_Prozent_hoch()
     {
@@ -121,13 +124,54 @@ public class TelegramUtilizationTests
     {
         var u = TelegramUtilization.Compute(
             [], TelegramFormat.Default, windowMinutes: 60, targetUph: 100, windowEnd: Now,
-            resourcePoints: ["ME71"]);
+            resourcePoints: [RP("ME71")]);
 
         var me71 = Assert.Single(u.Points);
         Assert.Equal("ME71", me71.ResourcePoint);
+        Assert.Equal("ME71", me71.Label);
+        Assert.Equal("Ohne Gruppe", me71.Group);
         Assert.Equal(0, me71.Count);
-        Assert.Equal(0, me71.Uph);
-        Assert.Equal(0, me71.Percent);
         Assert.Null(me71.LatestAt);
+    }
+
+    [Fact]
+    public void Fasst_Punkte_zu_Gruppen_zusammen()
+    {
+        var window = new[]
+        {
+            T(1, 30, "MA72"), T(2, 20, "MA72"), T(3, 10, "MB72"),  // Auslagerung RBG: 3 in 60 min
+            T(4, 15, "DA21"),                                       // Fördertechnik: 1
+        };
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints:
+            [
+                RP("MA72", "Auslagerung RBG", "RBG A"),
+                RP("MB72", "Auslagerung RBG", "RBG B"),
+                RP("DA21", "Fördertechnik"),
+            ]);
+
+        Assert.Equal(["Auslagerung RBG", "Fördertechnik"], u.Groups.Select(g => g.Name));
+        Assert.Equal("RBG A", Point(u, "MA72").Label);
+        Assert.Equal("Auslagerung RBG", Point(u, "MA72").Group);
+
+        var rbg = u.Groups.Single(g => g.Name == "Auslagerung RBG");
+        Assert.Equal(["MA72", "MB72"], rbg.Points);
+        Assert.Equal(3, rbg.Count);
+        Assert.Equal(3, rbg.Uph);                 // 3 Telegramme / 1 h
+        Assert.Equal(0.8, rbg.Percent);           // Math.Round(3 / (200*2) * 100, 1)
+        Assert.Equal(1, u.Groups.Single(g => g.Name == "Fördertechnik").Count);
+    }
+
+    [Fact]
+    public void Doppelte_Namen_werden_zusammengefuehrt()
+    {
+        var u = TelegramUtilization.Compute(
+            [T(1, 5, "MA72")], TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints: [RP("MA72", "A"), RP("MA72", "B")]);
+
+        Assert.Single(u.Points);
+        Assert.Equal("A", Point(u, "MA72").Group);
     }
 }
