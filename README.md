@@ -82,8 +82,9 @@ Type,3,A|TechnicalValues,20,A|WrapperProgram,4,A|LabelingProgramm,4,A|Command,8,
 Status,4,A|PlaceConfig,4,A|FinishId,4,A|Reserve,33,A
 ```
 
-Das ist das ab Werk in `appsettings.json` hinterlegte Standard-Layout (166 Zeichen). Rechts-Padding
-(Leerzeichen, NUL) wird je Feld abgeschnitten; zu kurze Blöcke ergeben leere Felder, überzählige
+Das ist das ab Werk in `appsettings.json` hinterlegte Standard-Layout (166 Zeichen). Die Anlage
+füllt Felder rechts mit **Punkten** auf (`MB11......`); Füllzeichen (`.`, Leerzeichen, NUL) werden
+je Feld abgeschnitten. Zu kurze Blöcke ergeben leere Felder, überzählige
 Zeichen werden ignoriert.
 
 ### Filter

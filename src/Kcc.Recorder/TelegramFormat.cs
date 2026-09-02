@@ -59,10 +59,13 @@ public sealed class TelegramFormat
         return new TelegramFormat(fields);
     }
 
+    /// <summary>Füllzeichen der Anlage: Punkt, Leerzeichen und NUL — werden je Feld rechts entfernt.</summary>
+    static readonly char[] Padding = ['.', ' ', '\0'];
+
     /// <summary>
     /// Zerlegt einen Data-Block anhand des Layouts — ein Wert je Feld, gleiche Reihenfolge wie
     /// <see cref="Fields"/>. Fehlende Zeichen ergeben leere Werte, überzählige werden ignoriert.
-    /// Padding (Leerzeichen, NUL) wird rechts abgeschnitten.
+    /// Füllzeichen (siehe <see cref="Padding"/>) werden rechts abgeschnitten.
     /// </summary>
     public IReadOnlyList<string> Slice(string? data)
     {
@@ -79,7 +82,7 @@ public sealed class TelegramFormat
             }
 
             var take = Math.Min(Fields[i].Length, text.Length - pos);
-            values[i] = text.Substring(pos, take).TrimEnd(' ', '\0');
+            values[i] = text.Substring(pos, take).TrimEnd(Padding);
             pos += Fields[i].Length;
         }
 

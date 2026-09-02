@@ -43,6 +43,7 @@ public class TelegramFormatTests
         var format = TelegramFormat.Parse("A,2|B,4|C,4");
 
         Assert.Equal(new[] { "12", "AB", "" }, format.Slice("12AB  "));   // B rechts gepaddet, C fehlt
+        Assert.Equal(new[] { "MB", "11", "" }, format.Slice("MB11......"));  // Anlage füllt mit Punkten
         Assert.Equal(new[] { "", "", "" }, format.Slice(null));
         Assert.Equal(new[] { "99", "3333", "44" }, format.Slice("99333344"));
     }

@@ -9,9 +9,10 @@ public class TelegramUtilizationTests
 
     // TelegramType(2) SequenceNumber(2) Sender(4) Receiver(4) TelegramCount(2) ErrorCode(2)
     // MessageCode(6) Length(4) ResourcePoint(10) …
+    // Die Anlage füllt Felder rechts mit Punkten auf.
     static string Data(string messageCode, string resourcePoint, string errorCode = "00") =>
         "DM" + "01" + "MFC1" + "CS01" + "01" + errorCode +
-        messageCode.PadRight(6) + "0166" + resourcePoint.PadRight(10);
+        messageCode.PadRight(6, '.') + "0166" + resourcePoint.PadRight(10, '.');
 
     static Telegram T(long id, int minutesAgo, string resourcePoint,
         string messageCode = "TSPORD", string errorCode = "00") =>
