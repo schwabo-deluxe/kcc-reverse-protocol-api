@@ -139,7 +139,7 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
         Log($"Zeichne auf nach {Path.GetFullPath(config.Database)} " +
             $"(bereits {store.Count()} Telegramme). Beenden mit Strg+C.");
         if (csv is not null)
-            Log($"Parallele CSV-Mitschrift: {csv.FilePath}");
+            Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
 
         var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.RunAsync(ct);
@@ -187,14 +187,15 @@ int Export(KccConfig config, CommandLine cli)
         return 2;
     }
 
+    var csv = new TelegramCsv(ResolveFormat(config));
     using var store = new TelegramStore(config.Database);
     using var writer = new StreamWriter(output, false, new UTF8Encoding(true));
-    writer.WriteLine(TelegramCsv.Header);
+    writer.WriteLine(csv.Header);
 
     var count = 0;
     foreach (var t in store.Read(cli.GetDateTime("from"), cli.GetDateTime("to")))
     {
-        writer.WriteLine(TelegramCsv.Row(t));
+        writer.WriteLine(csv.Row(t));
         count++;
     }
 
@@ -203,7 +204,12 @@ int Export(KccConfig config, CommandLine cli)
 }
 
 static TelegramCsvWriter? OpenCsv(KccConfig config) =>
-    config.CsvPath is { Length: > 0 } path ? new TelegramCsvWriter(path) : null;
+    config.CsvPath is { Length: > 0 } path
+        ? new TelegramCsvWriter(path, new TelegramCsv(ResolveFormat(config)))
+        : null;
+
+static TelegramFormat ResolveFormat(KccConfig config) =>
+    config.DataFormat is { Length: > 0 } spec ? TelegramFormat.Parse(spec) : TelegramFormat.Default;
 
 static string Prompt(string label)
 {

@@ -55,9 +55,25 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 |---|---|
 | `Database` | SQLite-Datei (Standard: `kcc-telegrams.db`) |
 | `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme bei `record`/`backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
+| `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
 Gleiches Semikolon-Format wie `kcc export` (UTF-8 mit BOM, für Excel im deutschen Gebietsschema).
+
+Neben den Stammspalten (`Id;DateTime;TelegramDirection;ConnectionName;Data`) wird der `Data`-Block
+anhand von `DataFormat` in **je eine Spalte pro Feld** zerlegt. Die Syntax entspricht dem
+`Format`-Feld der Anlage — pipe-getrennte Tripel `Name,Länge,Typ`:
+
+```
+TelegramType,2,A|SequenceNumber,2,A|Sender,4,A|Receiver,4,A|TelegramCount,2,A|ErrorCode,2,A|
+MessageCode,6,A|Length,4,A|ResourcePoint,10,A|ResourceLabel,20,A|Source,10,A|Destination,10,A|
+Type,3,A|TechnicalValues,20,A|WrapperProgram,4,A|LabelingProgramm,4,A|Command,8,A|Weight,6,A|
+Status,4,A|PlaceConfig,4,A|FinishId,4,A|Reserve,33,A
+```
+
+Das ist das ab Werk in `appsettings.json` hinterlegte Standard-Layout (166 Zeichen). Rechts-Padding
+(Leerzeichen, NUL) wird je Feld abgeschnitten; zu kurze Blöcke ergeben leere Felder, überzählige
+Zeichen werden ignoriert.
 
 ### Filter
 

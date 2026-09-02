@@ -55,6 +55,12 @@ public sealed class KccConfig
     /// </summary>
     public string? CsvPath { get; set; }
 
+    /// <summary>
+    /// Fixed-Width-Layout des <c>Data</c>-Blocks für die CSV-Spalten (Syntax "Name,Länge,Typ|…").
+    /// <c>null</c> nutzt das eingebaute Standard-Layout (<see cref="TelegramFormat.Default"/>).
+    /// </summary>
+    public string? DataFormat { get; set; }
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 
