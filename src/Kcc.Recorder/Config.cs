@@ -1,5 +1,5 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Globalization;
+using Microsoft.Extensions.Configuration;
 
 namespace Kcc.Recorder;
 
@@ -34,7 +34,10 @@ public sealed class FilterConfig
     public bool FilterEmptyDataOnServer { get; set; } = true;
 }
 
-/// <summary>Gesamtkonfiguration; wird aus kcc.json gelesen und von CLI/Umgebung überschrieben.</summary>
+/// <summary>
+/// Gesamtkonfiguration. Wird aus <c>appsettings.json</c> gebunden und von lokaler Datei,
+/// Umgebungsvariablen und Kommandozeile überschrieben — siehe <see cref="Load"/>.
+/// </summary>
 public sealed class KccConfig
 {
     public string Url { get; set; } = "wss://10.20.220.33/ws";
@@ -54,48 +57,65 @@ public sealed class KccConfig
 
     public FilterConfig Filter { get; set; } = new();
 
-    static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     /// <summary>
-    /// Lädt die Konfiguration in aufsteigender Priorität: Datei → Umgebungsvariablen → CLI-Argumente.
-    /// Ohne Pfadangabe wird kcc.json neben der ausführbaren Datei gesucht.
+    /// Baut die Konfiguration in aufsteigender Priorität (später schlägt früher):
+    /// <list type="number">
+    ///   <item><c>appsettings.json</c> — neben der EXE, dann im aktuellen Verzeichnis</item>
+    ///   <item><c>appsettings.local.json</c> — ebenda, für Zugangsdaten; gehört nicht ins Repo</item>
+    ///   <item>eine per <c>--config</c> angegebene JSON-Datei</item>
+    ///   <item>Umgebungsvariablen mit Präfix <c>KCC_</c> (z. B. <c>KCC_URL</c>, <c>KCC_PASSWORD</c>,
+    ///         geschachtelt <c>KCC_Filter__MinDataLength</c>)</item>
+    ///   <item>Kommandozeilen-Optionen (<c>--url</c>, <c>--user</c>, <c>--password</c>, <c>--db</c>,
+    ///         <c>--poll-interval</c>, <c>--batch-size</c>, <c>--insecure</c>)</item>
+    /// </list>
     /// </summary>
     public static KccConfig Load(CommandLine cli)
     {
-        var path = cli.GetString("config") ?? DefaultConfigPath();
-        var config = File.Exists(path)
-            ? JsonSerializer.Deserialize<KccConfig>(File.ReadAllText(path), Options) ?? new KccConfig()
-            : new KccConfig();
+        var builder = new ConfigurationBuilder();
 
-        config.Url = Environment.GetEnvironmentVariable("KCC_URL") ?? config.Url;
-        config.User = Environment.GetEnvironmentVariable("KCC_USER") ?? config.User;
-        config.Password = Environment.GetEnvironmentVariable("KCC_PASSWORD") ?? config.Password;
-        config.Database = Environment.GetEnvironmentVariable("KCC_DATABASE") ?? config.Database;
+        foreach (var dir in SearchDirectories())
+        {
+            builder.AddJsonFile(Path.Combine(dir, "appsettings.json"), optional: true, reloadOnChange: false);
+            builder.AddJsonFile(Path.Combine(dir, "appsettings.local.json"), optional: true, reloadOnChange: false);
+        }
 
-        config.Url = cli.GetString("url") ?? config.Url;
-        config.User = cli.GetString("user") ?? config.User;
-        config.Password = cli.GetString("password") ?? config.Password;
-        config.Database = cli.GetString("db") ?? config.Database;
-        config.AllowUntrustedCertificate = cli.HasFlag("insecure") || config.AllowUntrustedCertificate;
+        if (cli.GetString("config") is { } explicitPath)
+            builder.AddJsonFile(Path.GetFullPath(explicitPath), optional: false, reloadOnChange: false);
 
-        if (cli.GetInt("poll-interval") is { } poll)
-            config.PollIntervalSeconds = poll;
-        if (cli.GetInt("batch-size") is { } batch)
-            config.BatchSize = batch;
+        builder.AddEnvironmentVariables("KCC_");
+        builder.AddInMemoryCollection(CommandLineOverrides(cli));
 
+        var config = new KccConfig();
+        builder.Build().Bind(config);
         return config;
     }
 
-    static string DefaultConfigPath()
+    /// <summary>EXE-Verzeichnis zuerst, dann das aktuelle Arbeitsverzeichnis (falls abweichend).</summary>
+    static IEnumerable<string> SearchDirectories()
     {
-        var beside = Path.Combine(AppContext.BaseDirectory, "kcc.json");
-        return File.Exists(beside) ? beside : "kcc.json";
+        var beside = Path.GetFullPath(AppContext.BaseDirectory);
+        yield return beside;
+
+        var cwd = Path.GetFullPath(Directory.GetCurrentDirectory());
+        if (!string.Equals(cwd, beside, StringComparison.OrdinalIgnoreCase))
+            yield return cwd;
+    }
+
+    static IEnumerable<KeyValuePair<string, string?>> CommandLineOverrides(CommandLine cli)
+    {
+        if (cli.GetString("url") is { } url)
+            yield return new("Url", url);
+        if (cli.GetString("user") is { } user)
+            yield return new("User", user);
+        if (cli.GetString("password") is { } password)
+            yield return new("Password", password);
+        if (cli.GetString("db") is { } db)
+            yield return new("Database", db);
+        if (cli.GetInt("poll-interval") is { } poll)
+            yield return new("PollIntervalSeconds", poll.ToString(CultureInfo.InvariantCulture));
+        if (cli.GetInt("batch-size") is { } batch)
+            yield return new("BatchSize", batch.ToString(CultureInfo.InvariantCulture));
+        if (cli.HasFlag("insecure"))
+            yield return new("AllowUntrustedCertificate", "true");
     }
 }

@@ -3,7 +3,8 @@ obj/
 publish/
 artifacts/
 
-# Enthält Zugangsdaten — nur kcc.example.json gehört ins Repo.
+# Zugangsdaten — nur die Vorlage appsettings.json gehört ins Repo.
+appsettings.local.json
 kcc.json
 
 # Aufgezeichnete Telegramme

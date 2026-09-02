@@ -257,7 +257,7 @@ static void PrintUsage() => Console.WriteLine(
               [--from ...] [--to ...]
 
     Optionen:
-      --config datei    Konfigurationsdatei (Standard: kcc.json neben der EXE)
+      --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)
       --url wss://...   Endpunkt der Anlage
       --user name       Benutzername
       --password wert   Passwort (besser: KCC_PASSWORD oder interaktiv)
@@ -267,6 +267,9 @@ static void PrintUsage() => Console.WriteLine(
       --batch-size N    Zeilen pro Abfrage
       --verbose         Protokolliert die gesendeten und empfangenen Rahmen
 
-    Zugangsdaten werden in dieser Reihenfolge übernommen: Argument, Umgebungsvariable
-    (KCC_URL, KCC_USER, KCC_PASSWORD, KCC_DATABASE), kcc.json, interaktive Abfrage.
+    Konfiguration in aufsteigender Priorität (später schlägt früher):
+      appsettings.json -> appsettings.local.json (neben der EXE bzw. im Arbeitsverzeichnis)
+      -> --config-Datei -> Umgebungsvariablen KCC_* (KCC_URL, KCC_USER, KCC_PASSWORD,
+      KCC_DATABASE, geschachtelt KCC_Filter__MinDataLength) -> Kommandozeile.
+    Fehlt das Passwort, wird es verdeckt abgefragt.
     """);

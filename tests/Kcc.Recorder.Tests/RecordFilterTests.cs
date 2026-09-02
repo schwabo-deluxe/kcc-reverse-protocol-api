@@ -94,6 +94,23 @@ public class RecordFilterTests
         Assert.False(filter.ShouldRecord(Telegram("TEL_HEARTBEAT")));
     }
 
+    [Theory]
+    // Handshake-Frames: nur Kopf + Füllbytes, kein 0150-Feld.
+    [InlineData("AK52CS01MFC10100.................", false)]
+    [InlineData("LM11MFC1SR020100.................", false)]
+    [InlineData("AK63SR01MFC10100.................", false)]
+    // Nutztelegramme: tragen alle das Feld 0150.
+    [InlineData("DM52MFC1CS010100TSPORD0150MB11.....843001965460.....E01.....003166.....DA71.", true)]
+    [InlineData("DM22CS01MFC10100ENDTSP0150MB11.....843001965460.....E01.....END.DA71.", true)]
+    [InlineData("AK53MFC1SR010100.....0150................END.", true)]
+    public void Werksfilter_trennt_Handshake_von_Nutztelegramm(string data, bool recorded)
+    {
+        // Wie in appsettings.json ab Werk vorbelegt.
+        var filter = new RecordFilter(new FilterConfig { DataMatchRegex = "0150" });
+
+        Assert.Equal(recorded, filter.ShouldRecord(Telegram(data)));
+    }
+
     [Fact]
     public void Unbrauchbarer_regulaerer_Ausdruck_wird_klar_gemeldet()
     {

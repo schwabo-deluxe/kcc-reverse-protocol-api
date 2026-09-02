@@ -31,17 +31,28 @@ versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme h
 
 ## Konfiguration
 
-Werte werden in dieser Reihenfolge übernommen (später schlägt früher):
-`kcc.json` → Umgebungsvariablen (`KCC_URL`, `KCC_USER`, `KCC_PASSWORD`, `KCC_DATABASE`) →
-Kommandozeile. Fehlt das Passwort, wird es verdeckt abgefragt.
+Alles wird über `appsettings.json` konfiguriert. Die Datei liegt neben der EXE (und wird beim
+Build dorthin kopiert). Werte werden in dieser Reihenfolge übernommen (später schlägt früher):
 
-`kcc.example.json` als `kcc.json` neben die EXE legen und anpassen. **`kcc.json` gehört nicht ins
-Repository** — sie steht bereits in `.gitignore`.
+1. `appsettings.json` — neben der EXE, danach im aktuellen Arbeitsverzeichnis
+2. `appsettings.local.json` — ebenda, für Zugangsdaten; **gehört nicht ins Repository** (`.gitignore`)
+3. eine per `--config datei.json` angegebene Datei
+4. Umgebungsvariablen mit Präfix `KCC_` — flach (`KCC_URL`, `KCC_USER`, `KCC_PASSWORD`,
+   `KCC_DATABASE`) oder geschachtelt (`KCC_Filter__MinDataLength`)
+5. Kommandozeile (`--url`, `--user`, `--password`, `--db`, `--poll-interval`, `--batch-size`,
+   `--insecure`)
+
+Fehlt das Passwort, wird es verdeckt abgefragt. Für den Normalbetrieb `appsettings.json` anpassen
+und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
+
+```json
+{ "User": "MEINUSER", "Password": "geheim" }
+```
 
 ### Filter
 
-Standardmäßig wird ein Telegramm aufgezeichnet, wenn sein `Data`-Feld nicht leer ist und nicht nur
-aus Nullen besteht (typische Leerlauf-Frames). Anpassbar über den `Filter`-Abschnitt:
+Ein Telegramm wird aufgezeichnet, wenn sein `Data`-Feld nicht leer ist, nicht nur aus Nullen
+besteht und dem `DataMatchRegex` entspricht. Anpassbar über den `Filter`-Abschnitt:
 
 | Feld | Bedeutung |
 |---|---|
@@ -52,7 +63,11 @@ aus Nullen besteht (typische Leerlauf-Frames). Anpassbar über den `Filter`-Absc
 | `DataMatchRegex` / `DataIgnoreRegex` | Feinsteuerung über reguläre Ausdrücke |
 | `FilterEmptyDataOnServer` | Lässt schon den Server leere Frames aussortieren (spart Bandbreite) |
 
-Sobald die realen Telegramme vorliegen, lässt sich das ohne Codeänderung nachschärfen.
+`DataMatchRegex` ist ab Werk auf `0150` gesetzt. Die Anlage schickt laufend Handshake-Frames, die
+nur aus dem 16 Zeichen langen Kopf plus Füllbytes bestehen — echte Nutztelegramme
+(`…TSPORD0150…`, `…RPFREE0150…`, `…0150…END.`) tragen dagegen alle das Feld `0150`. So landen nur
+Telegramme mit tatsächlichem Inhalt in der Datenbank. Auf `null` setzen, um wieder alles
+aufzuzeichnen.
 
 ## Wie es funktioniert
 
