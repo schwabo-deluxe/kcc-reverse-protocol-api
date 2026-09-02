@@ -24,12 +24,19 @@ public static class UtilizationDashboard
           .meta { margin-left: auto; color: #9aa4b2; font-size: 12px; }
           .meta.err { color: #ff6b6b; }
           main { padding: 20px; max-width: 1100px; margin: 0 auto; }
-          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+          /* Breite Mindestspalte: auf hochformatigen/schmalen Ansichten wird daraus eine Spalte. */
+          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; }
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-          .tile .value { font-size: 26px; font-weight: 600; margin-top: 6px; }
-          .tile .sub { color: #9aa4b2; font-size: 12px; margin-top: 4px; }
-          .spark { margin-top: 10px; display: block; width: 100%; height: 54px; overflow: visible; }
+          .tile .sub { color: #9aa4b2; font-size: 12px; }
+          .tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+          /* Vertikaler Stapel: Tacho über dem Verlauf, damit der Chart die volle Breite bekommt. */
+          .gauge { display: block; width: 210px; height: 110px; margin: 10px auto 0; overflow: visible; }
+          .gauge .track { stroke: #2a2f37; }
+          .gauge .tick { stroke: #cdd6e0; }
+          .gauge.sm { width: 108px; height: 57px; margin: 0; }
+          .pct { text-align: center; font-weight: 700; font-size: 24px; line-height: 1; margin-top: 4px; }
+          .spark { display: block; width: 100%; height: 128px; margin-top: 10px; overflow: visible; }
           .spark .grid { stroke: #2a2f37; stroke-width: 1; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
           .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -38,15 +45,13 @@ public static class UtilizationDashboard
           .spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
           .axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
           .grp { margin-bottom: 24px; }
-          .grp-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 2px 10px; }
+          .grp-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 2px 12px; }
           .grp-name { font-size: 13px; font-weight: 600; color: #cdd6e0; text-transform: uppercase; letter-spacing: .04em; }
           .grp-sum { font-size: 12px; font-variant-numeric: tabular-nums; }
           tr.grp td { background: #171b21; font-weight: 600; }
           td.sub-row { padding-left: 24px; color: #cdd6e0; }
           #tip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s; background: #10141a; border: 1px solid #2a2f37; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
           #tip b { font-weight: 600; }
-          .bar { height: 6px; background: #10141a; border-radius: 99px; margin-top: 10px; overflow: hidden; }
-          .bar > i { display: block; height: 100%; border-radius: 99px; }
           table { width: 100%; border-collapse: collapse; margin-top: 22px; background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; overflow: hidden; }
           th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #2a2f37; font-variant-numeric: tabular-nums; }
           th:first-child, td:first-child { text-align: left; }
@@ -91,6 +96,33 @@ public static class UtilizationDashboard
           return '#5ccb7e';
         }
 
+        // Halbkreis-Tacho (nur Bogen + Zeiger, Zahl steht daneben): farbiger Wertbogen,
+        // Markierung bei 100 % vom Richtwert.
+        function gauge(value, max, stroke, cls) {
+          const cx = 100, cy = 92, r = 80;
+          const f = Math.max(0, Math.min(value / max, 1));
+          const pt = (frac, rad) => {
+            const t = Math.PI * (1 - frac);
+            return [cx + rad * Math.cos(t), cy - rad * Math.sin(t)];
+          };
+          const arc = (frac, cssClass, w, extra) => {
+            if (frac <= 0) return '';
+            const [x1, y1] = pt(0, r), [x2, y2] = pt(frac, r);
+            return `<path class="${cssClass}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} ` +
+              `A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" ` +
+              `stroke-width="${w}" stroke-linecap="round" ${extra || ''}/>`;
+          };
+          const [mx, my] = pt(f, r);
+          const [t1x, t1y] = pt(Math.min(1, 100 / max), r + 8);
+          const [t2x, t2y] = pt(Math.min(1, 100 / max), r - 8);
+          return `<svg class="gauge ${cls || ''}" viewBox="0 0 200 104">
+            ${arc(1, 'track', 13)}
+            ${arc(f, 'val', 6, `stroke="${stroke}"`)}
+            <line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>
+            <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="7" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
+          </svg>`;
+        }
+
         // Verlauf als Sparkline: gemeinsame Y-Skala über alle Punkte, damit die Kacheln
         // untereinander vergleichbar bleiben. Gestrichelt: der Richtwert.
         function spark(point, scaleMax, target) {
@@ -133,12 +165,15 @@ public static class UtilizationDashboard
 
           const byName = n => data.points.find(p => p.resourcePoint === n);
 
+          // Vertikaler Stapel: Kopf, Tacho, großer Verlauf.
           const tile = p => `
             <div class="tile">
-              <div class="label">${p.label || p.resourcePoint}</div>
-              <div class="value" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
-              <div class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</div>
-              <div class="bar"><i style="width:${Math.min(100, p.percent)}%;background:${color(p.percent)}"></i></div>
+              <div class="tile-head">
+                <span class="label">${p.label || p.resourcePoint}</span>
+                <span class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</span>
+              </div>
+              ${gauge(p.percent, 150, color(p.percent))}
+              <div class="pct" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
               ${spark(p, peak, data.targetUph)}
               <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
             </div>`;
@@ -150,6 +185,7 @@ public static class UtilizationDashboard
                 <span class="grp-name">${g.name}</span>
                 <span class="grp-sum" style="color:${color(g.percent)}">
                   Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH/h · ${g.count} Telegramme</span>
+                ${gauge(g.percent, 150, color(g.percent), 'sm')}
               </div>
               <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>
             </section>`).join('');

@@ -18,6 +18,13 @@ public static class Dashboard
           header h1 { font-size: 16px; margin: 0; font-weight: 600; }
           header .meta { color: #9aa4b2; font-size: 12px; }
           main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+          .hero { display: flex; justify-content: center; margin-bottom: 16px; }
+          .hero .card { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 12px 24px 6px; text-align: center; }
+          .hero .cap { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+          .hero .pct { font-weight: 700; font-size: 28px; line-height: 1; margin-top: 2px; }
+          .gauge { display: block; width: 240px; height: 128px; margin: 6px auto 0; overflow: visible; }
+          .gauge .track { stroke: #2a2f37; }
+          .gauge .tick { stroke: #cdd6e0; }
           .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; }
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
@@ -42,6 +49,7 @@ public static class Dashboard
           <span class="meta" id="status">lade …</span>
         </header>
         <main>
+          <div class="hero" id="hero"></div>
           <div class="tiles" id="tiles"></div>
           <div class="grids">
             <section><h2>Richtung</h2><table id="byDirection"></table></section>
@@ -61,6 +69,36 @@ public static class Dashboard
           const tile = (label, value, cls = "") =>
             `<div class="tile ${cls}"><div class="label">${label}</div><div class="value">${value}</div></div>`;
 
+          // Halbkreis-Tacho (Bogen + Zeiger, Zahl steht darunter): farbiger Wertbogen,
+          // optionale Markierung bei tickValue.
+          function gauge(value, max, stroke, tickValue) {
+            const cx = 110, cy = 100, r = 92;
+            const f = Math.max(0, Math.min(value / max, 1));
+            const pt = (frac, rad) => {
+              const t = Math.PI * (1 - frac);
+              return [cx + rad * Math.cos(t), cy - rad * Math.sin(t)];
+            };
+            const arc = (frac, cls, w, extra) => {
+              if (frac <= 0) return "";
+              const [x1, y1] = pt(0, r), [x2, y2] = pt(frac, r);
+              return `<path class="${cls}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} ` +
+                `A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" ` +
+                `stroke-width="${w}" stroke-linecap="round" ${extra || ""}/>`;
+            };
+            const [mx, my] = pt(f, r);
+            let mark = "";
+            if (tickValue != null && tickValue > 0 && tickValue < max) {
+              const [a1, b1] = pt(tickValue / max, r + 9), [a2, b2] = pt(tickValue / max, r - 9);
+              mark = `<line class="tick" x1="${a1.toFixed(1)}" y1="${b1.toFixed(1)}" x2="${a2.toFixed(1)}" y2="${b2.toFixed(1)}" stroke-width="3"/>`;
+            }
+            return `<svg class="gauge" viewBox="0 0 220 116">
+              ${arc(1, "track", 16)}
+              ${arc(f, "val", 7, `stroke="${stroke}"`)}
+              ${mark}
+              <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8" fill="${stroke}" stroke="#14171c" stroke-width="3"/>
+            </svg>`;
+          }
+
           const rows = (obj) => {
             const entries = Object.entries(obj || {});
             if (!entries.length) return `<tr><td>–</td><td class="n">0</td></tr>`;
@@ -79,12 +117,16 @@ public static class Dashboard
                 `aktualisiert ${new Date().toLocaleTimeString()}`;
 
               const lag = k.lagSeconds == null ? "–" : `${k.lagSeconds}s`;
-              const lagCls = k.lagSeconds == null ? "" : k.lagSeconds > 120 ? "bad" : k.lagSeconds > 30 ? "warn" : "";
+              const lagCol = k.lagSeconds == null ? "#7a8494" : k.lagSeconds > 120 ? "#ff6b6b" : k.lagSeconds > 30 ? "#ffb454" : "#5ccb7e";
+              document.getElementById("hero").innerHTML =
+                `<div class="card"><div class="cap">Lag — Sekunden seit letztem Schreibvorgang</div>` +
+                gauge(k.lagSeconds ?? 0, 180, lagCol, 30) +
+                `<div class="pct" style="color:${lagCol}">${lag}</div></div>`;
+
               document.getElementById("tiles").innerHTML = [
                 tile("Telegramme", k.count),
                 tile("pro Minute", k.perMinute),
                 tile("Fehler", k.errors, k.errors > 0 ? "bad" : ""),
-                tile("Lag", lag, lagCls),
                 tile("Verbindungen", k.distinctConnections),
                 tile("letzte Id", k.latestId ?? "–"),
               ].join("");
