@@ -160,8 +160,10 @@ dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
   --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt sie samt Prüfsumme an
-ein GitHub-Release.
+Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
+(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`) samt Prüfsumme
+an ein GitHub-Release. Die beiden HTML-Dateien sind dieselben Dashboards, die die API unter `/`
+bzw. `/auslastung` ausliefert — `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
 
 ## Hinweis
 

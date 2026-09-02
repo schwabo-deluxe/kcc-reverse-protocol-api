@@ -37,12 +37,16 @@ jobs:
             -p:Version=${{ steps.version.outputs.version }} \
             --output publish
 
+      - name: Dashboards als HTML-Dateien herausschreiben
+        run: dotnet run --project src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -- dump-dashboards --out publish
+
       - name: Paket schnüren
         run: |
           mkdir -p artifacts
           cp README.md publish/
           cd publish
-          zip -r "../artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip" kcc.exe appsettings.json README.md
+          zip -r "../artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip" \
+            kcc.exe appsettings.json README.md dashboard.html auslastung.html
           cd ../artifacts
           sha256sum "kcc-${{ steps.version.outputs.version }}-win-x64.zip" > SHA256SUMS.txt
 

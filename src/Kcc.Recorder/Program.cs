@@ -40,6 +40,7 @@ try
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
         "prune" => Prune(config, cli),
         "export" => Export(config, cli),
+        "dump-dashboards" => DumpDashboards(cli),
         _ => UnknownCommand(cli.Command),
     };
 }
@@ -241,6 +242,24 @@ int Prune(KccConfig config, CommandLine cli)
     return 0;
 }
 
+// Schreibt die eingebetteten Dashboards als eigenständige HTML-Dateien heraus — u. a. fürs Release-Zip.
+int DumpDashboards(CommandLine cli)
+{
+    var dir = cli.GetString("out") ?? ".";
+    Directory.CreateDirectory(dir);
+
+    var files = new[]
+    {
+        ("dashboard.html", Dashboard.Html),
+        ("auslastung.html", UtilizationDashboard.Html),
+    };
+    foreach (var (name, html) in files)
+        File.WriteAllText(Path.Combine(dir, name), html, new UTF8Encoding(false));
+
+    Log($"{string.Join(", ", files.Select(f => f.Item1))} nach {Path.GetFullPath(dir)} geschrieben.");
+    return 0;
+}
+
 int Export(KccConfig config, CommandLine cli)
 {
     var output = cli.GetString("out");
@@ -322,6 +341,7 @@ static void PrintUsage() => Console.WriteLine(
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
+      dump-dashboards [--out verz]     dashboard.html + auslastung.html herausschreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)
