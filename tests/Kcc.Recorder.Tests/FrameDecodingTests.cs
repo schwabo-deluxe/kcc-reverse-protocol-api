@@ -29,6 +29,34 @@ public class FrameDecodingTests
     }
 
     [Fact]
+    public void Textrahmen_mit_UTF8_BOM_wird_ohne_BOM_geliefert()
+    {
+        // Manche Gegenstellen stellen Text-Frames eine UTF-8-BOM voran; JsonDocument.Parse
+        // scheitert daran sonst mit "'0xEF' is an invalid start of a value".
+        var payload = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat(Encoding.UTF8.GetBytes("""{"Id":"x"}"""))
+            .ToArray();
+
+        var decoded = KccConnection.TryDecodeFrame(payload, WebSocketMessageType.Text, out var json);
+
+        Assert.True(decoded);
+        Assert.Equal("""{"Id":"x"}""", json);
+        JsonDocument.Parse(json).Dispose();
+    }
+
+    [Fact]
+    public void Binaerrahmen_mit_UTF8_BOM_wird_ohne_BOM_geliefert()
+    {
+        var expected = """{"Id":"abc"}""";
+        var gzipped = Gzip("\uFEFF" + expected);
+
+        var decoded = KccConnection.TryDecodeFrame(gzipped, WebSocketMessageType.Binary, out var json);
+
+        Assert.True(decoded);
+        Assert.Equal(expected, json);
+    }
+
+    [Fact]
     public void Binaerrahmen_wird_entpackt()
     {
         const string expected = """{"Id":"abc","Response":[]}""";

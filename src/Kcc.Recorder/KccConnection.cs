@@ -144,7 +144,7 @@ public sealed class KccConnection : IAsyncDisposable
 
         if (type == WebSocketMessageType.Text)
         {
-            json = Encoding.UTF8.GetString(payload);
+            json = DecodeUtf8(payload);
             return true;
         }
 
@@ -155,8 +155,18 @@ public sealed class KccConnection : IAsyncDisposable
         using var gzip = new GZipStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
         gzip.CopyTo(output);
-        json = Encoding.UTF8.GetString(output.ToArray());
+        json = DecodeUtf8(output.ToArray());
         return true;
+    }
+
+    /// <summary>
+    /// UTF-8 nach string, ohne führende BOM. <see cref="Encoding.UTF8"/> entfernt die BOM nicht;
+    /// <see cref="JsonDocument.Parse(string, JsonDocumentOptions)"/> würde sonst an "0xEF" scheitern.
+    /// </summary>
+    static string DecodeUtf8(byte[] bytes)
+    {
+        var text = Encoding.UTF8.GetString(bytes);
+        return text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;
     }
 
     void Dispatch(string json)
