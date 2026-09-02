@@ -79,6 +79,12 @@ public sealed class KccConfig
     /// <summary>Ob der Standardlauf die Lese-API samt Dashboard bereitstellt.</summary>
     public bool Serve { get; set; } = true;
 
+    /// <summary>Richtwert in Einheiten pro Stunde, auf den sich die Auslastung in Prozent bezieht.</summary>
+    public double UtilizationTargetUph { get; set; } = 200;
+
+    /// <summary>Ressourcenpunkte der Auslastungsauswertung. Leer = eingebaute Liste.</summary>
+    public List<string> ResourcePoints { get; set; } = [];
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

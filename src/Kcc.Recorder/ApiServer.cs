@@ -12,6 +12,8 @@ namespace Kcc.Recorder;
 ///   <item><c>GET /</c> — Dashboard</item>
 ///   <item><c>GET /api/kpis?minutes=60</c> — Kennzahlen über das Zeitfenster</item>
 ///   <item><c>GET /api/telegrams?minutes=60&amp;limit=2000</c> — Telegramme des Zeitfensters</item>
+///   <item><c>GET /auslastung</c> — Auslastung der Ressourcenpunkte</item>
+///   <item><c>GET /api/utilization?minutes=60&amp;target=200</c> — Auslastung als JSON</item>
 ///   <item><c>GET /health</c></item>
 /// </list>
 /// </summary>
@@ -86,6 +88,13 @@ public static class ApiServer
                 case "/index.html":
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", Dashboard.Html);
                     break;
+                case "/auslastung":
+                case "/auslastung.html":
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
+                    break;
+                case "/api/utilization":
+                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx), Target(ctx, config)));
+                    break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
                     break;
@@ -117,6 +126,14 @@ public static class ApiServer
         using var store = new TelegramStore(config.Database);
         var now = DateTime.Now;
         return TelegramKpis.Compute(ReadWindow(store, minutes, out _), format, minutes, now);
+    }
+
+    static TelegramUtilization Utilization(
+        KccConfig config, TelegramFormat format, int minutes, double target)
+    {
+        using var store = new TelegramStore(config.Database);
+        return TelegramUtilization.Compute(
+            ReadWindow(store, minutes, out _), format, minutes, target, DateTime.Now, config.ResourcePoints);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -158,6 +175,13 @@ public static class ApiServer
 
     static int Limit(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);
+
+    static double Target(HttpListenerContext ctx, KccConfig config) =>
+        double.TryParse(ctx.Request.QueryString["target"],
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0
+            ? v
+            : config.UtilizationTargetUph;
 
     static int Clamp(string? raw, int fallback, int min, int max) =>
         int.TryParse(raw, out var v) ? Math.Clamp(v, min, max) : fallback;
