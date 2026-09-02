@@ -15,8 +15,12 @@ public class TelegramKpisTests
         string errorCode = "00", string messageCode = "TSPORD") =>
         new(id, Now.AddMinutes(-minutesAgo), dir, connection, Data(errorCode, messageCode), null);
 
+    static TelegramKpis Compute(IReadOnlyList<Telegram> window, int windowMinutes, double? lagSeconds = 0) =>
+        TelegramKpis.Compute(window, TelegramFormat.Default, windowMinutes,
+            from: Now.AddMinutes(-windowMinutes), to: Now, lagSeconds: lagSeconds);
+
     [Fact]
-    public void Zaehlt_Fenster_Rate_und_Lag()
+    public void Zaehlt_Fenster_Rate_und_reicht_Lag_durch()
     {
         var window = new[]
         {
@@ -25,14 +29,16 @@ public class TelegramKpisTests
             T(3, 4, "L1", TelegramDirection.FromPlc),
         };
 
-        var k = TelegramKpis.Compute(window, TelegramFormat.Default, windowMinutes: 60, now: Now);
+        var k = Compute(window, windowMinutes: 60, lagSeconds: 12.5);
 
         Assert.Equal(60, k.WindowMinutes);
+        Assert.Equal(Now.AddMinutes(-60), k.From);
+        Assert.Equal(Now, k.To);
         Assert.Equal(3, k.Count);
         Assert.Equal(0.05, k.PerMinute);
         Assert.Equal(3, k.LatestId);
         Assert.Equal(Now.AddMinutes(-4), k.LatestAt);
-        Assert.Equal(240, k.LagSeconds);
+        Assert.Equal(12.5, k.LagSeconds);
         Assert.Equal(2, k.DistinctConnections);
     }
 
@@ -46,7 +52,7 @@ public class TelegramKpisTests
             T(3, 8, "L2", TelegramDirection.ToPlc, messageCode: "TSPORD"),
         };
 
-        var k = TelegramKpis.Compute(window, TelegramFormat.Default, 60, Now);
+        var k = Compute(window, 60);
 
         Assert.Equal(2, k.ByDirection["FromPlc"]);
         Assert.Equal(1, k.ByDirection["ToPlc"]);
@@ -65,7 +71,7 @@ public class TelegramKpisTests
             T(3, 3, "L1", TelegramDirection.FromPlc, errorCode: "E7"),
         };
 
-        var k = TelegramKpis.Compute(window, TelegramFormat.Default, 60, Now);
+        var k = Compute(window, 60);
 
         Assert.Equal(1, k.Errors);
     }
@@ -73,7 +79,7 @@ public class TelegramKpisTests
     [Fact]
     public void Leeres_Fenster_liefert_Nullen()
     {
-        var k = TelegramKpis.Compute([], TelegramFormat.Default, 60, Now);
+        var k = Compute([], 60, lagSeconds: null);
 
         Assert.Equal(0, k.Count);
         Assert.Null(k.LatestId);

@@ -28,7 +28,7 @@ public class TelegramUtilizationTests
         var window = Enumerable.Range(1, 30).Select(i => T(i, i, "DA21")).ToList();
 
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 30, targetUph: 200, now: Now);
+            window, TelegramFormat.Default, windowMinutes: 30, targetUph: 200, windowEnd: Now);
 
         var da21 = Point(u, "DA21");
         Assert.Equal(30, da21.Count);
@@ -50,7 +50,7 @@ public class TelegramUtilizationTests
         };
 
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, now: Now);
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now);
 
         Assert.Equal(3, u.TotalOrders);
         Assert.Equal(1, Point(u, "DA21").Count);
@@ -70,7 +70,7 @@ public class TelegramUtilizationTests
         };
 
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, now: Now);
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now);
 
         var ea21 = Point(u, "EA21");
         Assert.Equal(1, ea21.Errors);
@@ -89,7 +89,7 @@ public class TelegramUtilizationTests
         };
 
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, now: Now,
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
             bucketMinutes: 5);
 
         Assert.Equal(5, u.BucketMinutes);
@@ -107,7 +107,7 @@ public class TelegramUtilizationTests
     public void Rastert_auch_bei_unteilbarem_Fenster_lueckenlos()
     {
         var u = TelegramUtilization.Compute(
-            [T(1, 1, "DA21")], TelegramFormat.Default, windowMinutes: 7, targetUph: 200, now: Now,
+            [T(1, 1, "DA21")], TelegramFormat.Default, windowMinutes: 7, targetUph: 200, windowEnd: Now,
             bucketMinutes: 5);
 
         var series = Point(u, "DA21").Series;
@@ -119,7 +119,7 @@ public class TelegramUtilizationTests
     public void Nimmt_eigene_Punktliste_und_leeres_Fenster()
     {
         var u = TelegramUtilization.Compute(
-            [], TelegramFormat.Default, windowMinutes: 60, targetUph: 100, now: Now,
+            [], TelegramFormat.Default, windowMinutes: 60, targetUph: 100, windowEnd: Now,
             resourcePoints: ["ME71"]);
 
         var me71 = Assert.Single(u.Points);

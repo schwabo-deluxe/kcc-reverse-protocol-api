@@ -64,15 +64,20 @@ public sealed record TelegramUtilization
 
     public required IReadOnlyList<ResourcePointUtilization> Points { get; init; }
 
+    /// <param name="windowEnd">
+    /// Rechter Rand des Fensters — üblicherweise der Zeitstempel des jüngsten Telegramms, nicht
+    /// die Host-Uhr, damit das Fenster unabhängig von der Zeitzone der Anlage sitzt.
+    /// </param>
     public static TelegramUtilization Compute(
         IReadOnlyList<Telegram> window,
         TelegramFormat format,
         int windowMinutes,
         double targetUph,
-        DateTime now,
+        DateTime windowEnd,
         IReadOnlyList<string>? resourcePoints = null,
         int bucketMinutes = 5)
     {
+        var now = windowEnd;
         var points = resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints;
         var messageCode = FieldIndex(format, "MessageCode");
         var resourcePoint = FieldIndex(format, "ResourcePoint");

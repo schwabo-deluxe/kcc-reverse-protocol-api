@@ -124,29 +124,30 @@ public static class ApiServer
     static TelegramKpis Kpis(KccConfig config, TelegramFormat format, int minutes)
     {
         using var store = new TelegramStore(config.Database);
-        var now = DateTime.Now;
-        return TelegramKpis.Compute(ReadWindow(store, minutes, out _), format, minutes, now);
+        var w = ReadWindow(store, minutes);
+        return TelegramKpis.Compute(w.Rows, format, minutes, w.Start, w.End, store.SecondsSinceLastWrite());
     }
 
     static TelegramUtilization Utilization(
         KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes)
     {
         using var store = new TelegramStore(config.Database);
+        var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
-            ReadWindow(store, minutes, out _), format, minutes, target, DateTime.Now,
-            config.ResourcePoints, bucketMinutes);
+            w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
     {
         using var store = new TelegramStore(config.Database);
-        var rows = ReadWindow(store, minutes, out var since);
-        var clipped = rows.Count > limit ? rows.GetRange(rows.Count - limit, limit) : rows;
+        var w = ReadWindow(store, minutes);
+        var clipped = w.Rows.Count > limit ? w.Rows.GetRange(w.Rows.Count - limit, limit) : w.Rows;
         return new
         {
             minutes,
-            since,
-            total = rows.Count,
+            from = w.Start,
+            to = w.End,
+            total = w.Rows.Count,
             count = clipped.Count,
             telegrams = clipped,
         };
@@ -161,14 +162,23 @@ public static class ApiServer
             database = Path.GetFullPath(config.Database),
             telegrams = store.Count(),
             lastSeenId = store.GetLastSeenId(),
+            newestTelegram = store.MaxTelegramTime(),
+            secondsSinceLastWrite = store.SecondsSinceLastWrite(),
+            serverTime = DateTime.Now,
         };
     }
 
-    /// <summary>Telegramme mit <c>DateTime</c> ab jetzt minus <paramref name="minutes"/> (aufsteigend).</summary>
-    static List<Telegram> ReadWindow(TelegramStore store, int minutes, out DateTime since)
+    /// <summary>
+    /// Telegramme des Fensters, aufsteigend. Der rechte Rand ist der Zeitstempel des jüngsten
+    /// Telegramms (<see cref="TelegramStore.MaxTelegramTime"/>), nicht die Host-Uhr — so bleibt
+    /// „letzte N Minuten" richtig, egal in welcher Zeitzone die Anlage ihre Stempel schickt.
+    /// </summary>
+    static (List<Telegram> Rows, DateTime Start, DateTime End) ReadWindow(TelegramStore store, int minutes)
     {
-        since = DateTime.SpecifyKind(DateTime.Now.AddMinutes(-minutes), DateTimeKind.Unspecified);
-        return store.Read(since, null).ToList();
+        var end = store.MaxTelegramTime()
+            ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+        var start = end.AddMinutes(-minutes);
+        return (store.Read(start, null).ToList(), start, end);
     }
 
     static int Minutes(HttpListenerContext ctx, KccConfig config) =>

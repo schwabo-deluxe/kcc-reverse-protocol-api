@@ -16,7 +16,7 @@ public sealed record TelegramKpis
     public required long? LatestId { get; init; }
     public required DateTime? LatestAt { get; init; }
 
-    /// <summary>Alter des jüngsten Telegramms in Sekunden — zeigt, ob der Recorder hinterherhängt.</summary>
+    /// <summary>Sekunden seit dem letzten Schreibvorgang — zeigt, ob der Recorder noch läuft.</summary>
     public required double? LagSeconds { get; init; }
 
     public required int DistinctConnections { get; init; }
@@ -28,8 +28,12 @@ public sealed record TelegramKpis
     public required IReadOnlyDictionary<string, int> ByConnection { get; init; }
     public required IReadOnlyDictionary<string, int> ByMessageCode { get; init; }
 
+    /// <param name="from">Linker Rand des Fensters (in der Zeit-Basis der gespeicherten Telegramme).</param>
+    /// <param name="to">Rechter Rand — üblicherweise der Zeitstempel des jüngsten Telegramms.</param>
+    /// <param name="lagSeconds">Sekunden seit dem letzten Schreibvorgang; von der API durchgereicht.</param>
     public static TelegramKpis Compute(
-        IReadOnlyList<Telegram> window, TelegramFormat format, int windowMinutes, DateTime now)
+        IReadOnlyList<Telegram> window, TelegramFormat format, int windowMinutes,
+        DateTime from, DateTime to, double? lagSeconds)
     {
         var index = FieldIndex(format);
         var sliced = window
@@ -44,13 +48,13 @@ public sealed record TelegramKpis
         return new TelegramKpis
         {
             WindowMinutes = windowMinutes,
-            From = now.AddMinutes(-windowMinutes),
-            To = now,
+            From = from,
+            To = to,
             Count = window.Count,
             PerMinute = windowMinutes > 0 ? Math.Round((double)window.Count / windowMinutes, 2) : 0,
             LatestId = latest?.Id,
             LatestAt = latest?.DateTime,
-            LagSeconds = latest is null ? null : Math.Round((now - latest.DateTime).TotalSeconds, 1),
+            LagSeconds = lagSeconds,
             DistinctConnections = window
                 .Select(t => t.ConnectionName ?? "")
                 .Where(c => c.Length > 0)

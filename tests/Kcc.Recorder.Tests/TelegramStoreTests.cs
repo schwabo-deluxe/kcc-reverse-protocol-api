@@ -67,6 +67,38 @@ public class TelegramStoreTests : IDisposable
     }
 
     [Fact]
+    public void MaxTelegramTime_liefert_den_juengsten_Zeitstempel_ohne_Zeitzone()
+    {
+        using var store = new TelegramStore(_path);
+        Assert.Null(store.MaxTelegramTime());
+
+        // Bewusst mit UTC-Kind gespeichert — Store legt zeitzonenfrei ab.
+        store.Insert([
+            new Telegram(1, new DateTime(2026, 9, 2, 8, 0, 0, DateTimeKind.Utc),
+                TelegramDirection.FromPlc, "PLC1", "a", null),
+            new Telegram(2, new DateTime(2026, 9, 2, 9, 30, 0, DateTimeKind.Utc),
+                TelegramDirection.FromPlc, "PLC1", "b", null),
+        ]);
+
+        var max = store.MaxTelegramTime();
+        Assert.Equal(new DateTime(2026, 9, 2, 9, 30, 0), max);
+        Assert.Equal(DateTimeKind.Unspecified, max!.Value.Kind);
+    }
+
+    [Fact]
+    public void SecondsSinceLastWrite_misst_ab_dem_letzten_Insert()
+    {
+        using var store = new TelegramStore(_path);
+        Assert.Null(store.SecondsSinceLastWrite());
+
+        store.Insert([Telegram(1)]);
+
+        var seconds = store.SecondsSinceLastWrite();
+        Assert.NotNull(seconds);
+        Assert.InRange(seconds!.Value, 0, 30);
+    }
+
+    [Fact]
     public void RetentionCutoff_liegt_RetentionDays_in_der_Vergangenheit_und_ohne_Zeitzone()
     {
         var cutoff = TelegramStore.RetentionCutoff(365);

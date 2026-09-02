@@ -125,11 +125,16 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt) |
 | `GET /api/utilization?minutes=240&target=200&bucket=5` | Dieselbe Auswertung als JSON |
-| `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId` |
+| `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
-Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Lag des jüngsten Telegramms, aktive
+Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Sekunden seit dem letzten Schreibvorgang, aktive
 Verbindungen sowie Verteilung nach Richtung, Verbindung und `MessageCode`.
+
+**Zeitfenster:** Der rechte Rand ist der Zeitstempel des **jüngsten Telegramms in der DB**, nicht
+die Uhr des API-Hosts. So bleibt „letzte N Minuten" richtig, auch wenn die Anlage ihre
+Zeitstempel in einer anderen Zeitzone (z. B. UTC) schickt als der Rechner, auf dem `kcc` läuft.
+`GET /health` zeigt beide Zeiten, um einen solchen Versatz sichtbar zu machen.
 
 `http://localhost:PORT/` läuft unter Windows ohne Sonderrechte. Für `http://+:PORT/` oder einen
 festen Hostnamen ist einmalig `netsh http add urlacl url=http://+:PORT/ user=<DOMAIN\User>` nötig.
