@@ -68,10 +68,16 @@ public sealed class KccConfig
     public int RetentionDays { get; set; } = 365;
 
     /// <summary>
-    /// Adresse für <c>kcc serve</c> (Lese-API + Dashboard). HttpListener-Präfix;
+    /// Adresse der Lese-API samt Dashboard im Normalbetrieb. HttpListener-Präfix;
     /// <c>http://localhost:PORT/</c> braucht unter Windows keine Rechte.
     /// </summary>
     public string ApiUrl { get; set; } = "http://localhost:8080/";
+
+    /// <summary>Ob der Standardlauf Telegramme aufzeichnet.</summary>
+    public bool Record { get; set; } = true;
+
+    /// <summary>Ob der Standardlauf die Lese-API samt Dashboard bereitstellt.</summary>
+    public bool Serve { get; set; } = true;
 
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;

@@ -4,7 +4,7 @@ using Kcc.Recorder;
 
 var cli = CommandLine.Parse(args);
 
-if (cli.Command is "" or "help" or "--help" || cli.HasFlag("help"))
+if (cli.Command is "help" or "--help" || cli.HasFlag("help"))
 {
     PrintUsage();
     return 0;
@@ -34,12 +34,11 @@ try
     var config = KccConfig.Load(cli);
     return cli.Command switch
     {
+        "" => await RunAsync(config, cancellation.Token),
         "login-test" => await LoginTestAsync(config, cancellation.Token),
         "query" => await QueryAsync(config, cli, cancellation.Token),
-        "record" => await RecordAsync(config, cancellation.Token),
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
         "prune" => Prune(config, cli),
-        "serve" => await ServeAsync(config, cli, cancellation.Token),
         "export" => Export(config, cli),
         _ => UnknownCommand(cli.Command),
     };
@@ -129,6 +128,49 @@ async Task<int> QueryAsync(KccConfig config, CommandLine cli, CancellationToken 
     return 0;
 }
 
+// Standardbetrieb ohne Argumente: Aufzeichnung und Lese-API laufen im selben Prozess.
+// Was davon startet, steht in der Konfiguration (Record, Serve).
+async Task<int> RunAsync(KccConfig config, CancellationToken ct)
+{
+    if (!config.Record && !config.Serve)
+    {
+        Log("Record und Serve sind beide abgeschaltet — nichts zu tun.");
+        return 2;
+    }
+
+    // Fällt eine der beiden Aufgaben aus, endet auch die andere, statt halb weiterzulaufen.
+    using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    var tasks = new List<Task<int>>();
+    if (config.Serve)
+        tasks.Add(ServeAsync(config, stop.Token));
+    if (config.Record)
+        tasks.Add(RecordAsync(config, stop.Token));
+
+    var exit = 0;
+    try
+    {
+        while (tasks.Count > 0)
+        {
+            var done = await Task.WhenAny(tasks);
+            tasks.Remove(done);
+            exit = Math.Max(exit, await done);
+            stop.Cancel();
+        }
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    {
+        // Strg+C — regulärer Weg nach draußen.
+    }
+
+    return exit;
+}
+
+async Task<int> ServeAsync(KccConfig config, CancellationToken ct)
+{
+    await ApiServer.RunAsync(config, Log, ct);
+    return 0;
+}
+
 async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
 {
     using var store = new TelegramStore(config.Database);
@@ -177,15 +219,6 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
         using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await session.LogoffAsync(logoffTimeout.Token);
     }
-    return 0;
-}
-
-async Task<int> ServeAsync(KccConfig config, CommandLine cli, CancellationToken ct)
-{
-    if (cli.GetString("listen") is { } apiUrl)
-        config.ApiUrl = apiUrl;
-
-    await ApiServer.RunAsync(config, Log, ct);
     return 0;
 }
 
@@ -278,14 +311,15 @@ static void PrintUsage() => Console.WriteLine(
     """
     kcc — Mitschnitt der SPS-Telegramme einer Kardex MCC/KCC-Anlage.
 
+    Aufruf ohne Argumente: Aufzeichnung und Lese-API + Dashboard laufen gemeinsam,
+    konfiguriert über appsettings.json (Record, Serve, ApiUrl, Database, CsvPath).
+
     Kommandos:
       login-test                       Verbindung und Anmeldung prüfen
-      record                           Telegramme fortlaufend in DB (und CSV, s. CsvPath) schreiben
       query   [--take N] [--skip N]    Einmalabfrage auf stdout (--json für JSON)
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
-      serve   [--listen http://…/]     Lese-API + Dashboard starten (Standard: ApiUrl)
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
 

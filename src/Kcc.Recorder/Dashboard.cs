@@ -1,6 +1,6 @@
 namespace Kcc.Recorder;
 
-/// <summary>Eingebettetes Ein-Datei-Dashboard, das <c>kcc serve</c> unter <c>/</c> ausliefert.</summary>
+/// <summary>Eingebettetes Ein-Datei-Dashboard, das die Lese-API unter <c>/</c> ausliefert.</summary>
 public static class Dashboard
 {
     public const string Html = """

@@ -11,10 +11,13 @@ nötig, einfach `kcc.exe` kopieren und starten.
 
 ```
 kcc login-test --url wss://10.20.220.33/ws --user MEINUSER --insecure
-kcc record
+kcc
 ```
 
-Beim ersten `record` setzt der Recorder am aktuellen Ende der Protokolltabelle an, damit nicht
+`kcc` ohne Argumente ist der Normalbetrieb: Aufzeichnung und Lese-API samt Dashboard laufen
+gemeinsam in einem Prozess, gesteuert über `appsettings.json` (`Record`, `Serve`, `ApiUrl`).
+
+Beim ersten Lauf setzt der Recorder am aktuellen Ende der Protokolltabelle an, damit nicht
 versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme holt `kcc backfill`.
 
 ## Kommandos
@@ -22,11 +25,10 @@ versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme h
 | Kommando | Zweck |
 |---|---|
 | `kcc login-test` | Verbindung, Zertifikat und Anmeldung prüfen |
-| `kcc record` | Telegramme fortlaufend in die Datenbank schreiben |
+| `kcc` (ohne Argumente) | Normalbetrieb: Aufzeichnung + Lese-API/Dashboard |
 | `kcc query --take 100 [--json]` | Einmalabfrage auf stdout — zum Abgleich mit dem Web-Grid |
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
-| `kcc serve [--listen http://…/]` | Lese-API + Dashboard starten (Standard: `ApiUrl`) |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -56,9 +58,10 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | Feld | Bedeutung |
 |---|---|
 | `Database` | SQLite-Datei (Standard: `kcc-telegrams.db`) |
-| `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme bei `record`/`backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
+| `Record` / `Serve` | Was der Aufruf ohne Argumente startet: Aufzeichnung bzw. Lese-API + Dashboard (Standard: beides `true`) |
+| `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme im Normalbetrieb und bei `backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
 | `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
-| `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). `record`/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
+| `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
 Gleiches Semikolon-Format wie `kcc export` (UTF-8 mit BOM, für Excel im deutschen Gebietsschema).
@@ -100,13 +103,14 @@ aufzuzeichnen.
 
 ## Dashboard / API
 
-`kcc serve` startet eine kleine **Lese-API** (auf `HttpListener`, keine zusätzliche Abhängigkeit)
-samt eingebettetem Dashboard. Sie liest dieselbe SQLite-Datei wie der Recorder — `kcc record` und
-`kcc serve` laufen also parallel in zwei Prozessen.
+Der Normalbetrieb (`kcc` ohne Argumente) stellt neben der Aufzeichnung eine kleine **Lese-API**
+(auf `HttpListener`, keine zusätzliche Abhängigkeit) samt eingebettetem Dashboard bereit.
+Adresse und Betriebsart stehen in `appsettings.json`:
 
-```
-kcc serve                       # http://localhost:8080/  (aus ApiUrl)
-kcc serve --listen http://localhost:9000/
+```json
+"ApiUrl": "http://localhost:8080/",
+"Record": true,
+"Serve": true
 ```
 
 | Endpunkt | Zweck |
@@ -114,6 +118,7 @@ kcc serve --listen http://localhost:9000/
 | `GET /` | Dashboard (eine HTML-Datei, pollt `/api/kpis` jede Minute) |
 | `GET /api/kpis?minutes=60` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=60&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
+| `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert) |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId` |
 
 `minutes` wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
