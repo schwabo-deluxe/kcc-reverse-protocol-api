@@ -23,10 +23,16 @@ public sealed record ResourcePointUtilization
     /// <summary>Gruppe zur Strukturierung im Dashboard.</summary>
     public required string Group { get; init; }
 
-    /// <summary>Anzahl der <c>TSPORD</c>-Telegramme dieses Punkts im Fenster.</summary>
+    /// <summary>Anzahl der <c>TSPORD</c>-Telegramme dieses Punkts über das ganze Fenster.</summary>
     public required int Count { get; init; }
 
-    /// <summary>Auf eine Stunde hochgerechnete Menge (Units per Hour).</summary>
+    /// <summary>Anzahl im jüngsten <see cref="TelegramUtilization.RateMinutes"/>-Fenster — Basis für <see cref="Uph"/>.</summary>
+    public required int RateCount { get; init; }
+
+    /// <summary>
+    /// Auf eine Stunde hochgerechnete Menge (Units per Hour) — aus <see cref="RateCount"/> der
+    /// letzten Minuten, damit kleine Stöße sofort durchschlagen.
+    /// </summary>
     public required double Uph { get; init; }
 
     /// <summary>Anteil an <see cref="TelegramUtilization.TargetUph"/> in Prozent.</summary>
@@ -44,6 +50,7 @@ public sealed record UtilizationGroup
 {
     public required string Name { get; init; }
     public required int Count { get; init; }
+    public required int RateCount { get; init; }
     public required double Uph { get; init; }
 
     /// <summary>Mittlere Auslastung der Punkte dieser Gruppe in Prozent.</summary>
@@ -97,6 +104,9 @@ public sealed record TelegramUtilization
     /// <summary>Breite eines Intervalls der Verlaufskurven in Minuten.</summary>
     public required int BucketMinutes { get; init; }
 
+    /// <summary>Trailing-Fenster in Minuten, aus dem <see cref="ResourcePointUtilization.Uph"/> hochgerechnet wird.</summary>
+    public required int RateMinutes { get; init; }
+
     public required IReadOnlyList<ResourcePointUtilization> Points { get; init; }
 
     /// <summary>Dieselben Punkte nach <see cref="ResourcePointConfig.Group"/> zusammengefasst.</summary>
@@ -113,9 +123,12 @@ public sealed record TelegramUtilization
         double targetUph,
         DateTime windowEnd,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
-        int bucketMinutes = 5)
+        int bucketMinutes = 5,
+        int rateMinutes = 5)
     {
         var now = windowEnd;
+        var rate = Math.Max(1, rateMinutes);
+        var rateFrom = now.AddMinutes(-rate);
 
         // Nur Einträge mit Namen; je Name der erste gewinnt, Reihenfolge bleibt erhalten.
         var defs = (resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints)
@@ -133,7 +146,7 @@ public sealed record TelegramUtilization
 
         var stats = names.ToDictionary(
             n => n,
-            _ => (Count: 0, Errors: 0, Latest: (DateTime?)null),
+            _ => (Count: 0, Recent: 0, Errors: 0, Latest: (DateTime?)null),
             StringComparer.OrdinalIgnoreCase);
 
         // Zeitraster: der letzte Eimer endet bei 'now', der erste beginnt am Fensteranfang.
@@ -162,12 +175,13 @@ public sealed record TelegramUtilization
             var error = Field(fields, errorCode);
             stats[point] = (
                 current.Count + 1,
+                current.Recent + (telegram.DateTime > rateFrom ? 1 : 0),
                 current.Errors + (error.Length > 0 && !RecordFilter.IsAllZero(error) ? 1 : 0),
                 current.Latest is { } latest && latest > telegram.DateTime ? latest : telegram.DateTime);
         }
 
-        var hours = windowMinutes / 60d;
         var bucketHours = bucketWidth / 60d;
+        var rateHours = rate / 60d;   // Basis: die letzten paar Minuten, auf 1 h hochgerechnet
 
         UtilizationBucket Bucket(int count, int i) => new()
         {
@@ -180,13 +194,14 @@ public sealed record TelegramUtilization
         {
             var name = d.Name;
             var s = stats[name];
-            var uph = hours > 0 ? s.Count / hours : 0;
+            var uph = s.Recent / rateHours;
             return new ResourcePointUtilization
             {
                 ResourcePoint = name,
                 Label = d.DisplayLabel,
                 Group = d.GroupOrDefault,
                 Count = s.Count,
+                RateCount = s.Recent,
                 Uph = Math.Round(uph, 1),
                 Percent = targetUph > 0 ? Math.Round(uph / targetUph * 100, 1) : 0,
                 Errors = s.Errors,
@@ -201,7 +216,8 @@ public sealed record TelegramUtilization
         {
             var members = defs.Where(d => d.GroupOrDefault == gName).Select(d => d.Name).ToList();
             var count = members.Sum(n => stats[n].Count);
-            var uph = hours > 0 ? count / hours : 0;
+            var recent = members.Sum(n => stats[n].Recent);
+            var uph = recent / rateHours;
             var sumBuckets = new int[bucketCount];
             foreach (var n in members)
                 for (var i = 0; i < bucketCount; i++)
@@ -211,6 +227,7 @@ public sealed record TelegramUtilization
             {
                 Name = gName,
                 Count = count,
+                RateCount = recent,
                 Uph = Math.Round(uph, 1),
                 Percent = targetUph > 0 && members.Count > 0
                     ? Math.Round(uph / (targetUph * members.Count) * 100, 1)
@@ -229,6 +246,7 @@ public sealed record TelegramUtilization
             TargetUph = targetUph,
             TotalOrders = orders,
             BucketMinutes = bucketWidth,
+            RateMinutes = rate,
             Points = pointResults,
             Groups = groups,
         };

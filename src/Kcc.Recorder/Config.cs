@@ -112,6 +112,12 @@ public sealed class KccConfig
     public double UtilizationTargetUph { get; set; } = 200;
 
     /// <summary>
+    /// Trailing-Fenster in Minuten, aus dem UPH/h und Prozent der Auslastung hochgerechnet werden
+    /// (Standard: <c>5</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
+    /// </summary>
+    public int UtilizationRateMinutes { get; set; } = 5;
+
+    /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.
     /// Leer ⇒ eingebaute Liste (<see cref="TelegramUtilization.DefaultResourcePoints"/>).
     /// </summary>

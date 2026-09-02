@@ -93,7 +93,7 @@ public static class ApiServer
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
                     break;
                 case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx, config), Target(ctx, config), Bucket(ctx)));
+                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx, config), Target(ctx, config), Bucket(ctx), Rate(ctx, config)));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -132,12 +132,12 @@ public static class ApiServer
     }
 
     static TelegramUtilization Utilization(
-        KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes)
+        KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes, int rateMinutes)
     {
         using var store = new TelegramStore(config.Database);
         var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
-            w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes);
+            w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -223,6 +223,9 @@ public static class ApiServer
 
     static int Bucket(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["bucket"], fallback: 5, min: 1, max: 120);
+
+    static int Rate(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["rate"], fallback: config.UtilizationRateMinutes, min: 1, max: 240);
 
     static double Target(HttpListenerContext ctx, KccConfig config) =>
         double.TryParse(ctx.Request.QueryString["target"],

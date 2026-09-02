@@ -66,6 +66,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `WindowMinutes` | Zeitfenster der Dashboards und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
 | `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht |
+| `UtilizationRateMinutes` | Trailing-Fenster (Standard `5`), aus dem UPH/h und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A" }`. `Group`/`Label` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Leere Liste ⇒ eingebaute Vorgabe. |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
@@ -127,7 +128,7 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
-| `GET /api/utilization?minutes=240&target=200&bucket=5` | Dieselbe Auswertung als JSON |
+| `GET /api/utilization?minutes=240&target=200&bucket=5&rate=5` | Dieselbe Auswertung als JSON (`rate` = UPH-Fenster in Minuten) |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,

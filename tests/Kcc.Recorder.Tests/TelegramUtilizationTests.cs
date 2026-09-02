@@ -26,19 +26,28 @@ public class TelegramUtilizationTests
         new() { Name = name, Group = group, Label = label };
 
     [Fact]
-    public void Rechnet_Menge_auf_UPH_und_Prozent_hoch()
+    public void Uph_und_Prozent_kommen_aus_dem_Rate_Fenster()
     {
-        // 30 Telegramme in 30 Minuten = 60 UPH/h = 30 % von 200.
-        var window = Enumerable.Range(1, 30).Select(i => T(i, i, "DA21")).ToList();
+        // 6 Telegramme in den letzten 5 min -> 6 / (5/60) = 72 UPH/h = 36 % von 200.
+        // Die zwei älteren zählen für Count, nicht für UPH.
+        var window = new[]
+        {
+            T(1, 1, "DA21"), T(2, 2, "DA21"), T(3, 2, "DA21"),
+            T(4, 3, "DA21"), T(5, 4, "DA21"), T(6, 4, "DA21"),
+            T(7, 20, "DA21"), T(8, 40, "DA21"),
+        };
 
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 30, targetUph: 200, windowEnd: Now);
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            rateMinutes: 5);
 
         var da21 = Point(u, "DA21");
-        Assert.Equal(30, da21.Count);
-        Assert.Equal(60, da21.Uph);
-        Assert.Equal(30, da21.Percent);
-        Assert.Equal(30, u.TotalOrders);
+        Assert.Equal(5, u.RateMinutes);
+        Assert.Equal(8, da21.Count);
+        Assert.Equal(6, da21.RateCount);
+        Assert.Equal(72, da21.Uph);
+        Assert.Equal(36, da21.Percent);
+        Assert.Equal(8, u.TotalOrders);
         Assert.Equal(200, u.TargetUph);
     }
 
@@ -131,6 +140,8 @@ public class TelegramUtilizationTests
         Assert.Equal("ME71", me71.Label);
         Assert.Equal("Ohne Gruppe", me71.Group);
         Assert.Equal(0, me71.Count);
+        Assert.Equal(0, me71.RateCount);
+        Assert.Equal(0, me71.Uph);
         Assert.Null(me71.LatestAt);
     }
 
@@ -139,12 +150,14 @@ public class TelegramUtilizationTests
     {
         var window = new[]
         {
-            T(1, 30, "MA72"), T(2, 20, "MA72"), T(3, 10, "MB72"),  // Auslagerung RBG: 3 in 60 min
-            T(4, 15, "DA21"),                                       // Fördertechnik: 1
+            T(1, 1, "MA72"), T(2, 3, "MA72"), T(3, 4, "MB72"),  // Auslagerung RBG: 3 in den letzten 5 min
+            T(4, 2, "DA21"),                                     // Fördertechnik: 1
+            T(5, 30, "MA72"),                                    // alt: nur Count, nicht UPH
         };
 
         var u = TelegramUtilization.Compute(
             window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            rateMinutes: 5,
             resourcePoints:
             [
                 RP("MA72", "Auslagerung RBG", "RBG A"),
@@ -158,9 +171,10 @@ public class TelegramUtilizationTests
 
         var rbg = u.Groups.Single(g => g.Name == "Auslagerung RBG");
         Assert.Equal(["MA72", "MB72"], rbg.Points);
-        Assert.Equal(3, rbg.Count);
-        Assert.Equal(3, rbg.Uph);                 // 3 Telegramme / 1 h
-        Assert.Equal(0.8, rbg.Percent);           // Math.Round(3 / (200*2) * 100, 1)
+        Assert.Equal(4, rbg.Count);               // inkl. altes MA72
+        Assert.Equal(3, rbg.RateCount);
+        Assert.Equal(36, rbg.Uph);                // 3 / (5/60)
+        Assert.Equal(9, rbg.Percent);            // Math.Round(36 / (200*2) * 100, 1)
         Assert.Equal(1, u.Groups.Single(g => g.Name == "Fördertechnik").Count);
     }
 

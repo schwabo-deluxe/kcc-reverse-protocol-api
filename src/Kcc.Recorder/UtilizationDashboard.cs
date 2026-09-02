@@ -68,6 +68,7 @@ public static class UtilizationDashboard
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
           <label>Raster (min) <input type="number" id="bucket" value="5" min="1" max="120"></label>
+          <label>UPH aus (min) <input type="number" id="rate" value="5" min="1" max="240"></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>
@@ -159,6 +160,7 @@ public static class UtilizationDashboard
           $('minutes').value = data.windowMinutes;
           $('target').value = data.targetUph;
           $('bucket').value = data.bucketMinutes;
+          $('rate').value = data.rateMinutes;
 
           // Eine Skala für alle Kacheln — mindestens bis zum Richtwert.
           const peak = Math.max(
@@ -172,7 +174,7 @@ public static class UtilizationDashboard
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${p.label || p.resourcePoint}</span>
-                <span class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</span>
+                <span class="sub">${fmt(p.uph)} UPH/h · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
               </div>
               <div class="tile-body">
                 <div class="gauge-col">
@@ -192,7 +194,7 @@ public static class UtilizationDashboard
               <div class="grp-h">
                 <span class="grp-name">${g.name}</span>
                 <span class="grp-sum" style="color:${color(g.percent)}">
-                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH/h · ${g.count} Telegramme</span>
+                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH/h · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
                 ${gauge(g.percent, 150, color(g.percent), 'sm')}
               </div>
               <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>
@@ -216,7 +218,7 @@ public static class UtilizationDashboard
 
           $('meta').classList.remove('err');
           $('meta').textContent =
-            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Raster ${data.bucketMinutes} min` +
+            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Raster ${data.bucketMinutes} min · UPH aus ${data.rateMinutes} min` +
             ` · Stand ${new Date().toLocaleTimeString('de-DE')}`;
         }
 
@@ -265,9 +267,11 @@ public static class UtilizationDashboard
           const minutes = parseInt($('minutes').value, 10);
           const target = parseFloat($('target').value);
           const bucket = parseInt($('bucket').value, 10);
+          const rate = parseInt($('rate').value, 10);
           if (minutes > 0) query.set('minutes', Math.min(1440, minutes));
           if (target > 0) query.set('target', target);
           if (bucket > 0) query.set('bucket', Math.min(120, bucket));
+          if (rate > 0) query.set('rate', Math.min(240, rate));
           try {
             const res = await fetch(API_BASE + '/api/utilization?' + query, { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -278,7 +282,7 @@ public static class UtilizationDashboard
           }
         }
 
-        for (const id of ['minutes', 'target', 'bucket']) $(id).addEventListener('change', load);
+        for (const id of ['minutes', 'target', 'bucket', 'rate']) $(id).addEventListener('change', load);
         load();
         setInterval(load, 60000);
         </script>
