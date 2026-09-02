@@ -164,6 +164,8 @@ Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das 
 (`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`) samt Prüfsumme
 an ein GitHub-Release. Die beiden HTML-Dateien sind dieselben Dashboards, die die API unter `/`
 bzw. `/auslastung` ausliefert — `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
+Als lose Datei geöffnet fragen sie fest `http://localhost:8080` ab; mit `?api=http://host:port`
+lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
 
 ## Hinweis
 

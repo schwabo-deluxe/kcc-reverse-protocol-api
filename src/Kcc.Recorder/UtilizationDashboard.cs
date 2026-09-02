@@ -72,6 +72,13 @@ public static class UtilizationDashboard
         const $ = id => document.getElementById(id);
         const fmt = n => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 
+        // Wird die Seite über die API selbst ausgeliefert (http/https), zählt die eigene Herkunft.
+        // Als lose Datei (file://) sonst nichts erreichbar — dann fest auf den lokalen Standard.
+        // Mit "?api=http://host:port" überschreibbar.
+        const API_BASE = (new URLSearchParams(location.search).get('api')
+          || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8080'))
+          .replace(/\/+$/, '');
+
         function color(pct) {
           if (pct >= 95) return '#ff6b6b';
           if (pct >= 80) return '#ffb454';
@@ -193,7 +200,7 @@ public static class UtilizationDashboard
           if (target > 0) query.set('target', target);
           if (bucket > 0) query.set('bucket', Math.min(120, bucket));
           try {
-            const res = await fetch('api/utilization?' + query, { cache: 'no-store' });
+            const res = await fetch(API_BASE + '/api/utilization?' + query, { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             render(await res.json());
           } catch (e) {

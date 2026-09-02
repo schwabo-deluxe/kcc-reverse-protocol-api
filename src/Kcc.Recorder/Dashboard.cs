@@ -52,6 +52,12 @@ public static class Dashboard
         <script>
           const REFRESH_MS = 60_000;
 
+          // Über die API ausgeliefert: eigene Herkunft. Als lose Datei (file://): fest auf den
+          // lokalen Standard. Mit "?api=http://host:port" überschreibbar.
+          const API_BASE = (new URLSearchParams(location.search).get("api")
+            || (/^https?:$/.test(location.protocol) ? location.origin : "http://localhost:8080"))
+            .replace(/\/+$/, "");
+
           const tile = (label, value, cls = "") =>
             `<div class="tile ${cls}"><div class="label">${label}</div><div class="value">${value}</div></div>`;
 
@@ -63,7 +69,7 @@ public static class Dashboard
 
           async function refresh() {
             try {
-              const r = await fetch("/api/kpis", { cache: "no-store" });
+              const r = await fetch(API_BASE + "/api/kpis", { cache: "no-store" });
               if (!r.ok) throw new Error(`HTTP ${r.status}`);
               const k = await r.json();
 
