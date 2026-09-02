@@ -144,7 +144,9 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
         var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.RunAsync(ct);
 
-        await session.LogoffAsync(CancellationToken.None);
+        // Nach Strg+C nicht unbegrenzt auf die Abmelde-Antwort des Servers warten.
+        using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await session.LogoffAsync(logoffTimeout.Token);
     }
     return 0;
 }
@@ -169,7 +171,9 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
 
         var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.BackfillAsync(fromId, cli.GetLong("to-id"), ct);
-        await session.LogoffAsync(CancellationToken.None);
+
+        using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await session.LogoffAsync(logoffTimeout.Token);
     }
     return 0;
 }

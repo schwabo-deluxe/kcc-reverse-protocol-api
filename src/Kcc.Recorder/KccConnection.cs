@@ -228,7 +228,10 @@ public sealed class KccConnection : IAsyncDisposable
 
         if (_receiveLoop is not null)
         {
-            try { await _receiveLoop; } catch { /* beim Schliessen ohne Belang */ }
+            // Der Loop endet mit dem abgebrochenen Token; die Frist verhindert ein Hängen,
+            // falls ReceiveAsync den Abbruch nicht sofort quittiert.
+            try { await _receiveLoop.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch { /* beim Schliessen ohne Belang */ }
             _receiveLoop = null;
         }
 
