@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Kcc.Recorder;
@@ -131,6 +130,7 @@ async Task<int> QueryAsync(KccConfig config, CommandLine cli, CancellationToken 
 async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
 {
     using var store = new TelegramStore(config.Database);
+    using var csv = OpenCsv(config);
     var filter = new RecordFilter(config.Filter);
 
     var (connection, session, query) = await ConnectAsync(config, ct);
@@ -138,8 +138,10 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
     {
         Log($"Zeichne auf nach {Path.GetFullPath(config.Database)} " +
             $"(bereits {store.Count()} Telegramme). Beenden mit Strg+C.");
+        if (csv is not null)
+            Log($"Parallele CSV-Mitschrift: {csv.FilePath}");
 
-        var recorder = new TelegramRecorder(query, store, filter, config, Log);
+        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.RunAsync(ct);
 
         await session.LogoffAsync(CancellationToken.None);
@@ -156,12 +158,16 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
     }
 
     using var store = new TelegramStore(config.Database);
+    using var csv = OpenCsv(config);
     var filter = new RecordFilter(config.Filter);
 
     var (connection, session, query) = await ConnectAsync(config, ct);
     await using (connection)
     {
-        var recorder = new TelegramRecorder(query, store, filter, config, Log);
+        if (csv is not null)
+            Log($"Parallele CSV-Mitschrift: {csv.FilePath}");
+
+        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.BackfillAsync(fromId, cli.GetLong("to-id"), ct);
         await session.LogoffAsync(CancellationToken.None);
     }
@@ -179,20 +185,12 @@ int Export(KccConfig config, CommandLine cli)
 
     using var store = new TelegramStore(config.Database);
     using var writer = new StreamWriter(output, false, new UTF8Encoding(true));
-    writer.WriteLine("Id;DateTime;TelegramDirection;ConnectionName;Data;Format");
+    writer.WriteLine(TelegramCsv.Header);
 
     var count = 0;
     foreach (var t in store.Read(cli.GetDateTime("from"), cli.GetDateTime("to")))
     {
-        writer.WriteLine(string.Join(';', new[]
-        {
-            t.Id.ToString(CultureInfo.InvariantCulture),
-            t.DateTime.ToString("O", CultureInfo.InvariantCulture),
-            t.TelegramDirection.ToString(),
-            Csv(t.ConnectionName),
-            Csv(t.Data),
-            Csv(t.Format),
-        }));
+        writer.WriteLine(TelegramCsv.Row(t));
         count++;
     }
 
@@ -200,15 +198,8 @@ int Export(KccConfig config, CommandLine cli)
     return 0;
 }
 
-// Semikolon-getrennt, damit Excel im deutschen Gebietsschema die Spalten direkt erkennt.
-static string Csv(string? value)
-{
-    if (string.IsNullOrEmpty(value))
-        return "";
-    if (value.Contains('"') || value.Contains(';') || value.Contains('\n') || value.Contains('\r'))
-        return '"' + value.Replace("\"", "\"\"") + '"';
-    return value;
-}
+static TelegramCsvWriter? OpenCsv(KccConfig config) =>
+    config.CsvPath is { Length: > 0 } path ? new TelegramCsvWriter(path) : null;
 
 static string Prompt(string label)
 {
@@ -249,7 +240,7 @@ static void PrintUsage() => Console.WriteLine(
 
     Kommandos:
       login-test                       Verbindung und Anmeldung prüfen
-      record                           Telegramme fortlaufend in die Datenbank schreiben
+      record                           Telegramme fortlaufend in DB (und CSV, s. CsvPath) schreiben
       query   [--take N] [--skip N]    Einmalabfrage auf stdout (--json für JSON)
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen

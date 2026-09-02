@@ -49,6 +49,12 @@ public sealed class KccConfig
 
     public string Database { get; set; } = "kcc-telegrams.db";
 
+    /// <summary>
+    /// Wenn gesetzt: aufgezeichnete Telegramme zusätzlich fortlaufend an diese CSV-Datei anhängen.
+    /// <c>null</c> schaltet die CSV-Mitschrift ab.
+    /// </summary>
+    public string? CsvPath { get; set; }
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

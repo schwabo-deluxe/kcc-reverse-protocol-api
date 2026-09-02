@@ -49,6 +49,16 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 { "User": "MEINUSER", "Password": "geheim" }
 ```
 
+### Ausgabe
+
+| Feld | Bedeutung |
+|---|---|
+| `Database` | SQLite-Datei (Standard: `kcc-telegrams.db`) |
+| `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme bei `record`/`backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
+
+Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
+Gleiches Semikolon-Format wie `kcc export` (UTF-8 mit BOM, für Excel im deutschen Gebietsschema).
+
 ### Filter
 
 Ein Telegramm wird aufgezeichnet, wenn sein `Data`-Feld nicht leer ist, nicht nur aus Nullen

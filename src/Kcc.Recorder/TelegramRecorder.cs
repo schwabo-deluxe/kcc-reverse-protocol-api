@@ -14,19 +14,22 @@ public sealed class TelegramRecorder
     readonly RecordFilter _filter;
     readonly KccConfig _config;
     readonly Action<string> _log;
+    readonly TelegramCsvWriter? _csv;
 
     public TelegramRecorder(
         KccQuery query,
         TelegramStore store,
         RecordFilter filter,
         KccConfig config,
-        Action<string> log)
+        Action<string> log,
+        TelegramCsvWriter? csv = null)
     {
         _query = query;
         _store = store;
         _filter = filter;
         _config = config;
         _log = log;
+        _csv = csv;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -58,7 +61,10 @@ public sealed class TelegramRecorder
 
                 var keep = batch.Where(_filter.ShouldRecord).ToList();
                 if (keep.Count > 0)
+                {
                     recorded += _store.Insert(keep);
+                    _csv?.Append(keep);
+                }
 
                 // Auch für verworfene Zeilen weiterzählen, sonst werden sie endlos erneut geholt.
                 _store.SetLastSeenId(lastSeenId.Value);
@@ -105,7 +111,10 @@ public sealed class TelegramRecorder
 
             var keep = batch.Where(_filter.ShouldRecord).ToList();
             if (keep.Count > 0)
+            {
                 recorded += _store.Insert(keep);
+                _csv?.Append(keep);
+            }
 
             _log($"Backfill bis Id {cursor}: {recorded} von {seen} aufgezeichnet.");
 
