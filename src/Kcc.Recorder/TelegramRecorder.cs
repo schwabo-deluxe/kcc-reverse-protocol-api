@@ -32,8 +32,12 @@ public sealed class TelegramRecorder
         _csv = csv;
     }
 
+    DateTime _nextRetentionCheck = DateTime.MinValue;
+
     public async Task RunAsync(CancellationToken ct)
     {
+        ApplyRetention();
+
         var lastSeenId = _store.GetLastSeenId();
         if (lastSeenId is null)
         {
@@ -52,6 +56,8 @@ public sealed class TelegramRecorder
 
         while (!ct.IsCancellationRequested)
         {
+            ApplyRetention();
+
             var batch = await FetchBatchAsync(lastSeenId.Value, ct);
 
             if (batch.Count > 0)
@@ -88,9 +94,29 @@ public sealed class TelegramRecorder
         _log($"Beendet. {recorded} von {seen} gelesenen Telegrammen aufgezeichnet.");
     }
 
+    /// <summary>
+    /// Wendet die Aufbewahrungsregel an — höchstens einmal alle 24 h, damit die Aufrufe im
+    /// Poll-Takt billig bleiben. <c>RetentionDays &lt;= 0</c> schaltet die Regel ab.
+    /// </summary>
+    void ApplyRetention()
+    {
+        if (_config.RetentionDays <= 0 || DateTime.UtcNow < _nextRetentionCheck)
+            return;
+
+        _nextRetentionCheck = DateTime.UtcNow.AddHours(24);
+
+        var cutoff = TelegramStore.RetentionCutoff(_config.RetentionDays);
+        var removed = _store.DeleteOlderThan(cutoff);
+        if (removed > 0)
+            _log($"Aufbewahrung: {removed} Telegramme vor {cutoff:yyyy-MM-dd} gelöscht " +
+                 $"(RetentionDays {_config.RetentionDays}).");
+    }
+
     /// <summary>Lädt historische Telegramme in einem Id-Bereich nach.</summary>
     public async Task BackfillAsync(long fromId, long? toId, CancellationToken ct)
     {
+        ApplyRetention();
+
         var cursor = fromId - 1;
         var recorded = 0L;
         var seen = 0L;

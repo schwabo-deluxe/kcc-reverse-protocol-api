@@ -25,6 +25,7 @@ versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme h
 | `kcc record` | Telegramme fortlaufend in die Datenbank schreiben |
 | `kcc query --take 100 [--json]` | Einmalabfrage auf stdout — zum Abgleich mit dem Web-Grid |
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen |
+| `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -56,6 +57,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `Database` | SQLite-Datei (Standard: `kcc-telegrams.db`) |
 | `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme bei `record`/`backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
 | `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
+| `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). `record`/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
 Gleiches Semikolon-Format wie `kcc export` (UTF-8 mit BOM, für Excel im deutschen Gebietsschema).

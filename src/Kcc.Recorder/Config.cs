@@ -61,6 +61,12 @@ public sealed class KccConfig
     /// </summary>
     public string? DataFormat { get; set; }
 
+    /// <summary>
+    /// Aufbewahrungsdauer in Tagen. <c>record</c>/<c>backfill</c> löschen beim Start und danach
+    /// täglich ältere Telegramme; <c>prune</c> tut es einmalig. <c>0</c> oder negativ = unbegrenzt.
+    /// </summary>
+    public int RetentionDays { get; set; } = 365;
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

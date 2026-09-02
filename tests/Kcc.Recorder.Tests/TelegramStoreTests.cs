@@ -51,6 +51,31 @@ public class TelegramStoreTests : IDisposable
     }
 
     [Fact]
+    public void DeleteOlderThan_entfernt_nur_Zeilen_vor_dem_Stichtag()
+    {
+        using var store = new TelegramStore(_path);
+        var alt = new Telegram(1, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Unspecified),
+            TelegramDirection.FromPlc, "PLC1", "alt", null);
+        var neu = new Telegram(2, DateTime.Now,
+            TelegramDirection.FromPlc, "PLC1", "neu", null);
+        store.Insert([alt, neu]);
+
+        var removed = store.DeleteOlderThan(new DateTime(2021, 1, 1, 0, 0, 0, DateTimeKind.Unspecified));
+
+        Assert.Equal(1, removed);
+        Assert.Equal([2L], store.Read(null, null).Select(r => r.Id));
+    }
+
+    [Fact]
+    public void RetentionCutoff_liegt_RetentionDays_in_der_Vergangenheit_und_ohne_Zeitzone()
+    {
+        var cutoff = TelegramStore.RetentionCutoff(365);
+
+        Assert.Equal(DateTimeKind.Unspecified, cutoff.Kind);
+        Assert.InRange((DateTime.Now - cutoff).TotalDays, 364.9, 365.1);
+    }
+
+    [Fact]
     public void Liest_einen_Zeitraum()
     {
         using var store = new TelegramStore(_path);

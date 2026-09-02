@@ -38,6 +38,7 @@ try
         "query" => await QueryAsync(config, cli, cancellation.Token),
         "record" => await RecordAsync(config, cancellation.Token),
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
+        "prune" => Prune(config, cli),
         "export" => Export(config, cli),
         _ => UnknownCommand(cli.Command),
     };
@@ -178,6 +179,25 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
     return 0;
 }
 
+int Prune(KccConfig config, CommandLine cli)
+{
+    var days = cli.GetInt("days") ?? config.RetentionDays;
+    if (days <= 0)
+    {
+        Log($"Aufbewahrung unbegrenzt (RetentionDays {days}) — nichts zu löschen.");
+        return 0;
+    }
+
+    using var store = new TelegramStore(config.Database);
+    var before = store.Count();
+    var cutoff = TelegramStore.RetentionCutoff(days);
+    var removed = store.DeleteOlderThan(cutoff);
+    store.Vacuum();
+
+    Log($"{removed} Telegramme vor {cutoff:yyyy-MM-dd} gelöscht ({before} → {store.Count()}).");
+    return 0;
+}
+
 int Export(KccConfig config, CommandLine cli)
 {
     var output = cli.GetString("out");
@@ -254,6 +274,7 @@ static void PrintUsage() => Console.WriteLine(
       query   [--take N] [--skip N]    Einmalabfrage auf stdout (--json für JSON)
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
+      prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
 
@@ -266,6 +287,7 @@ static void PrintUsage() => Console.WriteLine(
       --insecure        Selbstsigniertes Zertifikat der Anlage akzeptieren
       --poll-interval N Sekunden zwischen zwei Abfragen
       --batch-size N    Zeilen pro Abfrage
+      --days N          Aufbewahrungsdauer für 'prune' (überschreibt RetentionDays)
       --verbose         Protokolliert die gesendeten und empfangenen Rahmen
 
     Konfiguration in aufsteigender Priorität (später schlägt früher):

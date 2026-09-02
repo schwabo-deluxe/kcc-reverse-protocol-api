@@ -16,6 +16,8 @@ public sealed class TelegramStore : IDisposable
         {
             DataSource = path,
             Mode = SqliteOpenMode.ReadWriteCreate,
+            // Eine langlebige Verbindung — ohne Pool wird die Datei bei Dispose sofort freigegeben.
+            Pooling = false,
         }.ToString());
         _connection.Open();
         Initialize();
@@ -82,6 +84,25 @@ public sealed class TelegramStore : IDisposable
         transaction.Commit();
         return written;
     }
+
+    /// <summary>
+    /// Stichtag für die Aufbewahrung: Telegramme mit früherem <c>DateTime</c> dürfen gelöscht werden.
+    /// Ohne Zeitzonen-Anteil formatiert, damit der String-Vergleich zu den gespeicherten Werten passt.
+    /// </summary>
+    public static DateTime RetentionCutoff(int retentionDays) =>
+        DateTime.SpecifyKind(DateTime.Now.AddDays(-retentionDays), DateTimeKind.Unspecified);
+
+    /// <summary>Löscht Telegramme, deren <c>DateTime</c> vor dem Stichtag liegt. Gibt die Anzahl zurück.</summary>
+    public int DeleteOlderThan(DateTime cutoffExclusive)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM telegrams WHERE DateTime < $cutoff;";
+        command.Parameters.AddWithValue("$cutoff", cutoffExclusive.ToString("O", CultureInfo.InvariantCulture));
+        return command.ExecuteNonQuery();
+    }
+
+    /// <summary>Gibt nach großen Löschungen belegten Speicher an das Betriebssystem zurück.</summary>
+    public void Vacuum() => Execute("VACUUM;");
 
     /// <summary>Höchste bereits verarbeitete Telegramm-Id — auch für Zeilen, die der Filter verworfen hat.</summary>
     public long? GetLastSeenId()
