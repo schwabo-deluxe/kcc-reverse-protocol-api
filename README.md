@@ -123,6 +123,7 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /` | Dashboard (eine HTML-Datei, pollt `/api/kpis` jede Minute) |
 | `GET /api/kpis?minutes=240` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
+| `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt) |
 | `GET /api/utilization?minutes=240&target=200&bucket=5` | Dieselbe Auswertung als JSON |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |

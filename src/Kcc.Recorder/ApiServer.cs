@@ -104,6 +104,9 @@ public static class ApiServer
                 case "/api/telegrams":
                     await WriteJsonAsync(res, 200, Telegrams(config, Minutes(ctx, config), Limit(ctx)));
                     break;
+                case "/api/fields":
+                    await WriteJsonAsync(res, 200, Fields(config, format, Minutes(ctx, config), Limit(ctx)));
+                    break;
                 default:
                     await WriteJsonAsync(res, 404, new { error = "not found", path });
                     break;
@@ -150,6 +153,37 @@ public static class ApiServer
             total = w.Rows.Count,
             count = clipped.Count,
             telegrams = clipped,
+        };
+    }
+
+    /// <summary>
+    /// Diagnose: zerlegt die letzten Telegramme des Fensters Feld für Feld nach dem Layout.
+    /// Damit lässt sich prüfen, welches Feld tatsächlich den Ressourcenpunkt trägt.
+    /// </summary>
+    static object Fields(KccConfig config, TelegramFormat format, int minutes, int limit)
+    {
+        using var store = new TelegramStore(config.Database);
+        var w = ReadWindow(store, minutes);
+        var take = Math.Min(limit, 200);
+        var rows = w.Rows.Count > take ? w.Rows.GetRange(w.Rows.Count - take, take) : w.Rows;
+
+        return new
+        {
+            layout = format.Fields.Select(f => new { f.Name, f.Length, f.Type }),
+            count = rows.Count,
+            telegrams = rows.Select(t =>
+            {
+                var values = format.Slice(t.Data);
+                return new
+                {
+                    t.Id,
+                    t.DateTime,
+                    data = t.Data,
+                    fields = format.Fields
+                        .Select((f, i) => (f.Name, Value: i < values.Count ? values[i] : ""))
+                        .ToDictionary(x => x.Name, x => x.Value),
+                };
+            }),
         };
     }
 
