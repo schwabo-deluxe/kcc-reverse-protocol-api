@@ -50,7 +50,6 @@ public static class Dashboard
           </div>
         </main>
         <script>
-          const MINUTES = 60;
           const REFRESH_MS = 60_000;
 
           const tile = (label, value, cls = "") =>
@@ -64,7 +63,7 @@ public static class Dashboard
 
           async function refresh() {
             try {
-              const r = await fetch(`/api/kpis?minutes=${MINUTES}`, { cache: "no-store" });
+              const r = await fetch("/api/kpis", { cache: "no-store" });
               if (!r.ok) throw new Error(`HTTP ${r.status}`);
               const k = await r.json();
 

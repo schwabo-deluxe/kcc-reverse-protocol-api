@@ -10,10 +10,10 @@ namespace Kcc.Recorder;
 /// eingebettetem Dashboard. Endpunkte:
 /// <list type="bullet">
 ///   <item><c>GET /</c> — Dashboard</item>
-///   <item><c>GET /api/kpis?minutes=60</c> — Kennzahlen über das Zeitfenster</item>
-///   <item><c>GET /api/telegrams?minutes=60&amp;limit=2000</c> — Telegramme des Zeitfensters</item>
+///   <item><c>GET /api/kpis?minutes=240</c> — Kennzahlen über das Zeitfenster</item>
+///   <item><c>GET /api/telegrams?minutes=240&amp;limit=2000</c> — Telegramme des Zeitfensters</item>
 ///   <item><c>GET /auslastung</c> — Auslastung der Ressourcenpunkte</item>
-///   <item><c>GET /api/utilization?minutes=60&amp;target=200&amp;bucket=5</c> — Auslastung als JSON</item>
+///   <item><c>GET /api/utilization?minutes=240&amp;target=200&amp;bucket=5</c> — Auslastung als JSON</item>
 ///   <item><c>GET /health</c></item>
 /// </list>
 /// </summary>
@@ -93,16 +93,16 @@ public static class ApiServer
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
                     break;
                 case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx), Target(ctx, config), Bucket(ctx)));
+                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx, config), Target(ctx, config), Bucket(ctx)));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
                     break;
                 case "/api/kpis":
-                    await WriteJsonAsync(res, 200, Kpis(config, format, Minutes(ctx)));
+                    await WriteJsonAsync(res, 200, Kpis(config, format, Minutes(ctx, config)));
                     break;
                 case "/api/telegrams":
-                    await WriteJsonAsync(res, 200, Telegrams(config, Minutes(ctx), Limit(ctx)));
+                    await WriteJsonAsync(res, 200, Telegrams(config, Minutes(ctx, config), Limit(ctx)));
                     break;
                 default:
                     await WriteJsonAsync(res, 404, new { error = "not found", path });
@@ -171,8 +171,8 @@ public static class ApiServer
         return store.Read(since, null).ToList();
     }
 
-    static int Minutes(HttpListenerContext ctx) =>
-        Clamp(ctx.Request.QueryString["minutes"], fallback: 60, min: 1, max: 1440);
+    static int Minutes(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["minutes"], fallback: config.WindowMinutes, min: 1, max: 1440);
 
     static int Limit(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);

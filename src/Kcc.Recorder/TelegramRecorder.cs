@@ -43,8 +43,12 @@ public sealed class TelegramRecorder
         {
             lastSeenId = await GetCurrentMaxIdAsync(ct);
             _store.SetLastSeenId(lastSeenId.Value);
-            _log($"Erster Start — setze am aktuellen Ende an (Id {lastSeenId}). " +
-                 "Ältere Telegramme holt 'kcc backfill'.");
+            _log($"Erster Start — setze am aktuellen Ende an (Id {lastSeenId}).");
+
+            // Damit das Dashboard nicht mit einem leeren Fenster startet, wird die zuletzt
+            // sichtbare Zeitspanne einmalig nachgeladen. Ältere Daten holt 'kcc backfill'.
+            if (_config.StartupBackfillMinutes > 0)
+                await BackfillSinceAsync(DateTime.Now.AddMinutes(-_config.StartupBackfillMinutes), ct);
         }
         else
         {
@@ -150,6 +154,54 @@ public sealed class TelegramRecorder
 
         _log($"Backfill fertig. {recorded} von {seen} gelesenen Telegrammen aufgezeichnet.");
     }
+
+    /// <summary>
+    /// Holt die Telegramme ab <paramref name="since"/> nach — von der neuesten Id rückwärts,
+    /// bis der Zeitpunkt unterschritten ist. Für den Start, damit das Dashboard sofort
+    /// Historie zeigt, statt erst mit dem Mitschnitt zu füllen.
+    /// </summary>
+    async Task BackfillSinceAsync(DateTime since, CancellationToken ct)
+    {
+        var recorded = 0L;
+        var seen = 0L;
+        var skip = 0;
+
+        while (!ct.IsCancellationRequested)
+        {
+            var batch = await FetchNewestAsync(skip, ct);
+            if (batch.Count == 0)
+                break;
+
+            skip += batch.Count;
+            seen += batch.Count;
+
+            var inWindow = batch.Where(t => t.DateTime >= since).ToList();
+            var keep = inWindow.Where(_filter.ShouldRecord).ToList();
+            if (keep.Count > 0)
+            {
+                // Aufsteigend einfügen, damit die CSV in derselben Reihenfolge wächst wie im Betrieb.
+                keep.Reverse();
+                recorded += _store.Insert(keep);
+                _csv?.Append(keep);
+            }
+
+            // Der älteste Datensatz des Stapels liegt vor dem Fenster — weiter zurück muss nicht.
+            if (inWindow.Count < batch.Count)
+                break;
+        }
+
+        _log($"Start-Nachladung ab {since:yyyy-MM-dd HH:mm}: " +
+             $"{recorded} von {seen} gelesenen Telegrammen aufgezeichnet.");
+    }
+
+    /// <summary>Neueste Telegramme absteigend, seitenweise über <paramref name="skip"/>.</summary>
+    Task<IReadOnlyList<Telegram>> FetchNewestAsync(int skip, CancellationToken ct) =>
+        _query.QueryTelegramsAsync(
+            _filter.ServerSideFilters().ToList(),
+            [new QueryOrderBy { column = "Id", sort = "desc" }],
+            _config.BatchSize,
+            skip: skip,
+            ct);
 
     Task<IReadOnlyList<Telegram>> FetchBatchAsync(long afterId, CancellationToken ct)
     {

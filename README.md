@@ -17,8 +17,10 @@ kcc
 `kcc` ohne Argumente ist der Normalbetrieb: Aufzeichnung und Lese-API samt Dashboard laufen
 gemeinsam in einem Prozess, gesteuert über `appsettings.json` (`Record`, `Serve`, `ApiUrl`).
 
-Beim ersten Lauf setzt der Recorder am aktuellen Ende der Protokolltabelle an, damit nicht
-versehentlich Millionen historischer Zeilen gezogen werden. Ältere Telegramme holt `kcc backfill`.
+Beim ersten Lauf setzt der Recorder am aktuellen Ende der Protokolltabelle an und lädt die
+letzten `StartupBackfillMinutes` (Standard 4 Stunden) einmalig nach, damit das Dashboard sofort
+Historie zeigt. Weiter zurück holt `kcc backfill`; ein Neustart setzt ohnehin lückenlos bei der
+zuletzt gesehenen Id wieder an.
 
 ## Kommandos
 
@@ -61,6 +63,9 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `Record` / `Serve` | Was der Aufruf ohne Argumente startet: Aufzeichnung bzw. Lese-API + Dashboard (Standard: beides `true`) |
 | `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme im Normalbetrieb und bei `backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
 | `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
+| `WindowMinutes` | Zeitfenster der Dashboards und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
+| `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
+| `UtilizationTargetUph` / `ResourcePoints` | Richtwert (UPH) und Ressourcenpunkte der Auslastungsauswertung |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
@@ -116,13 +121,13 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | Endpunkt | Zweck |
 |---|---|
 | `GET /` | Dashboard (eine HTML-Datei, pollt `/api/kpis` jede Minute) |
-| `GET /api/kpis?minutes=60` | Kennzahlen über das Zeitfenster |
-| `GET /api/telegrams?minutes=60&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
+| `GET /api/kpis?minutes=240` | Kennzahlen über das Zeitfenster |
+| `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt) |
-| `GET /api/utilization?minutes=60&target=200&bucket=5` | Dieselbe Auswertung als JSON |
+| `GET /api/utilization?minutes=240&target=200&bucket=5` | Dieselbe Auswertung als JSON |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId` |
 
-`minutes` wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
+Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
 Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Lag des jüngsten Telegramms, aktive
 Verbindungen sowie Verteilung nach Richtung, Verbindung und `MessageCode`.
 

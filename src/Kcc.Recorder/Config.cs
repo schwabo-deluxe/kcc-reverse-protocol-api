@@ -79,6 +79,15 @@ public sealed class KccConfig
     /// <summary>Ob der Standardlauf die Lese-API samt Dashboard bereitstellt.</summary>
     public bool Serve { get; set; } = true;
 
+    /// <summary>
+    /// Beim ersten Start einmalig nachgeladene Zeitspanne in Minuten, damit die Dashboards
+    /// sofort Historie zeigen. <c>0</c> schaltet die Nachladung ab.
+    /// </summary>
+    public int StartupBackfillMinutes { get; set; } = 240;
+
+    /// <summary>Zeitfenster der Dashboards und der API, wenn kein <c>minutes</c> mitgegeben wird.</summary>
+    public int WindowMinutes { get; set; } = 240;
+
     /// <summary>Richtwert in Einheiten pro Stunde, auf den sich die Auslastung in Prozent bezieht.</summary>
     public double UtilizationTargetUph { get; set; } = 200;
 

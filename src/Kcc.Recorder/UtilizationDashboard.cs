@@ -52,7 +52,7 @@ public static class UtilizationDashboard
         <body>
         <header>
           <h1>Auslastung (TSPORD)</h1>
-          <label>Fenster (min) <input type="number" id="minutes" value="60" min="1" max="1440"></label>
+          <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
           <label>Raster (min) <input type="number" id="bucket" value="5" min="1" max="120"></label>
           <div class="meta" id="meta">lädt …</div>
@@ -109,6 +109,7 @@ public static class UtilizationDashboard
 
         function render(data) {
           current = data;
+          $('minutes').value = data.windowMinutes;
           $('target').value = data.targetUph;
           $('bucket').value = data.bucketMinutes;
 
@@ -182,12 +183,17 @@ public static class UtilizationDashboard
         });
 
         async function load() {
-          const minutes = Math.min(1440, Math.max(1, parseInt($('minutes').value, 10) || 60));
-          const target = Math.max(1, parseFloat($('target').value) || 200);
+          // Beim ersten Aufruf ohne Vorgabe: Fenster, Richtwert und Raster kommen vom Server
+          // (appsettings.json), damit die Seite sofort die konfigurierte Historie zeigt.
+          const query = new URLSearchParams();
+          const minutes = parseInt($('minutes').value, 10);
+          const target = parseFloat($('target').value);
+          const bucket = parseInt($('bucket').value, 10);
+          if (minutes > 0) query.set('minutes', Math.min(1440, minutes));
+          if (target > 0) query.set('target', target);
+          if (bucket > 0) query.set('bucket', Math.min(120, bucket));
           try {
-            const bucket = Math.min(120, Math.max(1, parseInt($('bucket').value, 10) || 5));
-            const res = await fetch(
-              `api/utilization?minutes=${minutes}&target=${target}&bucket=${bucket}`, { cache: 'no-store' });
+            const res = await fetch('api/utilization?' + query, { cache: 'no-store' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             render(await res.json());
           } catch (e) {
