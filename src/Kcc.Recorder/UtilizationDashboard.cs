@@ -24,19 +24,21 @@ public static class UtilizationDashboard
           .meta { margin-left: auto; color: #9aa4b2; font-size: 12px; }
           .meta.err { color: #ff6b6b; }
           main { padding: 20px; max-width: 1100px; margin: 0 auto; }
-          /* Breite Mindestspalte: auf hochformatigen/schmalen Ansichten wird daraus eine Spalte. */
-          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
+          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; }
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
           .tile .sub { color: #9aa4b2; font-size: 12px; }
           .tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-          /* Vertikaler Stapel: Tacho über dem Verlauf, damit der Chart die volle Breite bekommt. */
-          .gauge { display: block; width: 210px; height: 110px; margin: 10px auto 0; overflow: visible; }
+          /* Tacho links, Verlauf rechts, auf gleicher Höhe. */
+          .tile-body { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+          .gauge-col { flex: 0 0 auto; text-align: center; }
+          .spark-col { flex: 1 1 0; min-width: 0; }
+          .gauge { display: block; width: 128px; height: 66px; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
-          .gauge.sm { width: 108px; height: 57px; margin: 0; }
-          .pct { text-align: center; font-weight: 700; font-size: 24px; line-height: 1; margin-top: 4px; }
-          .spark { display: block; width: 100%; height: 128px; margin-top: 10px; overflow: visible; }
+          .gauge.sm { width: 80px; height: 42px; }
+          .pct { font-weight: 700; font-size: 17px; line-height: 1; margin-top: 2px; }
+          .spark { display: block; width: 100%; height: 66px; overflow: visible; }
           .spark .grid { stroke: #2a2f37; stroke-width: 1; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
           .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -165,17 +167,23 @@ public static class UtilizationDashboard
 
           const byName = n => data.points.find(p => p.resourcePoint === n);
 
-          // Vertikaler Stapel: Kopf, Tacho, großer Verlauf.
+          // Tacho links, Verlauf rechts auf gleicher Höhe.
           const tile = p => `
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${p.label || p.resourcePoint}</span>
                 <span class="sub">${fmt(p.uph)} UPH/h · ${p.count} Telegramme</span>
               </div>
-              ${gauge(p.percent, 150, color(p.percent))}
-              <div class="pct" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
-              ${spark(p, peak, data.targetUph)}
-              <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
+              <div class="tile-body">
+                <div class="gauge-col">
+                  ${gauge(p.percent, 150, color(p.percent))}
+                  <div class="pct" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
+                </div>
+                <div class="spark-col">
+                  ${spark(p, peak, data.targetUph)}
+                  <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
+                </div>
+              </div>
             </div>`;
 
           // Kacheln nach Gruppe gebündelt.

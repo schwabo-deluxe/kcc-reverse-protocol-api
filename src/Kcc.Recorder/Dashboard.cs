@@ -21,8 +21,8 @@ public static class Dashboard
           .hero { display: flex; justify-content: center; margin-bottom: 16px; }
           .hero .card { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 12px 24px 6px; text-align: center; }
           .hero .cap { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-          .hero .pct { font-weight: 700; font-size: 28px; line-height: 1; margin-top: 2px; }
-          .gauge { display: block; width: 240px; height: 128px; margin: 6px auto 0; overflow: visible; }
+          .hero .pct { font-weight: 700; font-size: 22px; line-height: 1; margin-top: 2px; }
+          .gauge { display: block; width: 176px; height: 94px; margin: 6px auto 0; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
           .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
