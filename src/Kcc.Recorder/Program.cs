@@ -186,7 +186,11 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
         if (csv is not null)
             Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
 
-        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
+        var uph = new UphHistorySampler(
+            store, ResolveFormat(config), config.ResourcePoints, config.DestinationLabels,
+            config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log);
+
+        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv, uph);
         await recorder.RunAsync(ct);
 
         // Nach Strg+C nicht unbegrenzt auf die Abmelde-Antwort des Servers warten.
@@ -236,6 +240,15 @@ int Prune(KccConfig config, CommandLine cli)
     var before = store.Count();
     var cutoff = TelegramStore.RetentionCutoff(days);
     var removed = store.DeleteOlderThan(cutoff);
+
+    if (config.UphHistoryRetentionDays > 0)
+    {
+        var uphCutoff = TelegramStore.RetentionCutoff(config.UphHistoryRetentionDays);
+        var uphRemoved = store.DeleteUphSamplesOlderThan(uphCutoff);
+        if (uphRemoved > 0)
+            Log($"{uphRemoved} UPH-Rasterzeilen vor {uphCutoff:yyyy-MM-dd} gelöscht.");
+    }
+
     store.Vacuum();
 
     Log($"{removed} Telegramme vor {cutoff:yyyy-MM-dd} gelöscht ({before} → {store.Count()}).");
@@ -252,6 +265,7 @@ int DumpDashboards(CommandLine cli)
     {
         ("dashboard.html", Dashboard.Html),
         ("auslastung.html", UtilizationDashboard.Html),
+        ("verlauf.html", UphHistoryDashboard.Html),
     };
     foreach (var (name, html) in files)
         File.WriteAllText(Path.Combine(dir, name), html, new UTF8Encoding(false));

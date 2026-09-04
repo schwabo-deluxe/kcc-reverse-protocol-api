@@ -145,9 +145,7 @@ public sealed record TelegramUtilization
         int rateMinutes = 5,
         IReadOnlyDictionary<string, string>? destinationLabels = null)
     {
-        var destLabels = destinationLabels is null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(destinationLabels, StringComparer.OrdinalIgnoreCase);
+        var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
         var rate = Math.Max(1, rateMinutes);
         var rateFrom = now.AddMinutes(-rate);
@@ -171,7 +169,7 @@ public sealed record TelegramUtilization
             _ => (Count: 0, Recent: 0, Errors: 0, Latest: (DateTime?)null),
             StringComparer.OrdinalIgnoreCase);
 
-        // Endziel je Punkt: erste 4 Zeichen des letzten 33er-Blocks (Excel LINKS(RECHTS(D;33);4)).
+        // Endziel je Punkt (kanonisch, Muster wie DLL* zusammengefasst).
         var destinations = names.ToDictionary(
             n => n,
             _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
@@ -200,11 +198,11 @@ public sealed record TelegramUtilization
             if (slot >= 0 && slot < bucketCount)
                 buckets[point][slot]++;
 
-            var dest = Destination(telegram.Data);
+            var dest = destMap.CanonicalFromData(telegram.Data);
             if (dest.Length > 0)
             {
-                var map = destinations[point];
-                map[dest] = map.TryGetValue(dest, out var dc) ? dc + 1 : 1;
+                var byDest = destinations[point];
+                byDest[dest] = byDest.TryGetValue(dest, out var dc) ? dc + 1 : 1;
             }
 
             var error = Field(fields, errorCode);
@@ -248,9 +246,7 @@ public sealed record TelegramUtilization
                     .Select(kv => new DestinationShare
                     {
                         Target = kv.Key,
-                        Label = destLabels.TryGetValue(kv.Key, out var text) && !string.IsNullOrWhiteSpace(text)
-                            ? $"{kv.Key} ({text})"
-                            : kv.Key,
+                        Label = destMap.Label(kv.Key),
                         Count = kv.Value,
                         Percent = s.Count > 0 ? Math.Round(kv.Value * 100.0 / s.Count, 1) : 0,
                     })
@@ -302,21 +298,6 @@ public sealed record TelegramUtilization
 
     static string Field(IReadOnlyList<string> fields, int index) =>
         index >= 0 && index < fields.Count ? fields[index].Trim() : "";
-
-    /// <summary>
-    /// Endziel: das führende Token des letzten 33-Zeichen-Blocks (Excel-Näherung
-    /// <c>LINKS(RECHTS(D;33);4)</c>), aber 4 <em>oder</em> 5 Zeichen lang — z. B. <c>GA51</c>
-    /// oder <c>DLL13</c>. Gelesen wird bis zum ersten Füllzeichen, höchstens 5 Zeichen.
-    /// </summary>
-    static string Destination(string? data)
-    {
-        if (string.IsNullOrEmpty(data)) return "";
-        var right = data.Length <= 33 ? data : data[^33..];
-        var end = 0;
-        while (end < right.Length && end < 5 && right[end] is not ('.' or ' ' or '\0'))
-            end++;
-        return right[..end];
-    }
 
     static int FieldIndex(TelegramFormat format, string name)
     {

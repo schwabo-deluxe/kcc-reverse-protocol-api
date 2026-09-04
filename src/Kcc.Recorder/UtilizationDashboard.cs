@@ -2,7 +2,7 @@ namespace Kcc.Recorder;
 
 /// <summary>
 /// Eingebettete Auslastungsansicht unter <c>/auslastung</c>: pollt <c>/api/utilization</c> und
-/// zeigt je Ressourcenpunkt UPH/h und den Anteil am Richtwert.
+/// zeigt je Ressourcenpunkt UPH und den Anteil am Richtwert.
 /// </summary>
 public static class UtilizationDashboard
 {
@@ -80,7 +80,7 @@ public static class UtilizationDashboard
           <div id="tip" role="status"></div>
           <table>
             <thead><tr>
-              <th>Ressourcenpunkt</th><th>TSPORD</th><th>UPH/h</th>
+              <th>Ressourcenpunkt</th><th>TSPORD</th><th>UPH</th>
               <th>% vom Richtwert</th><th>Fehler</th><th>Letztes Telegramm</th>
             </tr></thead>
             <tbody id="rows"></tbody>
@@ -198,7 +198,7 @@ public static class UtilizationDashboard
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${heading(p)}</span>
-                <span class="sub">${fmt(p.uph)} UPH/h · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
+                <span class="sub">${fmt(p.uph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
               </div>
               <div class="tile-body">
                 <div class="gauge-col">
@@ -219,7 +219,7 @@ public static class UtilizationDashboard
               <div class="grp-h">
                 <span class="grp-name">${g.name}</span>
                 <span class="grp-sum" style="color:${color(g.percent)}">
-                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH/h · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
+                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
                 ${gauge(g.percent, 150, color(g.percent), 'sm')}
               </div>
               <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>
@@ -279,7 +279,7 @@ public static class UtilizationDashboard
           const tip = $('tip');
           tip.innerHTML =
             `<b>${hit.point.resourcePoint}</b> · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
-            `<br>${fmt(hit.bucket.uph)} UPH/h · ${hit.bucket.count} Telegramme`;
+            `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`;
           tip.style.opacity = 1;
           tip.style.left = Math.min(window.innerWidth - 180, e.clientX + 12) + 'px';
           tip.style.top = (e.clientY + 14) + 'px';

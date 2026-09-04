@@ -31,7 +31,7 @@ public class TelegramUtilizationTests
     [Fact]
     public void Uph_und_Prozent_kommen_aus_dem_Rate_Fenster()
     {
-        // 6 Telegramme in den letzten 5 min -> 6 / (5/60) = 72 UPH/h = 36 % von 200.
+        // 6 Telegramme in den letzten 5 min -> 6 / (5/60) = 72 UPH = 36 % von 200.
         // Die zwei älteren zählen für Count, nicht für UPH.
         var window = new[]
         {
@@ -200,6 +200,24 @@ public class TelegramUtilizationTests
         var d = Point(u, "DA21").Destinations;
         Assert.Equal("GA51 (Kommissionierung)", d.Single(x => x.Target == "GA51").Label);
         Assert.Equal("XX99", d.Single(x => x.Target == "XX99").Label);
+    }
+
+    [Fact]
+    public void Fasst_Zielmuster_zusammen()
+    {
+        var u = TelegramUtilization.Compute(
+            [
+                T(1, 5, "DA21", destination: "DLL13"),
+                T(2, 4, "DA21", destination: "DLL07"),
+                T(3, 3, "DA21", destination: "WA01"),
+            ],
+            TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            destinationLabels: new Dictionary<string, string> { ["DLL*"] = "Auslagerung DLL" });
+
+        var d = Point(u, "DA21").Destinations;
+        Assert.Equal(["DLL*", "WA01"], d.Select(x => x.Target));
+        Assert.Equal(2, d[0].Count);
+        Assert.Equal("DLL* (Auslagerung DLL)", d[0].Label);
     }
 
     [Fact]

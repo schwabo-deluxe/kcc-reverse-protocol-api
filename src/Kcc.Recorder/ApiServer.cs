@@ -14,6 +14,8 @@ namespace Kcc.Recorder;
 ///   <item><c>GET /api/telegrams?minutes=240&amp;limit=2000</c> — Telegramme des Zeitfensters</item>
 ///   <item><c>GET /auslastung</c> — Auslastung der Ressourcenpunkte</item>
 ///   <item><c>GET /api/utilization?minutes=240&amp;target=200&amp;bucket=5</c> — Auslastung als JSON</item>
+///   <item><c>GET /verlauf</c> — UPH-Historie je Endziel (eigene 4-Wochen-Aufbewahrung)</item>
+///   <item><c>GET /api/uph-history?hours=168&amp;bucket=15&amp;rp=MA72</c> — Historie als JSON</item>
 ///   <item><c>GET /health</c></item>
 /// </list>
 /// </summary>
@@ -92,8 +94,16 @@ public static class ApiServer
                 case "/auslastung.html":
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
                     break;
+                case "/verlauf":
+                case "/verlauf.html":
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", UphHistoryDashboard.Html);
+                    break;
                 case "/api/utilization":
                     await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx, config), Target(ctx, config), Bucket(ctx), Rate(ctx, config)));
+                    break;
+                case "/api/uph-history":
+                    await WriteJsonAsync(res, 200, UphHistory(config, format,
+                        HistHours(ctx), HistBucket(ctx, config), ctx.Request.QueryString["rp"]));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -139,6 +149,18 @@ public static class ApiServer
         return TelegramUtilization.Compute(
             w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
             config.DestinationLabels);
+    }
+
+    static UphHistoryReport UphHistory(
+        KccConfig config, TelegramFormat format, int hours, int bucketMinutes, string? resourcePoint)
+    {
+        using var store = new TelegramStore(config.Database);
+        var end = store.MaxTelegramTime()
+            ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+        var start = end.AddHours(-hours);
+        var rows = store.ReadUphSamples(start, end);
+        return UphHistoryReport.Compute(
+            rows, start, end, bucketMinutes, config.DestinationLabels, resourcePoint);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -227,6 +249,13 @@ public static class ApiServer
 
     static int Rate(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["rate"], fallback: config.UtilizationRateMinutes, min: 1, max: 240);
+
+    // UPH-Historie: Zeitraum bis 4 Wochen, Anzeigeraster bis 1 Tag.
+    static int HistHours(HttpListenerContext ctx) =>
+        Clamp(ctx.Request.QueryString["hours"], fallback: 168, min: 1, max: 24 * 28);
+
+    static int HistBucket(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UphHistoryIntervalMinutes, min: 5, max: 1440);
 
     static double Target(HttpListenerContext ctx, KccConfig config) =>
         double.TryParse(ctx.Request.QueryString["target"],

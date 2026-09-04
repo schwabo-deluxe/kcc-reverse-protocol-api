@@ -112,7 +112,7 @@ public sealed class KccConfig
     public double UtilizationTargetUph { get; set; } = 200;
 
     /// <summary>
-    /// Trailing-Fenster in Minuten, aus dem UPH/h und Prozent der Auslastung hochgerechnet werden
+    /// Trailing-Fenster in Minuten, aus dem UPH und Prozent der Auslastung hochgerechnet werden
     /// (Standard: <c>5</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
     /// </summary>
     public int UtilizationRateMinutes { get; set; } = 5;
@@ -124,11 +124,21 @@ public sealed class KccConfig
     public List<ResourcePointConfig> ResourcePoints { get; set; } = [];
 
     /// <summary>
-    /// Klartext für Endziele (erste 4 Zeichen des letzten 33er-Blocks), z. B.
-    /// <c>{ "GA51": "Kommissionierung" }</c>. Wird in der Zieltabelle als <c>GA51 (Kommissionierung)</c>
-    /// angezeigt. Unbekannte Ziele bleiben roh.
+    /// Klartext für Endziele (führendes Token des letzten 33er-Blocks, 4–5 Zeichen), z. B.
+    /// <c>{ "GA51": "Kommissionierung" }</c> ⇒ Anzeige <c>GA51 (Kommissionierung)</c>. Ein Schlüssel
+    /// mit <c>*</c> am Ende ist ein Präfixmuster: <c>{ "DLL*": "Auslagerung DLL" }</c> fasst alle
+    /// <c>DLL…</c> zu einem Ziel zusammen. Unbekannte Ziele bleiben roh.
     /// </summary>
     public Dictionary<string, string> DestinationLabels { get; set; } = [];
+
+    /// <summary>Rasterweite der UPH-Historie in Minuten (Standard <c>15</c>) — wie fein <c>/verlauf</c> auflöst.</summary>
+    public int UphHistoryIntervalMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Aufbewahrung der UPH-Historie in Tagen (Standard <c>28</c> = 4 Wochen), getrennt von
+    /// <see cref="RetentionDays"/> der Rohtelegramme. <c>0</c>/negativ = unbegrenzt.
+    /// </summary>
+    public int UphHistoryRetentionDays { get; set; } = 28;
 
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;

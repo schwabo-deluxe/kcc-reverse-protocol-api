@@ -119,6 +119,30 @@ public class TelegramStoreTests : IDisposable
         Assert.Equal(2, rows[0].Id);
     }
 
+    [Fact]
+    public void Uph_Historie_wird_ab_Stichtag_ersetzt_und_zeitraumweise_gelesen()
+    {
+        using var store = new TelegramStore(_path);
+        var t0 = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Unspecified);
+
+        UphSampleRow Row(int min, string rp, string dest, int orders) =>
+            new() { Bucket = t0.AddMinutes(min), ResourcePoint = rp, Destination = dest, Orders = orders };
+
+        store.ReplaceUphSamplesFrom(t0, [Row(0, "MA72", "WA01", 5), Row(15, "MA72", "WA01", 7)]);
+        Assert.Equal(2, store.UphSampleCount());
+        Assert.Equal(t0.AddMinutes(15), store.MaxUphBucket());
+
+        // Erneut ab Minute 15 verdichten — die frühere Zeile bei 0 bleibt, die bei 15 wird ersetzt.
+        store.ReplaceUphSamplesFrom(t0.AddMinutes(15), [Row(15, "MA72", "WA01", 9), Row(30, "MA72", "GA51", 3)]);
+
+        var rows = store.ReadUphSamples(t0, t0.AddMinutes(60));
+        Assert.Equal([5, 9, 3], rows.Select(r => r.Orders));
+        Assert.Equal(DateTimeKind.Unspecified, rows[0].Bucket.Kind);
+
+        Assert.Equal(1, store.DeleteUphSamplesOlderThan(t0.AddMinutes(15)));
+        Assert.Equal(2, store.UphSampleCount());
+    }
+
     public void Dispose()
     {
         foreach (var file in new[] { _path, _path + "-wal", _path + "-shm" })

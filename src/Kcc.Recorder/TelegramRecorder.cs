@@ -15,6 +15,7 @@ public sealed class TelegramRecorder
     readonly KccConfig _config;
     readonly Action<string> _log;
     readonly TelegramCsvWriter? _csv;
+    readonly UphHistorySampler? _uph;
 
     public TelegramRecorder(
         KccQuery query,
@@ -22,7 +23,8 @@ public sealed class TelegramRecorder
         RecordFilter filter,
         KccConfig config,
         Action<string> log,
-        TelegramCsvWriter? csv = null)
+        TelegramCsvWriter? csv = null,
+        UphHistorySampler? uph = null)
     {
         _query = query;
         _store = store;
@@ -30,6 +32,7 @@ public sealed class TelegramRecorder
         _config = config;
         _log = log;
         _csv = csv;
+        _uph = uph;
     }
 
     DateTime _nextRetentionCheck = DateTime.MinValue;
@@ -55,12 +58,15 @@ public sealed class TelegramRecorder
             _log($"Setze fort ab Id {lastSeenId}.");
         }
 
+        _uph?.Tick();
+
         var recorded = 0L;
         var seen = 0L;
 
         while (!ct.IsCancellationRequested)
         {
             ApplyRetention();
+            _uph?.Tick();
 
             var batch = await FetchBatchAsync(lastSeenId.Value, ct);
 

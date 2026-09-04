@@ -46,6 +46,16 @@ public sealed class TelegramStore : IDisposable
                 Value TEXT NOT NULL
             );
             """);
+        Execute("""
+            CREATE TABLE IF NOT EXISTS uph_samples (
+                Bucket        TEXT    NOT NULL,
+                ResourcePoint TEXT    NOT NULL,
+                Destination   TEXT    NOT NULL,
+                Orders        INTEGER NOT NULL,
+                PRIMARY KEY (Bucket, ResourcePoint, Destination)
+            );
+            """);
+        Execute("CREATE INDEX IF NOT EXISTS ix_uph_samples_bucket ON uph_samples(Bucket);");
     }
 
     /// <summary>Schreibt einen Stapel in einer Transaktion. Bereits vorhandene Ids werden übersprungen.</summary>
@@ -204,6 +214,105 @@ public sealed class TelegramStore : IDisposable
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5));
         }
+    }
+
+    // ---- UPH-Historie (verdichtete Zähler, eigene Aufbewahrung) --------------------------------
+
+    /// <summary>Jüngstes bereits verdichtetes Zeitraster, oder <c>null</c> solange nichts verdichtet wurde.</summary>
+    public DateTime? MaxUphBucket()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MAX(Bucket) FROM uph_samples;";
+        return command.ExecuteScalar() is string s && s.Length > 0
+            ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
+    }
+
+    public long UphSampleCount()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM uph_samples;";
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Ersetzt alle Rasterzeilen ab <paramref name="from"/> (einschließlich) durch
+    /// <paramref name="rows"/> — in einer Transaktion, damit die Verdichtung wiederholbar ist
+    /// (das jüngste, evtl. noch unvollständige Raster wird beim nächsten Lauf neu gerechnet).
+    /// </summary>
+    public void ReplaceUphSamplesFrom(DateTime from, IEnumerable<UphSampleRow> rows)
+    {
+        using var transaction = _connection.BeginTransaction();
+
+        using (var delete = _connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM uph_samples WHERE Bucket >= $from;";
+            delete.Parameters.AddWithValue("$from", Stamp(from));
+            delete.ExecuteNonQuery();
+        }
+
+        using (var insert = _connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO uph_samples (Bucket, ResourcePoint, Destination, Orders)
+                VALUES ($bucket, $resourcePoint, $destination, $orders)
+                ON CONFLICT(Bucket, ResourcePoint, Destination) DO UPDATE SET Orders = excluded.Orders;
+                """;
+            var bucket = insert.Parameters.Add("$bucket", SqliteType.Text);
+            var resourcePoint = insert.Parameters.Add("$resourcePoint", SqliteType.Text);
+            var destination = insert.Parameters.Add("$destination", SqliteType.Text);
+            var orders = insert.Parameters.Add("$orders", SqliteType.Integer);
+
+            foreach (var row in rows)
+            {
+                bucket.Value = Stamp(row.Bucket);
+                resourcePoint.Value = row.ResourcePoint;
+                destination.Value = row.Destination;
+                orders.Value = row.Orders;
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        transaction.Commit();
+    }
+
+    /// <summary>Löscht Rasterzeilen vor dem Stichtag. Gibt die Anzahl zurück.</summary>
+    public int DeleteUphSamplesOlderThan(DateTime cutoffExclusive)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM uph_samples WHERE Bucket < $cutoff;";
+        command.Parameters.AddWithValue("$cutoff", Stamp(cutoffExclusive));
+        return command.ExecuteNonQuery();
+    }
+
+    /// <summary>Rasterzeilen im Halbbereich <c>[from, to)</c>, aufsteigend.</summary>
+    public IReadOnlyList<UphSampleRow> ReadUphSamples(DateTime from, DateTime to)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT Bucket, ResourcePoint, Destination, Orders FROM uph_samples
+            WHERE Bucket >= $from AND Bucket < $to
+            ORDER BY Bucket;
+            """;
+        command.Parameters.AddWithValue("$from", Stamp(from));
+        command.Parameters.AddWithValue("$to", Stamp(to));
+
+        var list = new List<UphSampleRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(new UphSampleRow
+            {
+                Bucket = DateTime.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind),
+                ResourcePoint = reader.GetString(1),
+                Destination = reader.GetString(2),
+                Orders = reader.GetInt32(3),
+            });
+        }
+        return list;
     }
 
     void Execute(string sql)

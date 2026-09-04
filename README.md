@@ -66,9 +66,11 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `WindowMinutes` | Zeitfenster der Dashboards und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
 | `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht |
-| `UtilizationRateMinutes` | Trailing-Fenster (Standard `5`), aus dem UPH/h und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
+| `UtilizationRateMinutes` | Trailing-Fenster (Standard `5`), aus dem UPH und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A" }`. `Group`/`Label` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Leere Liste ⇒ eingebaute Vorgabe. |
-| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. |
+| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
+| `UphHistoryIntervalMinutes` | Rasterweite der UPH-Historie in Minuten (Standard `15`) — wie fein `/verlauf` auflöst. |
+| `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
@@ -128,8 +130,10 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/kpis?minutes=240` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
-| `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH/h, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
+| `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
 | `GET /api/utilization?minutes=240&target=200&bucket=5&rate=5` | Dieselbe Auswertung als JSON (`rate` = UPH-Fenster in Minuten) |
+| `GET /verlauf` | UPH-Historie je Endziel als gestapelte Fläche plus Mengenverhältnis der Ziele. Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener 4-Wochen-Aufbewahrung** (`UphHistoryRetentionDays`), die der Recorder laufend aus den Rohtelegrammen bildet |
+| `GET /api/uph-history?hours=168&bucket=15&rp=MA72` | Historie als JSON: Buckets je Endziel (Menge + UPH), Summen mit Ø UPH und Anteil. `hours` bis 672 (4 W), `bucket` frei wählbar, `rp` grenzt auf einen Ressourcenpunkt ein |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
@@ -166,9 +170,10 @@ dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
 ```
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
-(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`) samt Prüfsumme
-an ein GitHub-Release. Die beiden HTML-Dateien sind dieselben Dashboards, die die API unter `/`
-bzw. `/auslastung` ausliefert — `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
+(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`)
+samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards, die die API
+unter `/`, `/auslastung` bzw. `/verlauf` ausliefert — `kcc dump-dashboards [--out verz]` schreibt
+sie jederzeit heraus.
 Als lose Datei geöffnet fragen sie fest `http://localhost:8080` ab; mit `?api=http://host:port`
 lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
 
