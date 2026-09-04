@@ -84,6 +84,37 @@ public sealed class UphHistorySampler
              $"(bis {completeUpTo:yyyy-MM-dd HH:mm}).");
     }
 
+    /// <summary>
+    /// Baut die gesamte Historie aus den Rohtelegrammen neu auf — nötig, nachdem ältere
+    /// Telegramme per <c>backfill</c> nachgeladen wurden, denn <see cref="SampleNow"/> rechnet
+    /// nur vorwärts ab dem zuletzt gespeicherten Raster. Fenster: das Kürzere aus
+    /// Aufbewahrungszeitraum und ältestem vorhandenen Telegramm.
+    /// </summary>
+    public void Rebuild()
+    {
+        var newest = _store.MaxTelegramTime();
+        if (newest is null)
+            return;
+
+        var step = TimeSpan.FromMinutes(_intervalMinutes);
+        var completeUpTo = Floor(newest.Value, step);
+        var retentionStart = _retentionDays > 0
+            ? Floor(newest.Value.AddDays(-_retentionDays), step)
+            : DateTime.MinValue;
+        var oldest = _store.MinTelegramTime() is { } min ? Floor(min, step) : completeUpTo;
+        var start = oldest > retentionStart ? oldest : retentionStart;
+
+        if (start >= completeUpTo)
+            return;
+
+        var rows = Aggregate(start, completeUpTo, step);
+        _store.ReplaceUphSamplesFrom(DateTime.MinValue, rows);   // alles verwerfen, komplett neu
+        _nextRun = DateTime.UtcNow.AddMinutes(_intervalMinutes);
+
+        _log($"UPH-Historie neu aufgebaut: {rows.Count} Rasterzeilen " +
+             $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+    }
+
     void ApplyRetention()
     {
         if (_retentionDays <= 0 || DateTime.UtcNow < _nextRetention)

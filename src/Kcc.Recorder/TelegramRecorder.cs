@@ -58,7 +58,8 @@ public sealed class TelegramRecorder
             _log($"Setze fort ab Id {lastSeenId}.");
         }
 
-        _uph?.Tick();
+        // Beim Start einmal komplett neu aufbauen — fängt zwischenzeitliche 'backfill'-Läufe ab.
+        _uph?.Rebuild();
 
         var recorded = 0L;
         var seen = 0L;

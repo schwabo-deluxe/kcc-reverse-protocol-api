@@ -39,6 +39,7 @@ try
         "query" => await QueryAsync(config, cli, cancellation.Token),
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
         "prune" => Prune(config, cli),
+        "uph-rebuild" => UphRebuild(config),
         "export" => Export(config, cli),
         "dump-dashboards" => DumpDashboards(cli),
         _ => UnknownCommand(cli.Command),
@@ -186,11 +187,7 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
         if (csv is not null)
             Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
 
-        var uph = new UphHistorySampler(
-            store, ResolveFormat(config), config.ResourcePoints, config.DestinationLabels,
-            config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log);
-
-        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv, uph);
+        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv, NewUphSampler(config, store));
         await recorder.RunAsync(ct);
 
         // Nach Strg+C nicht unbegrenzt auf die Abmelde-Antwort des Servers warten.
@@ -224,8 +221,23 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
         using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await session.LogoffAsync(logoffTimeout.Token);
     }
+
+    // Nachgeladene ältere Telegramme in die UPH-Historie übernehmen.
+    NewUphSampler(config, store).Rebuild();
     return 0;
 }
+
+// Baut die UPH-Historie aus den vorhandenen Telegrammen neu auf (nach 'backfill' oder Konfig-Änderung).
+int UphRebuild(KccConfig config)
+{
+    using var store = new TelegramStore(config.Database);
+    NewUphSampler(config, store).Rebuild();
+    return 0;
+}
+
+UphHistorySampler NewUphSampler(KccConfig config, TelegramStore store) =>
+    new(store, ResolveFormat(config), config.ResourcePoints, config.DestinationLabels,
+        config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log);
 
 int Prune(KccConfig config, CommandLine cli)
 {
@@ -353,6 +365,8 @@ static void PrintUsage() => Console.WriteLine(
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
+      uph-rebuild                      UPH-Historie (/verlauf) aus den Telegrammen neu aufbauen —
+                                       nach 'backfill' oder Änderung von UphHistory*-Optionen
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
       dump-dashboards [--out verz]     dashboard.html + auslastung.html herausschreiben

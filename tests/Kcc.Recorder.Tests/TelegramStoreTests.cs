@@ -120,6 +120,24 @@ public class TelegramStoreTests : IDisposable
     }
 
     [Fact]
+    public void MinTelegramTime_liefert_den_aeltesten_Zeitstempel_ohne_Zeitzone()
+    {
+        using var store = new TelegramStore(_path);
+        Assert.Null(store.MinTelegramTime());
+
+        store.Insert([
+            new Telegram(2, new DateTime(2026, 9, 2, 9, 0, 0, DateTimeKind.Utc),
+                TelegramDirection.FromPlc, "P", "b", null),
+            new Telegram(1, new DateTime(2026, 9, 2, 7, 30, 0, DateTimeKind.Utc),
+                TelegramDirection.FromPlc, "P", "a", null),
+        ]);
+
+        var min = store.MinTelegramTime();
+        Assert.Equal(new DateTime(2026, 9, 2, 7, 30, 0), min);
+        Assert.Equal(DateTimeKind.Unspecified, min!.Value.Kind);
+    }
+
+    [Fact]
     public void Uph_Historie_wird_ab_Stichtag_ersetzt_und_zeitraumweise_gelesen()
     {
         using var store = new TelegramStore(_path);

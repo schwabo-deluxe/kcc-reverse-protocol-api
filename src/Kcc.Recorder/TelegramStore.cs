@@ -165,6 +165,16 @@ public sealed class TelegramStore : IDisposable
             : null;
     }
 
+    /// <summary><c>DateTime</c> des ältesten Telegramms, oder <c>null</c> bei leerer Tabelle.</summary>
+    public DateTime? MinTelegramTime()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MIN(DateTime) FROM telegrams;";
+        return command.ExecuteScalar() is string s && s.Length > 0
+            ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
+    }
+
     /// <summary>
     /// Sekunden seit dem letzten Schreibvorgang (Spalte <c>RecordedAt</c>, unsere UTC-Uhr) —
     /// zeigt, ob der Recorder noch Telegramme ablegt. <c>null</c>, solange nichts geschrieben wurde.

@@ -29,8 +29,9 @@ zuletzt gesehenen Id wieder an.
 | `kcc login-test` | Verbindung, Zertifikat und Anmeldung prüfen |
 | `kcc` (ohne Argumente) | Normalbetrieb: Aufzeichnung + Lese-API/Dashboard |
 | `kcc query --take 100 [--json]` | Einmalabfrage auf stdout — zum Abgleich mit dem Web-Grid |
-| `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen |
+| `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen (baut anschließend die UPH-Historie neu auf) |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
+| `kcc uph-rebuild` | UPH-Historie (`/verlauf`) aus den vorhandenen Telegrammen neu aufbauen — nach einem separaten `backfill` oder Änderung der `UphHistory*`-Optionen |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -70,7 +71,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A" }`. `Group`/`Label` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Leere Liste ⇒ eingebaute Vorgabe. |
 | `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
 | `UphHistoryIntervalMinutes` | Rasterweite der UPH-Historie in Minuten (Standard `15`) — wie fein `/verlauf` auflöst. |
-| `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. |
+| `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. `/verlauf` zeigt nur diesen Zeitraum — für weiter zurück den Wert erhöhen und `kcc uph-rebuild` laufen lassen. Der Recorder baut die Historie bei jedem Start und nach `backfill` neu auf. |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
@@ -132,8 +133,8 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
 | `GET /api/utilization?minutes=240&target=200&bucket=5&rate=5` | Dieselbe Auswertung als JSON (`rate` = UPH-Fenster in Minuten) |
-| `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener 4-Wochen-Aufbewahrung** (`UphHistoryRetentionDays`), die der Recorder laufend aus den Rohtelegrammen bildet |
-| `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
+| `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Zeitbereich per Maus aufziehen zoomt hinein (Doppelklick / „Zoom zurück" setzt zurück). Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener Aufbewahrung** `UphHistoryRetentionDays` (Standard 4 Wochen), die der Recorder laufend aus den Rohtelegrammen bildet — weiter zurück als dieser Zeitraum reicht `/verlauf` nicht, auch nach `backfill` nicht |
+| `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, Anlagenzeit); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,

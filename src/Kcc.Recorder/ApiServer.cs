@@ -103,7 +103,8 @@ public static class ApiServer
                     break;
                 case "/api/uph-history":
                     await WriteJsonAsync(res, 200, UphHistory(config, format,
-                        HistHours(ctx), HistBucket(ctx, config), HistGroupBy(ctx), ctx.Request.QueryString["rp"]));
+                        HistHours(ctx), HistBucket(ctx, config), HistGroupBy(ctx), ctx.Request.QueryString["rp"],
+                        HistStamp(ctx, "from"), HistStamp(ctx, "to")));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -153,12 +154,18 @@ public static class ApiServer
 
     static UphHistoryReport UphHistory(
         KccConfig config, TelegramFormat format, int hours, int bucketMinutes,
-        UphHistoryGroupBy groupBy, string? resourcePoint)
+        UphHistoryGroupBy groupBy, string? resourcePoint, DateTime? from, DateTime? to)
     {
         using var store = new TelegramStore(config.Database);
-        var end = store.MaxTelegramTime()
+        var newest = store.MaxTelegramTime()
             ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
-        var start = end.AddHours(-hours);
+
+        // Absolutes Fenster (Zoom per from&to) schlägt das relative 'hours'-Fenster.
+        var end = to ?? newest;
+        var start = from ?? end.AddHours(-hours);
+        if (start >= end)
+            start = end.AddHours(-1);
+
         var rows = store.ReadUphSamples(start, end);
         return UphHistoryReport.Compute(
             rows, start, end, bucketMinutes, groupBy,
@@ -263,6 +270,14 @@ public static class ApiServer
         string.Equals(ctx.Request.QueryString["groupBy"], "resourcePoint", StringComparison.OrdinalIgnoreCase)
             ? UphHistoryGroupBy.ResourcePoint
             : UphHistoryGroupBy.Destination;
+
+    // Zeitzonenfrei geparst — passend zur Ablage in Anlagenzeit.
+    static DateTime? HistStamp(HttpListenerContext ctx, string key) =>
+        DateTime.TryParse(ctx.Request.QueryString[key],
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var v)
+            ? DateTime.SpecifyKind(v, DateTimeKind.Unspecified)
+            : null;
 
     static double Target(HttpListenerContext ctx, KccConfig config) =>
         double.TryParse(ctx.Request.QueryString["target"],
