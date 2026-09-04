@@ -67,7 +67,8 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `WindowMinutes` | Zeitfenster des KPI-Dashboards (`/`) und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
 | `UtilizationWindowMinutes` | Zeitfenster der Auslastungsansicht (`/auslastung`) ohne `minutes`-Parameter (Standard: `60`) |
-| `UtilizationBucketMinutes` | Rasterweite des Verlaufs in der Auslastungsansicht ohne `bucket`-Parameter (Standard: `5`) |
+| `UtilizationBucketMinutes` | Breite des **gleitenden** Fensters der Verlaufskurven in der Auslastungsansicht ohne `bucket`-Parameter (Standard: `5`). Der Verlauf gleitet, statt in feste Eimer zu springen — der letzte Punkt ist der aktuell laufende Trailing-Wert, deckungsgleich mit der Tacho-Anzeige. |
+| `UtilizationSeriesStepMinutes` | Abtastschritt der Verlaufskurven ohne `step`-Parameter (Standard: `1`) — ein Stützpunkt je Schritt |
 | `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht (Standard: `200`) |
 | `UtilizationRateMinutes` | Trailing-Fenster (Standard `1`), aus dem UPH und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A", "Order": 1 }`. `Group`/`Label`/`Order` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Innerhalb einer Gruppe wird nach `Order` (aufsteigend) sortiert, ohne Angabe nach Listenposition. Leere Liste ⇒ eingebaute Vorgabe. |
@@ -135,7 +136,7 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
-| `GET /api/utilization?minutes=240&target=200&bucket=5&rate=5` | Dieselbe Auswertung als JSON (`rate` = UPH-Fenster in Minuten) |
+| `GET /api/utilization?minutes=60&target=200&bucket=5&rate=1&step=1` | Dieselbe Auswertung als JSON. `rate` = Trailing-Fenster für UPH/Prozent; `bucket` = Breite des gleitenden Verlaufsfensters; `step` = Abtastschritt des Verlaufs |
 | `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Zeitbereich per Maus aufziehen zoomt hinein (Doppelklick / „Zoom zurück" setzt zurück). Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener Aufbewahrung** `UphHistoryRetentionDays` (Standard 4 Wochen), die der Recorder laufend aus den Rohtelegrammen bildet — weiter zurück als dieser Zeitraum reicht `/verlauf` nicht, auch nach `backfill` nicht |
 | `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, Anlagenzeit); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |

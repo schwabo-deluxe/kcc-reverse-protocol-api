@@ -99,7 +99,7 @@ public static class ApiServer
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UphHistoryDashboard.Html);
                     break;
                 case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, UtilMinutes(ctx, config), Target(ctx, config), Bucket(ctx, config), Rate(ctx, config)));
+                    await WriteJsonAsync(res, 200, Utilization(config, format, UtilMinutes(ctx, config), Target(ctx, config), Bucket(ctx, config), Rate(ctx, config), SeriesStep(ctx, config)));
                     break;
                 case "/api/uph-history":
                     await WriteJsonAsync(res, 200, UphHistory(config, format,
@@ -143,13 +143,14 @@ public static class ApiServer
     }
 
     static TelegramUtilization Utilization(
-        KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes, int rateMinutes)
+        KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes,
+        int rateMinutes, int seriesStep)
     {
         using var store = new TelegramStore(config.Database);
         var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
             w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
-            config.DestinationLabels, config.GroupOrder);
+            config.DestinationLabels, config.GroupOrder, seriesStep);
     }
 
     static UphHistoryReport UphHistory(
@@ -261,6 +262,9 @@ public static class ApiServer
 
     static int Rate(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["rate"], fallback: config.UtilizationRateMinutes, min: 1, max: 240);
+
+    static int SeriesStep(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["step"], fallback: config.UtilizationSeriesStepMinutes, min: 1, max: 30);
 
     // UPH-Historie: Zeitraum bis 4 Wochen, Anzeigeraster bis 1 Tag.
     static int HistHours(HttpListenerContext ctx) =>

@@ -94,41 +94,48 @@ public class TelegramUtilizationTests
     }
 
     [Fact]
-    public void Rastert_den_Verlauf_in_Fuenf_Minuten_Eimer()
+    public void Verlauf_ist_ein_gleitendes_Fenster()
     {
-        // Fenster 12:00–13:00, Raster 5 min: zwei Telegramme im Eimer 12:00, eines um 12:55.
-        var window = new[]
-        {
-            T(1, 59, "DA21"),
-            T(2, 57, "DA21"),
-            T(3, 3, "DA21"),
-        };
-
+        // Fenster 60 min, Glättung 5, Schritt 1 -> 60 Stützpunkte, Fensterbreite 5 min.
+        // Ein Telegramm vor 30 min erscheint in genau 5 aufeinanderfolgenden Punkten.
         var u = TelegramUtilization.Compute(
-            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
-            bucketMinutes: 5);
+            [T(1, 30, "DA21")], TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            bucketMinutes: 5, seriesStepMinutes: 1);
 
         Assert.Equal(5, u.BucketMinutes);
+        Assert.Equal(1, u.SeriesStepMinutes);
         var series = Point(u, "DA21").Series;
-        Assert.Equal(12, series.Count);
-        Assert.Equal(Now.AddMinutes(-60), series[0].At);
-        Assert.Equal(2, series[0].Count);
-        Assert.Equal(24, series[0].Uph);   // 2 je 5 min = 24/h
-        Assert.Equal(0, series[1].Count);
-        Assert.Equal(1, series[11].Count);
-        Assert.Equal(3, series.Sum(b => b.Count));
+        Assert.Equal(60, series.Count);
+        Assert.Equal(Now, series[^1].At);                     // letzter Punkt endet jetzt
+        Assert.Equal(5, series.Count(b => b.Count > 0));
+        Assert.All(series.Where(b => b.Count > 0), b => Assert.Equal(1, b.Count));
+        Assert.All(series.Where(b => b.Count > 0), b => Assert.Equal(12, b.Uph));  // 1 / (5/60)
     }
 
     [Fact]
-    public void Rastert_auch_bei_unteilbarem_Fenster_lueckenlos()
+    public void Verlauf_endet_mit_dem_aktuell_laufenden_Trailing_Wert()
+    {
+        // 3 Telegramme in den letzten 5 min, eines älter -> letzter Stützpunkt zeigt 3 (= 36 UPH).
+        var u = TelegramUtilization.Compute(
+            [T(1, 1, "DA21"), T(2, 2, "DA21"), T(3, 4, "DA21"), T(4, 20, "DA21")],
+            TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            bucketMinutes: 5, seriesStepMinutes: 1);
+
+        var last = Point(u, "DA21").Series[^1];
+        Assert.Equal(3, last.Count);
+        Assert.Equal(36, last.Uph);
+    }
+
+    [Fact]
+    public void Verlauf_deckt_das_ganze_Fenster_ab()
     {
         var u = TelegramUtilization.Compute(
             [T(1, 1, "DA21")], TelegramFormat.Default, windowMinutes: 7, targetUph: 200, windowEnd: Now,
-            bucketMinutes: 5);
+            bucketMinutes: 5, seriesStepMinutes: 1);
 
         var series = Point(u, "DA21").Series;
-        Assert.Equal(2, series.Count);
-        Assert.Equal(1, series.Sum(b => b.Count));
+        Assert.Equal(7, series.Count);
+        Assert.Equal(1, series[^1].Count);
     }
 
     [Fact]

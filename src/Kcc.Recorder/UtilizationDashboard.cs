@@ -71,7 +71,7 @@ public static class UtilizationDashboard
           <h1>Auslastung (TSPORD)</h1>
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
-          <label>Raster (min) <input type="number" id="bucket" value="5" min="1" max="120"></label>
+          <label>Glättung (min) <input type="number" id="bucket" value="5" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
           <label>UPH aus (min) <input type="number" id="rate" value="1" min="1" max="240"></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
@@ -243,7 +243,7 @@ public static class UtilizationDashboard
 
           $('meta').classList.remove('err');
           $('meta').textContent =
-            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Raster ${data.bucketMinutes} min · UPH aus ${data.rateMinutes} min` +
+            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Verlauf gleitend ${data.bucketMinutes} min · UPH aus ${data.rateMinutes} min` +
             ` · Stand ${new Date().toLocaleTimeString('de-DE')}`;
         }
 

@@ -119,8 +119,11 @@ public sealed record TelegramUtilization
     /// <summary>Alle <c>TSPORD</c>-Telegramme im Fenster — auch die ohne gelisteten Punkt.</summary>
     public required int TotalOrders { get; init; }
 
-    /// <summary>Breite eines Intervalls der Verlaufskurven in Minuten.</summary>
+    /// <summary>Breite des gleitenden Fensters der Verlaufskurven in Minuten (Glättung).</summary>
     public required int BucketMinutes { get; init; }
+
+    /// <summary>Abtastschritt der Verlaufskurven in Minuten — ein Stützpunkt je Schritt.</summary>
+    public required int SeriesStepMinutes { get; init; }
 
     /// <summary>Trailing-Fenster in Minuten, aus dem <see cref="ResourcePointUtilization.Uph"/> hochgerechnet wird.</summary>
     public required int RateMinutes { get; init; }
@@ -144,7 +147,8 @@ public sealed record TelegramUtilization
         int bucketMinutes = 5,
         int rateMinutes = 5,
         IReadOnlyDictionary<string, string>? destinationLabels = null,
-        IReadOnlyList<string>? groupOrder = null)
+        IReadOnlyList<string>? groupOrder = null,
+        int seriesStepMinutes = 1)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
@@ -184,11 +188,15 @@ public sealed record TelegramUtilization
             _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             StringComparer.OrdinalIgnoreCase);
 
-        // Zeitraster: der letzte Eimer endet bei 'now', der erste beginnt am Fensteranfang.
-        var bucketWidth = Math.Max(1, bucketMinutes);
-        var bucketCount = Math.Max(1, (int)Math.Ceiling(windowMinutes / (double)bucketWidth));
+        // Verlauf als gleitendes Fenster: fein abtasten (Schritt), dann je Stützpunkt die
+        // Menge der letzten 'bucketWidth' Minuten summieren. Der letzte Stützpunkt endet bei
+        // 'now' und zeigt damit den aktuell laufenden Trailing-Wert („developing").
+        var step = Math.Max(1, seriesStepMinutes);
+        var bucketWidth = Math.Max(step, bucketMinutes);        // Glättungsfenster
+        var fineCount = Math.Max(1, (int)Math.Ceiling(windowMinutes / (double)step));
+        var winSteps = Math.Max(1, (int)Math.Round(bucketWidth / (double)step));   // Fenster in Feinschritten
         var from = now.AddMinutes(-windowMinutes);
-        var buckets = names.ToDictionary(n => n, _ => new int[bucketCount], StringComparer.OrdinalIgnoreCase);
+        var buckets = names.ToDictionary(n => n, _ => new int[fineCount], StringComparer.OrdinalIgnoreCase);
 
         var orders = 0;
         foreach (var telegram in window)
@@ -203,8 +211,8 @@ public sealed record TelegramUtilization
             if (point.Length == 0 || !stats.TryGetValue(point, out var current))
                 continue;
 
-            var slot = (int)((telegram.DateTime - from).TotalMinutes / bucketWidth);
-            if (slot >= 0 && slot < bucketCount)
+            var slot = (int)((telegram.DateTime - from).TotalMinutes / step);
+            if (slot >= 0 && slot < fineCount)
                 buckets[point][slot]++;
 
             var dest = destMap.CanonicalFromData(telegram.Data);
@@ -222,15 +230,28 @@ public sealed record TelegramUtilization
                 current.Latest is { } latest && latest > telegram.DateTime ? latest : telegram.DateTime);
         }
 
-        var bucketHours = bucketWidth / 60d;
+        var winHours = winSteps * step / 60d;
         var rateHours = rate / 60d;   // Basis: die letzten paar Minuten, auf 1 h hochgerechnet
 
-        UtilizationBucket Bucket(int count, int i) => new()
+        // Gleitende Summe über die letzten 'winSteps' Feinschritte, ein Stützpunkt je Schritt.
+        List<UtilizationBucket> RollingSeries(int[] fine)
         {
-            At = from.AddMinutes(i * bucketWidth),
-            Count = count,
-            Uph = Math.Round(count / bucketHours, 1),
-        };
+            var outp = new List<UtilizationBucket>(fineCount);
+            var acc = 0;
+            for (var i = 0; i < fineCount; i++)
+            {
+                acc += fine[i];
+                if (i >= winSteps)
+                    acc -= fine[i - winSteps];
+                outp.Add(new UtilizationBucket
+                {
+                    At = from.AddMinutes((i + 1) * step),   // Fensterende
+                    Count = acc,
+                    Uph = Math.Round(acc / winHours, 1),
+                });
+            }
+            return outp;
+        }
 
         var pointResults = defs.Select(d =>
         {
@@ -248,7 +269,7 @@ public sealed record TelegramUtilization
                 Percent = targetUph > 0 ? Math.Round(uph / targetUph * 100, 1) : 0,
                 Errors = s.Errors,
                 LatestAt = s.Latest,
-                Series = buckets[name].Select(Bucket).ToList(),
+                Series = RollingSeries(buckets[name]),
                 Destinations = destinations[name]
                     .OrderByDescending(kv => kv.Value)
                     .ThenBy(kv => kv.Key, StringComparer.Ordinal)
@@ -276,9 +297,9 @@ public sealed record TelegramUtilization
             var count = members.Sum(n => stats[n].Count);
             var recent = members.Sum(n => stats[n].Recent);
             var uph = recent / rateHours;
-            var sumBuckets = new int[bucketCount];
+            var sumBuckets = new int[fineCount];
             foreach (var n in members)
-                for (var i = 0; i < bucketCount; i++)
+                for (var i = 0; i < fineCount; i++)
                     sumBuckets[i] += buckets[n][i];
 
             return new UtilizationGroup
@@ -292,7 +313,7 @@ public sealed record TelegramUtilization
                     : 0,
                 Errors = members.Sum(n => stats[n].Errors),
                 Points = members,
-                Series = sumBuckets.Select(Bucket).ToList(),
+                Series = RollingSeries(sumBuckets),
             };
         }).ToList();
 
@@ -304,6 +325,7 @@ public sealed record TelegramUtilization
             TargetUph = targetUph,
             TotalOrders = orders,
             BucketMinutes = bucketWidth,
+            SeriesStepMinutes = step,
             RateMinutes = rate,
             Points = pointResults,
             Groups = groups,

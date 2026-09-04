@@ -117,8 +117,15 @@ public sealed class KccConfig
     /// <summary>Zeitfenster der Auslastungsansicht (<c>/auslastung</c>), wenn kein <c>minutes</c> mitgegeben wird.</summary>
     public int UtilizationWindowMinutes { get; set; } = 60;
 
-    /// <summary>Rasterweite des Verlaufs in der Auslastungsansicht in Minuten, wenn kein <c>bucket</c> mitgegeben wird.</summary>
+    /// <summary>
+    /// Breite des gleitenden Fensters der Verlaufskurven auf <c>/auslastung</c> in Minuten
+    /// (Glättung), wenn kein <c>bucket</c> mitgegeben wird. Der Verlauf gleitet, statt in feste
+    /// Eimer zu springen; der letzte Punkt zeigt den aktuell laufenden Wert.
+    /// </summary>
     public int UtilizationBucketMinutes { get; set; } = 5;
+
+    /// <summary>Abtastschritt der Verlaufskurven in Minuten — ein Stützpunkt je Schritt (Standard <c>1</c>).</summary>
+    public int UtilizationSeriesStepMinutes { get; set; } = 1;
 
     /// <summary>Richtwert in Einheiten pro Stunde, auf den sich die Auslastung in Prozent bezieht.</summary>
     public double UtilizationTargetUph { get; set; } = 200;
