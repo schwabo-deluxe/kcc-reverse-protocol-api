@@ -50,6 +50,12 @@ public sealed class ResourcePointConfig
     /// <summary>Klartext fürs Dashboard. Leer ⇒ <see cref="Name"/>.</summary>
     public string? Label { get; set; }
 
+    /// <summary>
+    /// Sortierschlüssel im Dashboard (aufsteigend, kleiner zuerst). Ohne Angabe zählt die
+    /// Reihenfolge in der Liste. Innerhalb einer Gruppe wirksam.
+    /// </summary>
+    public int? Order { get; set; }
+
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
 }
@@ -128,6 +134,13 @@ public sealed class KccConfig
     /// Leer ⇒ eingebaute Liste (<see cref="TelegramUtilization.DefaultResourcePoints"/>).
     /// </summary>
     public List<ResourcePointConfig> ResourcePoints { get; set; } = [];
+
+    /// <summary>
+    /// Reihenfolge der Gruppen im Auslastungs-Dashboard, z. B. <c>[ "Auslagerung RBG", "Fördertechnik" ]</c>.
+    /// Nicht genannte Gruppen folgen in der Reihenfolge ihres ersten Auftretens in
+    /// <see cref="ResourcePoints"/>. Leer ⇒ komplett nach erstem Auftreten.
+    /// </summary>
+    public List<string> GroupOrder { get; set; } = [];
 
     /// <summary>
     /// Klartext für Endziele (führendes Token des letzten 33er-Blocks, 4–5 Zeichen), z. B.

@@ -25,8 +25,8 @@ public class TelegramUtilizationTests
     static ResourcePointUtilization Point(TelegramUtilization u, string name) =>
         u.Points.Single(p => p.ResourcePoint == name);
 
-    static ResourcePointConfig RP(string name, string? group = null, string? label = null) =>
-        new() { Name = name, Group = group, Label = label };
+    static ResourcePointConfig RP(string name, string? group = null, string? label = null, int? order = null) =>
+        new() { Name = name, Group = group, Label = label, Order = order };
 
     [Fact]
     public void Uph_und_Prozent_kommen_aus_dem_Rate_Fenster()
@@ -251,6 +251,40 @@ public class TelegramUtilizationTests
         Assert.Equal(36, rbg.Uph);                // 3 / (5/60)
         Assert.Equal(9, rbg.Percent);            // Math.Round(36 / (200*2) * 100, 1)
         Assert.Equal(1, u.Groups.Single(g => g.Name == "Fördertechnik").Count);
+    }
+
+    [Fact]
+    public void Ordnet_Punkte_nach_dem_Order_Schluessel()
+    {
+        var u = TelegramUtilization.Compute(
+            [T(1, 1, "MA72"), T(2, 1, "MB72"), T(3, 1, "MC72")],
+            TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints:
+            [
+                RP("MA72", "RBG", order: 3),
+                RP("MB72", "RBG", order: 1),
+                RP("MC72", "RBG", order: 2),
+            ]);
+
+        Assert.Equal(["MB72", "MC72", "MA72"], u.Points.Select(p => p.ResourcePoint));
+        Assert.Equal(["MB72", "MC72", "MA72"], u.Groups.Single().Points);
+    }
+
+    [Fact]
+    public void Ordnet_Gruppen_nach_GroupOrder()
+    {
+        var u = TelegramUtilization.Compute(
+            [T(1, 1, "DA21"), T(2, 1, "MA72")],
+            TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints:
+            [
+                RP("DA21", "Fördertechnik"),         // zuerst in der Liste
+                RP("MA72", "Auslagerung RBG"),
+                RP("ZZ01", "Sonstiges"),             // nicht in GroupOrder
+            ],
+            groupOrder: ["Auslagerung RBG", "Fördertechnik"]);
+
+        Assert.Equal(["Auslagerung RBG", "Fördertechnik", "Sonstiges"], u.Groups.Select(g => g.Name));
     }
 
     [Fact]

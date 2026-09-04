@@ -143,14 +143,15 @@ public sealed record TelegramUtilization
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         int bucketMinutes = 5,
         int rateMinutes = 5,
-        IReadOnlyDictionary<string, string>? destinationLabels = null)
+        IReadOnlyDictionary<string, string>? destinationLabels = null,
+        IReadOnlyList<string>? groupOrder = null)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
         var rate = Math.Max(1, rateMinutes);
         var rateFrom = now.AddMinutes(-rate);
 
-        // Nur Einträge mit Namen; je Name der erste gewinnt, Reihenfolge bleibt erhalten.
+        // Nur Einträge mit Namen; je Name der erste gewinnt.
         var defs = (resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints)
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
             .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
@@ -158,6 +159,14 @@ public sealed record TelegramUtilization
             .ToList();
         if (defs.Count == 0)
             defs = DefaultResourcePoints.ToList();
+
+        // Reihenfolge: erst nach optionalem Order-Schlüssel, dann nach Listenposition (stabil).
+        defs = defs
+            .Select((Def, Index) => (Def, Index))
+            .OrderBy(x => x.Def.Order ?? int.MaxValue)
+            .ThenBy(x => x.Index)
+            .Select(x => x.Def)
+            .ToList();
 
         var names = defs.Select(d => d.Name).ToList();
         var messageCode = FieldIndex(format, "MessageCode");
@@ -254,9 +263,14 @@ public sealed record TelegramUtilization
             };
         }).ToList();
 
-        // Gruppen in der Reihenfolge ihres ersten Auftretens.
-        var groupOrder = defs.Select(d => d.GroupOrDefault).Distinct().ToList();
-        var groups = groupOrder.Select(gName =>
+        // Gruppen: konfigurierte Reihenfolge zuerst, der Rest nach erstem Auftreten.
+        var seenGroups = defs.Select(d => d.GroupOrDefault).Distinct().ToList();
+        var orderedGroups = groupOrder is { Count: > 0 }
+            ? groupOrder.Where(seenGroups.Contains)
+                .Concat(seenGroups.Where(g => !groupOrder.Contains(g)))
+                .ToList()
+            : seenGroups;
+        var groups = orderedGroups.Select(gName =>
         {
             var members = defs.Where(d => d.GroupOrDefault == gName).Select(d => d.Name).ToList();
             var count = members.Sum(n => stats[n].Count);
