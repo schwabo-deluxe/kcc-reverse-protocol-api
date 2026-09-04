@@ -70,7 +70,7 @@ public static class UtilizationDashboard
         <header>
           <h1>Auslastung (TSPORD)</h1>
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
-          <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
+          <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (TargetUph in appsettings.json)"></label>
           <label>Glättung (min) <input type="number" id="bucket" value="5" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
           <label>UPH aus (min) <input type="number" id="rate" value="15" min="1" max="240"></label>
           <div class="meta" id="meta">lädt …</div>
@@ -198,7 +198,7 @@ public static class UtilizationDashboard
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${heading(p)}</span>
-                <span class="sub">${fmt(p.uph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
+                <span class="sub">${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
               </div>
               <div class="tile-body">
                 <div class="gauge-col">
@@ -219,7 +219,7 @@ public static class UtilizationDashboard
               <div class="grp-h">
                 <span class="grp-name">${g.name}</span>
                 <span class="grp-sum" style="color:${color(g.percent)}">
-                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} UPH · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
+                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
                 ${gauge(g.percent, 150, color(g.percent), 'sm')}
               </div>
               <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>

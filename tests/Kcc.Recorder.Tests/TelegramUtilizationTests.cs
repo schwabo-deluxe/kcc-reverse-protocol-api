@@ -25,8 +25,9 @@ public class TelegramUtilizationTests
     static ResourcePointUtilization Point(TelegramUtilization u, string name) =>
         u.Points.Single(p => p.ResourcePoint == name);
 
-    static ResourcePointConfig RP(string name, string? group = null, string? label = null, int? order = null) =>
-        new() { Name = name, Group = group, Label = label, Order = order };
+    static ResourcePointConfig RP(string name, string? group = null, string? label = null,
+        int? order = null, double? targetUph = null) =>
+        new() { Name = name, Group = group, Label = label, Order = order, TargetUph = targetUph };
 
     [Fact]
     public void Uph_und_Prozent_kommen_aus_dem_Rate_Fenster()
@@ -275,6 +276,38 @@ public class TelegramUtilizationTests
 
         Assert.Equal(["MB72", "MC72", "MA72"], u.Points.Select(p => p.ResourcePoint));
         Assert.Equal(["MB72", "MC72", "MA72"], u.Groups.Single().Points);
+    }
+
+    [Fact]
+    public void Eigener_Richtwert_je_Ressourcenpunkt()
+    {
+        // 6 Telegramme in den letzten 5 min -> je Punkt 6/(5/60) = 72 UPH.
+        var window = new[]
+        {
+            T(1, 1, "DA21"), T(2, 2, "DA21"), T(3, 2, "DA21"), T(4, 3, "DA21"), T(5, 4, "DA21"), T(6, 4, "DA21"),
+            T(7, 1, "LB41"), T(8, 2, "LB41"), T(9, 2, "LB41"), T(10, 3, "LB41"), T(11, 4, "LB41"), T(12, 4, "LB41"),
+        };
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            rateMinutes: 5,
+            resourcePoints:
+            [
+                RP("DA21", "FT", targetUph: 100),   // eigener Richtwert
+                RP("LB41", "FT"),                    // Vorgabe 200
+            ]);
+
+        var da21 = Point(u, "DA21");
+        Assert.Equal(100, da21.TargetUph);
+        Assert.Equal(72, da21.Uph);
+        Assert.Equal(72, da21.Percent);             // 72 / 100
+        var lb41 = Point(u, "LB41");
+        Assert.Equal(200, lb41.TargetUph);
+        Assert.Equal(36, lb41.Percent);             // 72 / 200
+
+        var g = u.Groups.Single();
+        Assert.Equal(300, g.TargetUph);             // 100 + 200
+        Assert.Equal(54, g.Percent);                // Mittel aus 72 % und 36 %
     }
 
     [Fact]

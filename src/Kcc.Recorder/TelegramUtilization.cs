@@ -50,7 +50,10 @@ public sealed record ResourcePointUtilization
     /// </summary>
     public required double Uph { get; init; }
 
-    /// <summary>Anteil an <see cref="TelegramUtilization.TargetUph"/> in Prozent.</summary>
+    /// <summary>UPH-Richtwert dieses Punkts (eigener aus der Konfiguration oder der Vorgabewert).</summary>
+    public required double TargetUph { get; init; }
+
+    /// <summary>Anteil an <see cref="TargetUph"/> in Prozent.</summary>
     public required double Percent { get; init; }
 
     public required int Errors { get; init; }
@@ -71,7 +74,10 @@ public sealed record UtilizationGroup
     public required int RateCount { get; init; }
     public required double Uph { get; init; }
 
-    /// <summary>Mittlere Auslastung der Punkte dieser Gruppe in Prozent.</summary>
+    /// <summary>Summe der Richtwerte der Punkte dieser Gruppe.</summary>
+    public required double TargetUph { get; init; }
+
+    /// <summary>Mittlere Auslastung der Punkte dieser Gruppe in Prozent (jeder gegen seinen Richtwert).</summary>
     public required double Percent { get; init; }
 
     public required int Errors { get; init; }
@@ -258,6 +264,7 @@ public sealed record TelegramUtilization
             var name = d.Name;
             var s = stats[name];
             var uph = s.Recent / rateHours;
+            var pointTarget = d.TargetUph is > 0 ? d.TargetUph.Value : targetUph;
             return new ResourcePointUtilization
             {
                 ResourcePoint = name,
@@ -266,7 +273,8 @@ public sealed record TelegramUtilization
                 Count = s.Count,
                 RateCount = s.Recent,
                 Uph = Math.Round(uph, 1),
-                Percent = targetUph > 0 ? Math.Round(uph / targetUph * 100, 1) : 0,
+                TargetUph = pointTarget,
+                Percent = pointTarget > 0 ? Math.Round(uph / pointTarget * 100, 1) : 0,
                 Errors = s.Errors,
                 LatestAt = s.Latest,
                 Series = RollingSeries(buckets[name]),
@@ -291,6 +299,7 @@ public sealed record TelegramUtilization
                 .Concat(seenGroups.Where(g => !groupOrder.Contains(g)))
                 .ToList()
             : seenGroups;
+        var resultByName = pointResults.ToDictionary(p => p.ResourcePoint, StringComparer.OrdinalIgnoreCase);
         var groups = orderedGroups.Select(gName =>
         {
             var members = defs.Where(d => d.GroupOrDefault == gName).Select(d => d.Name).ToList();
@@ -308,8 +317,9 @@ public sealed record TelegramUtilization
                 Count = count,
                 RateCount = recent,
                 Uph = Math.Round(uph, 1),
-                Percent = targetUph > 0 && members.Count > 0
-                    ? Math.Round(uph / (targetUph * members.Count) * 100, 1)
+                TargetUph = members.Sum(n => resultByName[n].TargetUph),
+                Percent = members.Count > 0
+                    ? Math.Round(members.Average(n => resultByName[n].Percent), 1)
                     : 0,
                 Errors = members.Sum(n => stats[n].Errors),
                 Points = members,

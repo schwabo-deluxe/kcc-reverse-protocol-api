@@ -56,6 +56,12 @@ public sealed class ResourcePointConfig
     /// </summary>
     public int? Order { get; set; }
 
+    /// <summary>
+    /// Eigener UPH-Richtwert dieses Punkts, auf den sich seine Prozent-Auslastung bezieht.
+    /// Ohne Angabe gilt <see cref="KccConfig.UtilizationTargetUph"/>.
+    /// </summary>
+    public double? TargetUph { get; set; }
+
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
 }
