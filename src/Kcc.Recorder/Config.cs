@@ -67,6 +67,37 @@ public sealed class ResourcePointConfig
 }
 
 /// <summary>
+/// Eine Konturkontrolle für die Auswertung unter <c>/kontur</c>: die Telegramme dieses
+/// Ressourcenpunkts mit diesem <c>MessageCode</c> tragen im <c>Status</c>-Feld das
+/// Konturergebnis (<c>Kxyz</c>).
+/// </summary>
+public sealed class ContourCheckpointConfig
+{
+    /// <summary>Code wie im Telegramm-Feld <c>ResourcePoint</c>, z. B. <c>LB21</c>.</summary>
+    public string ResourcePoint { get; set; } = "";
+
+    /// <summary>Zugehöriger <c>MessageCode</c>, z. B. <c>ENDTSP</c> oder <c>TSPREG</c>.</summary>
+    public string MessageCode { get; set; } = "";
+
+    /// <summary>Klartext fürs Dashboard. Leer ⇒ „<c>ResourcePoint MessageCode</c>".</summary>
+    public string? Label { get; set; }
+
+    public string DisplayLabel =>
+        string.IsNullOrWhiteSpace(Label) ? $"{ResourcePoint} {MessageCode}".Trim() : Label!;
+}
+
+/// <summary>
+/// Ein Fehlerbit im Konturergebnis <c>Kxyz</c>: <see cref="Nibble"/> 0 = <c>x</c>, 1 = <c>y</c>,
+/// 2 = <c>z</c>; <see cref="Bit"/> 0..3 innerhalb des Hex-Nibbles.
+/// </summary>
+public sealed class ContourFlagConfig
+{
+    public int Nibble { get; set; }
+    public int Bit { get; set; }
+    public string Label { get; set; } = "";
+}
+
+/// <summary>
 /// Gesamtkonfiguration. Wird aus <c>appsettings.json</c> gebunden und von lokaler Datei,
 /// Umgebungsvariablen und Kommandozeile überschrieben — siehe <see cref="Load"/>.
 /// </summary>
@@ -154,6 +185,21 @@ public sealed class KccConfig
     /// <see cref="ResourcePoints"/>. Leer ⇒ komplett nach erstem Auftreten.
     /// </summary>
     public List<string> GroupOrder { get; set; } = [];
+
+    /// <summary>
+    /// Konturkontrollen für <c>/kontur</c>. Leer ⇒ eingebaute Liste
+    /// (<see cref="ContourReport.DefaultCheckpoints"/>).
+    /// </summary>
+    public List<ContourCheckpointConfig> ContourCheckpoints { get; set; } = [];
+
+    /// <summary>
+    /// Bedeutung der Fehlerbits im Konturergebnis <c>Kxyz</c>. Leer ⇒ eingebaute Tabelle
+    /// (<see cref="ContourReport.DefaultFlags"/>).
+    /// </summary>
+    public List<ContourFlagConfig> ContourFlags { get; set; } = [];
+
+    /// <summary>Zeitfenster der Konturauswertung in Minuten ohne <c>minutes</c>-Parameter (Standard <c>480</c>).</summary>
+    public int ContourWindowMinutes { get; set; } = 480;
 
     /// <summary>
     /// Klartext für Endziele (führendes Token des letzten 33er-Blocks, 4–5 Zeichen), z. B.

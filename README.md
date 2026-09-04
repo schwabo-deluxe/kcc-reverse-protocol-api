@@ -76,6 +76,9 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
 | `UphHistoryIntervalMinutes` | Rasterweite der UPH-Historie in Minuten (Standard `15`) — wie fein `/verlauf` auflöst. |
 | `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. `/verlauf` zeigt nur diesen Zeitraum — für weiter zurück den Wert erhöhen und `kcc uph-rebuild` laufen lassen. Der Recorder baut die Historie bei jedem Start und nach `backfill` neu auf. |
+| `ContourCheckpoints` | Konturkontrollen für `/kontur`, je Eintrag `{ "ResourcePoint": "LB21", "MessageCode": "ENDTSP", "Label": "…" }`. Ausgewertet wird das `Status`-Feld (`Kxyz`) dieser Telegramme. Leere Liste ⇒ eingebaute Vorgabe (LB21 ENDTSP, DA91/AA41/NA41 TSPREG). |
+| `ContourFlags` | Bedeutung der Fehlerbits im Konturergebnis `Kxyz`, je Eintrag `{ "Nibble": 0, "Bit": 2, "Label": "Profil links" }` — `Nibble` 0 = `x`, 1 = `y`, 2 = `z`; `Bit` 0…3. Leere Liste ⇒ eingebaute Tabelle laut Doku „Konturenfehler (Kxyz)". `Status = "…."` (leer) = kein Konturfehler. |
+| `ContourWindowMinutes` | Zeitfenster der Konturauswertung ohne `minutes`-Parameter (Standard: `480` = 8 h) |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
@@ -138,7 +141,9 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
 | `GET /api/utilization?minutes=60&target=200&bucket=5&rate=1&step=1` | Dieselbe Auswertung als JSON. `rate` = Trailing-Fenster für UPH/Prozent; `bucket` = Breite des gleitenden Verlaufsfensters; `step` = Abtastschritt des Verlaufs |
 | `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Zeitbereich per Maus aufziehen zoomt hinein (Doppelklick / „Zoom zurück" setzt zurück). Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener Aufbewahrung** `UphHistoryRetentionDays` (Standard 4 Wochen), die der Recorder laufend aus den Rohtelegrammen bildet — weiter zurück als dieser Zeitraum reicht `/verlauf` nicht, auch nach `backfill` nicht |
-| `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, Anlagenzeit); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
+| `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
+| `GET /kontur` | Auswertung der Konturkontrollen: welche Konturfehler an welchem Kontrollpunkt auflaufen. Zerlegt das `Status`-Feld (`Kxyz`) der Telegramme aus `ContourCheckpoints` in benannte Fehlerbits (`ContourFlags`). KPIs, Balken je Fehlerart, Kreuztabelle Kontrollpunkt × Fehlerart |
+| `GET /api/kontur?minutes=480` | Dieselbe Auswertung als JSON |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
@@ -147,8 +152,12 @@ Verbindungen sowie Verteilung nach Richtung, Verbindung und `MessageCode`.
 
 **Zeitfenster:** Der rechte Rand ist der Zeitstempel des **jüngsten Telegramms in der DB**, nicht
 die Uhr des API-Hosts. So bleibt „letzte N Minuten" richtig, auch wenn die Anlage ihre
-Zeitstempel in einer anderen Zeitzone (z. B. UTC) schickt als der Rechner, auf dem `kcc` läuft.
+Zeitstempel in einer anderen Zeitzone schickt als der Rechner, auf dem `kcc` läuft.
 `GET /health` zeigt beide Zeiten, um einen solchen Versatz sichtbar zu machen.
+
+**Zeitzone:** Die Anlage liefert die Zeitstempel in **UTC**; die DB legt sie zeitzonenfrei ab. Die
+API gibt sie als echtes UTC-ISO (`…Z`) aus, sodass die Dashboards sie in die **lokale Zeit des
+Betrachters** umrechnen. `GET /api/telegrams` liefert dieselben Werte, ebenfalls als UTC.
 
 `http://localhost:PORT/` läuft unter Windows ohne Sonderrechte. Für `http://+:PORT/` oder einen
 festen Hostnamen ist einmalig `netsh http add urlacl url=http://+:PORT/ user=<DOMAIN\User>` nötig.
@@ -175,10 +184,10 @@ dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
 ```
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
-(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`)
-samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards, die die API
-unter `/`, `/auslastung` bzw. `/verlauf` ausliefert — `kcc dump-dashboards [--out verz]` schreibt
-sie jederzeit heraus.
+(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`,
+`kontur.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards,
+die die API unter `/`, `/auslastung`, `/verlauf` bzw. `/kontur` ausliefert —
+`kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
 Als lose Datei geöffnet fragen sie fest `http://localhost:8080` ab; mit `?api=http://host:port`
 lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
 

@@ -16,6 +16,8 @@ namespace Kcc.Recorder;
 ///   <item><c>GET /api/utilization?minutes=240&amp;target=200&amp;bucket=5</c> — Auslastung als JSON</item>
 ///   <item><c>GET /verlauf</c> — UPH-Historie je Endziel (eigene 4-Wochen-Aufbewahrung)</item>
 ///   <item><c>GET /api/uph-history?hours=168&amp;bucket=15&amp;rp=MA72</c> — Historie als JSON</item>
+///   <item><c>GET /kontur</c> — Auswertung der Konturkontrollen (Status-Feld <c>Kxyz</c>)</item>
+///   <item><c>GET /api/kontur?minutes=480</c> — Konturfehler je Kontrolle als JSON</item>
 ///   <item><c>GET /health</c></item>
 /// </list>
 /// </summary>
@@ -23,8 +25,32 @@ public static class ApiServer
 {
     static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new UtcDateTimeConverter() },
     };
+
+    /// <summary>
+    /// Die Anlage schickt (und wir speichern) Zeitstempel in UTC, aber zeitzonenfrei
+    /// (<see cref="DateTimeKind.Unspecified"/>). Dieser Konverter schreibt sie als echtes
+    /// UTC-ISO (mit <c>Z</c>), damit die Dashboards sie per <c>new Date(...)</c> automatisch in
+    /// die lokale Zeit des Betrachters umrechnen.
+    /// </summary>
+    sealed class UtcDateTimeConverter : JsonConverter<DateTime>
+    {
+        public override DateTime Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
+            reader.GetDateTime();
+
+        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+        {
+            var utc = value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            };
+            writer.WriteStringValue(utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
 
     public static async Task RunAsync(KccConfig config, Action<string> log, CancellationToken ct)
     {
@@ -97,6 +123,13 @@ public static class ApiServer
                 case "/verlauf":
                 case "/verlauf.html":
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UphHistoryDashboard.Html);
+                    break;
+                case "/kontur":
+                case "/kontur.html":
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", ContourDashboard.Html);
+                    break;
+                case "/api/kontur":
+                    await WriteJsonAsync(res, 200, Contour(config, format, ContourMinutes(ctx, config)));
                     break;
                 case "/api/utilization":
                     await WriteJsonAsync(res, 200, Utilization(config, format, UtilMinutes(ctx, config), Target(ctx, config), Bucket(ctx, config), Rate(ctx, config), SeriesStep(ctx, config)));
@@ -171,6 +204,14 @@ public static class ApiServer
         return UphHistoryReport.Compute(
             rows, start, end, bucketMinutes, groupBy,
             config.DestinationLabels, config.ResourcePoints, resourcePoint);
+    }
+
+    static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)
+    {
+        using var store = new TelegramStore(config.Database);
+        var w = ReadWindow(store, minutes);
+        return ContourReport.Compute(
+            w.Rows, format, minutes, w.Start, w.End, config.ContourCheckpoints, config.ContourFlags);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -253,6 +294,9 @@ public static class ApiServer
 
     static int UtilMinutes(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["minutes"], fallback: config.UtilizationWindowMinutes, min: 1, max: 1440);
+
+    static int ContourMinutes(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["minutes"], fallback: config.ContourWindowMinutes, min: 1, max: 60 * 24 * 30);
 
     static int Limit(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);

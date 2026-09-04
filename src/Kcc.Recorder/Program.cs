@@ -278,6 +278,7 @@ int DumpDashboards(CommandLine cli)
         ("dashboard.html", Dashboard.Html),
         ("auslastung.html", UtilizationDashboard.Html),
         ("verlauf.html", UphHistoryDashboard.Html),
+        ("kontur.html", ContourDashboard.Html),
     };
     foreach (var (name, html) in files)
         File.WriteAllText(Path.Combine(dir, name), html, new UTF8Encoding(false));

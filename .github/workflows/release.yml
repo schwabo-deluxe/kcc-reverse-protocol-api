@@ -63,7 +63,7 @@ jobs:
           cp README.md publish/
           cd publish
           zip -r "../artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip" \
-            kcc.exe appsettings.json README.md dashboard.html auslastung.html verlauf.html
+            kcc.exe appsettings.json README.md dashboard.html auslastung.html verlauf.html kontur.html
           cd ../artifacts
           sha256sum "kcc-${{ steps.version.outputs.version }}-win-x64.zip" > SHA256SUMS.txt
 
