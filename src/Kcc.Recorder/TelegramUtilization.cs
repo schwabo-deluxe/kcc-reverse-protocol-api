@@ -303,13 +303,19 @@ public sealed record TelegramUtilization
     static string Field(IReadOnlyList<string> fields, int index) =>
         index >= 0 && index < fields.Count ? fields[index].Trim() : "";
 
-    /// <summary>Endziel: <c>LINKS(RECHTS(D;33);4)</c> auf dem Rohdatenfeld, ohne Füllzeichen.</summary>
+    /// <summary>
+    /// Endziel: das führende Token des letzten 33-Zeichen-Blocks (Excel-Näherung
+    /// <c>LINKS(RECHTS(D;33);4)</c>), aber 4 <em>oder</em> 5 Zeichen lang — z. B. <c>GA51</c>
+    /// oder <c>DLL13</c>. Gelesen wird bis zum ersten Füllzeichen, höchstens 5 Zeichen.
+    /// </summary>
     static string Destination(string? data)
     {
         if (string.IsNullOrEmpty(data)) return "";
         var right = data.Length <= 33 ? data : data[^33..];
-        var head = right.Length <= 4 ? right : right[..4];
-        return head.Trim('.', ' ', '\0');
+        var end = 0;
+        while (end < right.Length && end < 5 && right[end] is not ('.' or ' ' or '\0'))
+            end++;
+        return right[..end];
     }
 
     static int FieldIndex(TelegramFormat format, string name)

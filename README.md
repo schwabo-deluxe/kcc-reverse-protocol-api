@@ -68,7 +68,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht |
 | `UtilizationRateMinutes` | Trailing-Fenster (Standard `5`), aus dem UPH/h und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A" }`. `Group`/`Label` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Leere Liste ⇒ eingebaute Vorgabe. |
-| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist `LINKS(RECHTS(Data;33);4)` (erste 4 Zeichen des letzten 33er-Blocks); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. |
+| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.

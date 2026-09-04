@@ -14,8 +14,8 @@ public class TelegramUtilizationTests
         string destination = "WA01") =>
         "DM" + "01" + "MFC1" + "CS01" + "01" + errorCode +
         messageCode.PadRight(6, '.') + "0166" + resourcePoint.PadRight(10, '.') +
-        // Letzter 33er-Block beginnt mit dem Endziel (Excel LINKS(RECHTS(D;33);4)).
-        destination.PadRight(4, '.') + new string('.', 29);
+        // Letzter 33er-Block beginnt mit dem Endziel (4 oder 5 Zeichen), Rest Füllzeichen.
+        (destination + new string('.', 33))[..33];
 
     static Telegram T(long id, int minutesAgo, string resourcePoint,
         string messageCode = "TSPORD", string errorCode = "00", string destination = "WA01") =>
@@ -169,6 +169,24 @@ public class TelegramUtilizationTests
         Assert.Equal(75, d[0].Percent);
         Assert.Equal(25, d[1].Percent);
         Assert.Equal("WA01", d[0].Label);  // ohne Mapping bleibt das Ziel roh
+    }
+
+    [Fact]
+    public void Erkennt_Endziele_mit_vier_oder_fuenf_Zeichen()
+    {
+        var window = new[]
+        {
+            T(1, 10, "DA21", destination: "DLL13"),
+            T(2, 9, "DA21", destination: "DLL13"),
+            T(3, 8, "DA21", destination: "GA51"),
+        };
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now);
+
+        var d = Point(u, "DA21").Destinations;
+        Assert.Equal(["DLL13", "GA51"], d.Select(x => x.Target));
+        Assert.Equal(2, d[0].Count);
     }
 
     [Fact]
