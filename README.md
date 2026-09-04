@@ -64,10 +64,12 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `Record` / `Serve` | Was der Aufruf ohne Argumente startet: Aufzeichnung bzw. Lese-API + Dashboard (Standard: beides `true`) |
 | `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme im Normalbetrieb und bei `backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
 | `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
-| `WindowMinutes` | Zeitfenster der Dashboards und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
+| `WindowMinutes` | Zeitfenster des KPI-Dashboards (`/`) und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
-| `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht |
-| `UtilizationRateMinutes` | Trailing-Fenster (Standard `5`), aus dem UPH und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
+| `UtilizationWindowMinutes` | Zeitfenster der Auslastungsansicht (`/auslastung`) ohne `minutes`-Parameter (Standard: `60`) |
+| `UtilizationBucketMinutes` | Rasterweite des Verlaufs in der Auslastungsansicht ohne `bucket`-Parameter (Standard: `5`) |
+| `UtilizationTargetUph` | Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht (Standard: `200`) |
+| `UtilizationRateMinutes` | Trailing-Fenster (Standard `1`), aus dem UPH und Prozent hochgerechnet werden. Klein = reagiert sofort auf kurze Stöße; groß = geglättet. `Count` und der Verlauf bleiben über das ganze Fenster. |
 | `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A" }`. `Group`/`Label` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Leere Liste ⇒ eingebaute Vorgabe. |
 | `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
 | `UphHistoryIntervalMinutes` | Rasterweite der UPH-Historie in Minuten (Standard `15`) — wie fein `/verlauf` auflöst. |

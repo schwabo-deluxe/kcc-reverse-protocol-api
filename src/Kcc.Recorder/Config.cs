@@ -105,17 +105,23 @@ public sealed class KccConfig
     /// </summary>
     public int StartupBackfillMinutes { get; set; } = 240;
 
-    /// <summary>Zeitfenster der Dashboards und der API, wenn kein <c>minutes</c> mitgegeben wird.</summary>
+    /// <summary>Zeitfenster des KPI-Dashboards und der API, wenn kein <c>minutes</c> mitgegeben wird.</summary>
     public int WindowMinutes { get; set; } = 240;
+
+    /// <summary>Zeitfenster der Auslastungsansicht (<c>/auslastung</c>), wenn kein <c>minutes</c> mitgegeben wird.</summary>
+    public int UtilizationWindowMinutes { get; set; } = 60;
+
+    /// <summary>Rasterweite des Verlaufs in der Auslastungsansicht in Minuten, wenn kein <c>bucket</c> mitgegeben wird.</summary>
+    public int UtilizationBucketMinutes { get; set; } = 5;
 
     /// <summary>Richtwert in Einheiten pro Stunde, auf den sich die Auslastung in Prozent bezieht.</summary>
     public double UtilizationTargetUph { get; set; } = 200;
 
     /// <summary>
     /// Trailing-Fenster in Minuten, aus dem UPH und Prozent der Auslastung hochgerechnet werden
-    /// (Standard: <c>5</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
+    /// (Standard: <c>1</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
     /// </summary>
-    public int UtilizationRateMinutes { get; set; } = 5;
+    public int UtilizationRateMinutes { get; set; } = 1;
 
     /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.

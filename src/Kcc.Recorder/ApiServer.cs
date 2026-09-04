@@ -99,7 +99,7 @@ public static class ApiServer
                     await WriteTextAsync(res, 200, "text/html; charset=utf-8", UphHistoryDashboard.Html);
                     break;
                 case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, Minutes(ctx, config), Target(ctx, config), Bucket(ctx), Rate(ctx, config)));
+                    await WriteJsonAsync(res, 200, Utilization(config, format, UtilMinutes(ctx, config), Target(ctx, config), Bucket(ctx, config), Rate(ctx, config)));
                     break;
                 case "/api/uph-history":
                     await WriteJsonAsync(res, 200, UphHistory(config, format,
@@ -250,11 +250,14 @@ public static class ApiServer
     static int Minutes(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["minutes"], fallback: config.WindowMinutes, min: 1, max: 1440);
 
+    static int UtilMinutes(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["minutes"], fallback: config.UtilizationWindowMinutes, min: 1, max: 1440);
+
     static int Limit(HttpListenerContext ctx) =>
         Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);
 
-    static int Bucket(HttpListenerContext ctx) =>
-        Clamp(ctx.Request.QueryString["bucket"], fallback: 5, min: 1, max: 120);
+    static int Bucket(HttpListenerContext ctx, KccConfig config) =>
+        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UtilizationBucketMinutes, min: 1, max: 120);
 
     static int Rate(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["rate"], fallback: config.UtilizationRateMinutes, min: 1, max: 240);
