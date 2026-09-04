@@ -72,7 +72,7 @@ public static class UtilizationDashboard
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1"></label>
           <label>Glättung (min) <input type="number" id="bucket" value="5" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
-          <label>UPH aus (min) <input type="number" id="rate" value="1" min="1" max="240"></label>
+          <label>UPH aus (min) <input type="number" id="rate" value="15" min="1" max="240"></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>

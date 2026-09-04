@@ -132,9 +132,9 @@ public sealed class KccConfig
 
     /// <summary>
     /// Trailing-Fenster in Minuten, aus dem UPH und Prozent der Auslastung hochgerechnet werden
-    /// (Standard: <c>1</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
+    /// (Standard: <c>15</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
     /// </summary>
-    public int UtilizationRateMinutes { get; set; } = 1;
+    public int UtilizationRateMinutes { get; set; } = 15;
 
     /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.
