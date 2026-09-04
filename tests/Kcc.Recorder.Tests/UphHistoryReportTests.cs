@@ -17,12 +17,13 @@ public class UphHistoryReportTests
             [Row(0, "MA72", "WA01", 30), Row(30, "MA72", "WA01", 15)],
             T0, T0.AddMinutes(60), bucketMinutes: 15);
 
+        Assert.Equal("destination", report.GroupBy);
         Assert.Equal(4, report.Buckets.Count);
         Assert.Equal(30, report.Buckets[0].Total);
-        Assert.Equal(120, report.Buckets[0].Uph);         // 30 / (15/60)
-        Assert.Equal(120, report.Buckets[0].Uph2["WA01"]);
+        Assert.Equal(120, report.Buckets[0].Uph);          // 30 / (15/60)
+        Assert.Equal(120, report.Buckets[0].Series["WA01"]);
         Assert.Equal(0, report.Buckets[1].Total);
-        Assert.Equal(60, report.Buckets[2].Uph);          // 15 / (15/60)
+        Assert.Equal(60, report.Buckets[2].Uph);           // 15 / (15/60)
         Assert.Equal(45, report.TotalOrders);
     }
 
@@ -35,11 +36,11 @@ public class UphHistoryReportTests
 
         Assert.Single(report.Buckets);
         Assert.Equal(30, report.Buckets[0].Total);
-        Assert.Equal(30, report.Buckets[0].Uph);          // 30 / (60/60)
+        Assert.Equal(30, report.Buckets[0].Uph);           // 30 / (60/60)
     }
 
     [Fact]
-    public void Sortiert_Ziele_nach_Menge_und_rechnet_Anteil_und_Klartext()
+    public void Sortiert_Reihen_nach_Menge_und_rechnet_Anteil_und_Klartext()
     {
         var report = UphHistoryReport.Compute(
             [Row(0, "MA72", "WA01", 10), Row(0, "MA72", "GA51", 30), Row(20, "MA72", "DLL*", 10)],
@@ -50,13 +51,30 @@ public class UphHistoryReportTests
                 ["DLL*"] = "Auslagerung DLL",
             });
 
-        Assert.Equal(["GA51", "DLL*", "WA01"], report.Destinations);   // Gleichstand: nach Name
+        Assert.Equal(["GA51", "DLL*", "WA01"], report.Keys);   // Gleichstand: nach Name
         var ga51 = report.Totals[0];
         Assert.Equal("GA51 (Kommissionierung)", ga51.Label);
         Assert.Equal(30, ga51.Orders);
-        Assert.Equal(60, ga51.Share);                     // 30 von 50
-        Assert.Equal(30, ga51.AvgUph);                    // 30 / 1 h Fenster
+        Assert.Equal(60, ga51.Share);                          // 30 von 50
+        Assert.Equal(30, ga51.AvgUph);                         // 30 / 1 h Fenster
         Assert.Equal("DLL* (Auslagerung DLL)", report.Totals[1].Label);
+    }
+
+    [Fact]
+    public void Stapelt_nach_Ressourcenpunkt()
+    {
+        var report = UphHistoryReport.Compute(
+            [Row(0, "MA72", "WA01", 10), Row(0, "MB72", "WA01", 30), Row(15, "MA72", "GA51", 10)],
+            T0, T0.AddMinutes(60), bucketMinutes: 15,
+            groupBy: UphHistoryGroupBy.ResourcePoint,
+            resourcePoints: [new ResourcePointConfig { Name = "MB72", Label = "RBG B" }]);
+
+        Assert.Equal("resourcePoint", report.GroupBy);
+        Assert.Equal(["MB72", "MA72"], report.Keys);           // MB72 30 vor MA72 20
+        Assert.Equal("RBG B", report.Totals[0].Label);         // Klartext aus ResourcePoints
+        Assert.Equal("MA72", report.Totals[1].Label);          // ohne Eintrag: roh
+        Assert.Equal(40, report.Buckets[0].Series["MA72"]);     // 10 / (15/60)
+        Assert.Equal(120, report.Buckets[0].Series["MB72"]);
     }
 
     [Fact]
@@ -71,7 +89,7 @@ public class UphHistoryReportTests
     }
 
     [Fact]
-    public void Leeres_Fenster_liefert_ein_Raster_ohne_Ziele()
+    public void Leeres_Fenster_liefert_ein_Raster_ohne_Reihen()
     {
         var report = UphHistoryReport.Compute([], T0, T0.AddMinutes(60), bucketMinutes: 15);
 

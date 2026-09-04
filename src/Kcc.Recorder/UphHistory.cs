@@ -19,20 +19,34 @@ public sealed record UphSampleRow
     public required int Orders { get; init; }
 }
 
-/// <summary>Ein Zeitraster der Historie mit Gesamtmenge und Aufschlüsselung je Endziel.</summary>
+/// <summary>Wonach die Historie gestapelt wird.</summary>
+public enum UphHistoryGroupBy
+{
+    /// <summary>Ein Band je Endziel.</summary>
+    Destination,
+
+    /// <summary>Ein Band je Ressourcenpunkt.</summary>
+    ResourcePoint,
+}
+
+/// <summary>Ein Zeitraster der Historie mit Gesamtmenge und Aufschlüsselung je Reihe.</summary>
 public sealed record UphHistoryBucket
 {
     public required DateTime At { get; init; }
     public required int Total { get; init; }
     public required double Uph { get; init; }
+
+    /// <summary>Menge je Reihenschlüssel.</summary>
     public required IReadOnlyDictionary<string, int> Orders { get; init; }
-    public required IReadOnlyDictionary<string, double> Uph2 { get; init; }
+
+    /// <summary>UPH je Reihenschlüssel.</summary>
+    public required IReadOnlyDictionary<string, double> Series { get; init; }
 }
 
-/// <summary>Summe eines Endziels über das Historienfenster: Menge, Ø UPH und Anteil.</summary>
-public sealed record UphHistoryDestination
+/// <summary>Summe einer Reihe (Endziel oder Ressourcenpunkt) über das Fenster.</summary>
+public sealed record UphHistorySeries
 {
-    public required string Target { get; init; }
+    public required string Key { get; init; }
     public required string Label { get; init; }
     public required int Orders { get; init; }
 
@@ -45,7 +59,8 @@ public sealed record UphHistoryDestination
 
 /// <summary>
 /// Reine Auswertung der UPH-Historie über einem Zeitfenster — verdichtet die gespeicherten
-/// Rasterzeilen auf ein (gröberes) Anzeigeraster und rechnet Mengen in UPH um.
+/// Rasterzeilen auf ein (gröberes) Anzeigeraster und rechnet Mengen in UPH um. Gestapelt
+/// wird wahlweise nach Endziel oder nach Ressourcenpunkt (<see cref="UphHistoryGroupBy"/>).
 /// </summary>
 public sealed record UphHistoryReport
 {
@@ -53,31 +68,43 @@ public sealed record UphHistoryReport
     public required DateTime To { get; init; }
     public required int BucketMinutes { get; init; }
 
+    /// <summary>Aufteilung der Bänder: <c>destination</c> oder <c>resourcePoint</c>.</summary>
+    public required string GroupBy { get; init; }
+
     /// <summary>Gefilterter Ressourcenpunkt oder <c>null</c> für „alle".</summary>
     public required string? ResourcePoint { get; init; }
 
-    /// <summary>Ressourcenpunkte, die im Fenster vorkommen (aufsteigend).</summary>
+    /// <summary>Ressourcenpunkte, die im Fenster vorkommen (aufsteigend) — für die Auswahl.</summary>
     public required IReadOnlyList<string> ResourcePoints { get; init; }
 
-    /// <summary>Endziele im Fenster, absteigend nach Menge — die Reihenfolge der Bänder.</summary>
-    public required IReadOnlyList<string> Destinations { get; init; }
+    /// <summary>Reihenschlüssel im Fenster, absteigend nach Menge — die Reihenfolge der Bänder.</summary>
+    public required IReadOnlyList<string> Keys { get; init; }
 
     public required IReadOnlyList<UphHistoryBucket> Buckets { get; init; }
-    public required IReadOnlyList<UphHistoryDestination> Totals { get; init; }
+    public required IReadOnlyList<UphHistorySeries> Totals { get; init; }
     public required int TotalOrders { get; init; }
-
-    /// <summary>Platzhalter-Schlüssel für Telegramme ohne erkanntes Endziel.</summary>
-    public const string NoDestination = "";
 
     public static UphHistoryReport Compute(
         IReadOnlyList<UphSampleRow> rows,
         DateTime from,
         DateTime to,
         int bucketMinutes,
+        UphHistoryGroupBy groupBy = UphHistoryGroupBy.Destination,
         IReadOnlyDictionary<string, string>? destinationLabels = null,
+        IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         string? resourcePoint = null)
     {
         var map = new DestinationMap(destinationLabels);
+        var rpLabels = (resourcePoints ?? [])
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().DisplayLabel, StringComparer.OrdinalIgnoreCase);
+
+        var byResourcePoint = groupBy == UphHistoryGroupBy.ResourcePoint;
+        Func<UphSampleRow, string> keyOf = byResourcePoint ? r => r.ResourcePoint : r => r.Destination;
+        Func<string, string> labelOf = byResourcePoint
+            ? k => rpLabels.GetValueOrDefault(k, k)
+            : map.Label;
 
         var step = Math.Max(1, bucketMinutes);
         if (to <= from)
@@ -91,11 +118,11 @@ public sealed record UphHistoryReport
 
         var count = Math.Max(1, (int)Math.Ceiling((to - from).TotalMinutes / step));
         var slotOrders = new int[count];
-        var slotByDest = new Dictionary<string, int>[count];
+        var slotByKey = new Dictionary<string, int>[count];
         for (var i = 0; i < count; i++)
-            slotByDest[i] = new Dictionary<string, int>(StringComparer.Ordinal);
+            slotByKey[i] = new Dictionary<string, int>(StringComparer.Ordinal);
 
-        var destTotals = new Dictionary<string, int>(StringComparer.Ordinal);
+        var keyTotals = new Dictionary<string, int>(StringComparer.Ordinal);
         var points = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var r in scoped)
@@ -104,17 +131,18 @@ public sealed record UphHistoryReport
             if (slot < 0 || slot >= count)
                 continue;
 
+            var key = keyOf(r);
             slotOrders[slot] += r.Orders;
-            slotByDest[slot][r.Destination] = slotByDest[slot].GetValueOrDefault(r.Destination) + r.Orders;
-            destTotals[r.Destination] = destTotals.GetValueOrDefault(r.Destination) + r.Orders;
+            slotByKey[slot][key] = slotByKey[slot].GetValueOrDefault(key) + r.Orders;
+            keyTotals[key] = keyTotals.GetValueOrDefault(key) + r.Orders;
             points.Add(r.ResourcePoint);
         }
 
-        var totalOrders = destTotals.Values.Sum();
+        var totalOrders = keyTotals.Values.Sum();
         var bucketHours = step / 60d;
         var windowHours = Math.Max(1e-9, (to - from).TotalHours);
 
-        var destOrder = destTotals
+        var keyOrder = keyTotals
             .OrderByDescending(kv => kv.Value)
             .ThenBy(kv => kv.Key, StringComparer.Ordinal)
             .Select(kv => kv.Key)
@@ -123,24 +151,24 @@ public sealed record UphHistoryReport
         var buckets = new UphHistoryBucket[count];
         for (var i = 0; i < count; i++)
         {
-            var orders = slotByDest[i];
+            var orders = slotByKey[i];
             buckets[i] = new UphHistoryBucket
             {
                 At = from.AddMinutes(i * step),
                 Total = slotOrders[i],
                 Uph = Math.Round(slotOrders[i] / bucketHours, 1),
                 Orders = orders,
-                Uph2 = orders.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / bucketHours, 1), StringComparer.Ordinal),
+                Series = orders.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / bucketHours, 1), StringComparer.Ordinal),
             };
         }
 
-        var totals = destOrder.Select(d => new UphHistoryDestination
+        var totals = keyOrder.Select(k => new UphHistorySeries
         {
-            Target = d,
-            Label = map.Label(d),
-            Orders = destTotals[d],
-            AvgUph = Math.Round(destTotals[d] / windowHours, 1),
-            Share = totalOrders > 0 ? Math.Round(destTotals[d] * 100.0 / totalOrders, 1) : 0,
+            Key = k,
+            Label = labelOf(k),
+            Orders = keyTotals[k],
+            AvgUph = Math.Round(keyTotals[k] / windowHours, 1),
+            Share = totalOrders > 0 ? Math.Round(keyTotals[k] * 100.0 / totalOrders, 1) : 0,
         }).ToList();
 
         return new UphHistoryReport
@@ -148,9 +176,10 @@ public sealed record UphHistoryReport
             From = from,
             To = to,
             BucketMinutes = step,
+            GroupBy = byResourcePoint ? "resourcePoint" : "destination",
             ResourcePoint = rp,
             ResourcePoints = points.ToList(),
-            Destinations = destOrder,
+            Keys = keyOrder,
             Buckets = buckets,
             Totals = totals,
             TotalOrders = totalOrders,

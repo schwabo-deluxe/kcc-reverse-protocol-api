@@ -58,23 +58,29 @@ public static class UphHistoryDashboard
             <button data-h="336">14 T</button>
             <button data-h="672">4 W</button>
           </div>
+          <label>Stapeln nach
+            <select id="dim">
+              <option value="destination">Endziel</option>
+              <option value="resourcePoint">Ressourcenpunkt</option>
+            </select>
+          </label>
           <label>Ressourcenpunkt <select id="rp"><option value="">alle</option></select></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>
           <div class="card">
-            <h2>UPH je Endziel (gestapelt)</h2>
+            <h2 id="h-area">UPH je Endziel (gestapelt)</h2>
             <svg class="area" id="area" preserveAspectRatio="none"></svg>
           </div>
           <div class="card">
-            <h2>Mengenverhältnis der Ziele</h2>
+            <h2 id="h-ratio">Mengenverhältnis der Ziele</h2>
             <div class="ratio" id="ratio"></div>
             <div class="legend" id="legend"></div>
           </div>
           <div class="card">
-            <h2>Ziele im Zeitraum</h2>
+            <h2 id="h-table">Ziele im Zeitraum</h2>
             <table>
-              <thead><tr><th>Ziel</th><th>Ø UPH</th><th>Aufträge</th><th>Anteil</th></tr></thead>
+              <thead><tr><th id="h-key">Ziel</th><th>Ø UPH</th><th>Aufträge</th><th>Anteil</th></tr></thead>
               <tbody id="rows"></tbody>
             </table>
           </div>
@@ -101,11 +107,11 @@ public static class UphHistoryDashboard
           return 240;
         }
 
-        // Gestapelte Fläche: je Ziel ein Band, von der Grundlinie aufwärts akkumuliert.
+        // Gestapelte Fläche: je Reihe (Ziel oder Ressourcenpunkt) ein Band, aufwärts akkumuliert.
         function drawArea(data) {
           const svg = $('area');
           const W = 960, H = 300, padL = 44, padB = 22, padT = 8, padR = 8;
-          const b = data.buckets, dests = data.destinations;
+          const b = data.buckets, keys = data.keys;
           svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
           if (!b.length) { svg.innerHTML = '<text x="12" y="20" class="xlabel">keine Daten im Zeitraum</text>'; return; }
 
@@ -115,8 +121,8 @@ public static class UphHistoryDashboard
 
           let below = b.map(() => 0);
           let bands = '';
-          dests.forEach((d, di) => {
-            const above = b.map((k, i) => below[i] + (k.uph2[d] || 0));
+          keys.forEach((d, di) => {
+            const above = b.map((k, i) => below[i] + (k.series[d] || 0));
             const top = b.map((k, i) => `${x(i).toFixed(1)},${y(above[i]).toFixed(1)}`);
             const bot = b.map((k, i) => `${x(i).toFixed(1)},${y(below[i]).toFixed(1)}`).reverse();
             bands += `<polygon points="${top.concat(bot).join(' ')}" fill="${colorFor(di)}" fill-opacity="0.85"></polygon>`;
@@ -173,6 +179,13 @@ public static class UphHistoryDashboard
           if (rp.options.length <= 1 && data.resourcePoints.length) {
             for (const p of data.resourcePoints) rp.add(new Option(p, p));
           }
+          const byRp = data.groupBy === 'resourcePoint';
+          const noun = byRp ? 'Ressourcenpunkt' : 'Endziel';
+          const nounPl = byRp ? 'Ressourcenpunkte' : 'Ziele';
+          $('h-area').textContent = `UPH je ${noun} (gestapelt)`;
+          $('h-ratio').textContent = `Mengenverhältnis der ${nounPl}`;
+          $('h-table').textContent = `${nounPl} im Zeitraum`;
+          $('h-key').textContent = noun;
           drawArea(data);
           drawRatio(data);
           drawTable(data);
@@ -201,13 +214,13 @@ public static class UphHistoryDashboard
           cursor.setAttribute('x1', cx); cursor.setAttribute('x2', cx);
           cursor.style.visibility = 'visible';
 
-          const parts = current.destinations
-            .map((d, di) => ({ d, di, uph: k.uph2[d] || 0 }))
+          const parts = current.keys
+            .map((d, di) => ({ d, di, uph: k.series[d] || 0 }))
             .filter(p => p.uph > 0)
             .sort((a, b) => b.uph - a.uph);
           const at = new Date(k.at);
           $('tip').innerHTML = `<b>${at.toLocaleString('de-DE')}</b><div><span>gesamt</span><span>${fmt(k.uph)} UPH</span></div>`
-            + parts.map(p => `<div><span><i class="sw" style="display:inline-block;width:8px;height:8px;background:${colorFor(p.di)}"></i> ${current.totals.find(t => t.target === p.d)?.label || p.d}</span><span>${fmt(p.uph)}</span></div>`).join('');
+            + parts.map(p => `<div><span><i class="sw" style="display:inline-block;width:8px;height:8px;background:${colorFor(p.di)}"></i> ${current.totals.find(t => t.key === p.d)?.label || p.d}</span><span>${fmt(p.uph)}</span></div>`).join('');
           $('tip').style.opacity = 1;
           $('tip').style.left = Math.min(window.innerWidth - 270, e.clientX + 14) + 'px';
           $('tip').style.top = (e.clientY + 14) + 'px';
@@ -217,6 +230,7 @@ public static class UphHistoryDashboard
           const q = new URLSearchParams();
           q.set('hours', hours);
           q.set('bucket', bucketFor(hours));
+          q.set('groupBy', $('dim').value);
           if ($('rp').value) q.set('rp', $('rp').value);
           try {
             const res = await fetch(API_BASE + '/api/uph-history?' + q, { cache: 'no-store' });
@@ -236,6 +250,7 @@ public static class UphHistoryDashboard
           load();
         });
         $('rp').addEventListener('change', load);
+        $('dim').addEventListener('change', load);
         load();
         setInterval(load, 60000);
         </script>

@@ -132,8 +132,8 @@ Adresse und Betriebsart stehen in `appsettings.json`:
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
 | `GET /auslastung` | Auslastung der Ressourcenpunkte aus `TSPORD`-Telegrammen (UPH, % vom Richtwert, Verlauf je Punkt), gebündelt nach `Group` |
 | `GET /api/utilization?minutes=240&target=200&bucket=5&rate=5` | Dieselbe Auswertung als JSON (`rate` = UPH-Fenster in Minuten) |
-| `GET /verlauf` | UPH-Historie je Endziel als gestapelte Fläche plus Mengenverhältnis der Ziele. Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener 4-Wochen-Aufbewahrung** (`UphHistoryRetentionDays`), die der Recorder laufend aus den Rohtelegrammen bildet |
-| `GET /api/uph-history?hours=168&bucket=15&rp=MA72` | Historie als JSON: Buckets je Endziel (Menge + UPH), Summen mit Ø UPH und Anteil. `hours` bis 672 (4 W), `bucket` frei wählbar, `rp` grenzt auf einen Ressourcenpunkt ein |
+| `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Speist sich aus einer verdichteten Rollup-Tabelle mit **eigener 4-Wochen-Aufbewahrung** (`UphHistoryRetentionDays`), die der Recorder laufend aus den Rohtelegrammen bildet |
+| `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W); `bucket` frei wählbar; `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,

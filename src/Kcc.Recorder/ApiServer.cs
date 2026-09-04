@@ -103,7 +103,7 @@ public static class ApiServer
                     break;
                 case "/api/uph-history":
                     await WriteJsonAsync(res, 200, UphHistory(config, format,
-                        HistHours(ctx), HistBucket(ctx, config), ctx.Request.QueryString["rp"]));
+                        HistHours(ctx), HistBucket(ctx, config), HistGroupBy(ctx), ctx.Request.QueryString["rp"]));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -152,7 +152,8 @@ public static class ApiServer
     }
 
     static UphHistoryReport UphHistory(
-        KccConfig config, TelegramFormat format, int hours, int bucketMinutes, string? resourcePoint)
+        KccConfig config, TelegramFormat format, int hours, int bucketMinutes,
+        UphHistoryGroupBy groupBy, string? resourcePoint)
     {
         using var store = new TelegramStore(config.Database);
         var end = store.MaxTelegramTime()
@@ -160,7 +161,8 @@ public static class ApiServer
         var start = end.AddHours(-hours);
         var rows = store.ReadUphSamples(start, end);
         return UphHistoryReport.Compute(
-            rows, start, end, bucketMinutes, config.DestinationLabels, resourcePoint);
+            rows, start, end, bucketMinutes, groupBy,
+            config.DestinationLabels, config.ResourcePoints, resourcePoint);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)
@@ -256,6 +258,11 @@ public static class ApiServer
 
     static int HistBucket(HttpListenerContext ctx, KccConfig config) =>
         Clamp(ctx.Request.QueryString["bucket"], fallback: config.UphHistoryIntervalMinutes, min: 5, max: 1440);
+
+    static UphHistoryGroupBy HistGroupBy(HttpListenerContext ctx) =>
+        string.Equals(ctx.Request.QueryString["groupBy"], "resourcePoint", StringComparison.OrdinalIgnoreCase)
+            ? UphHistoryGroupBy.ResourcePoint
+            : UphHistoryGroupBy.Destination;
 
     static double Target(HttpListenerContext ctx, KccConfig config) =>
         double.TryParse(ctx.Request.QueryString["target"],
