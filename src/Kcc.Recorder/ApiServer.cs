@@ -137,7 +137,8 @@ public static class ApiServer
         using var store = new TelegramStore(config.Database);
         var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
-            w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes);
+            w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
+            config.DestinationLabels);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)

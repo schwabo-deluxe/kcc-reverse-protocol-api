@@ -12,6 +12,21 @@ public sealed record UtilizationBucket
     public required double Uph { get; init; }
 }
 
+/// <summary>Anteil eines Endziels an den Aufträgen eines Ressourcenpunkts.</summary>
+public sealed record DestinationShare
+{
+    /// <summary>Erste 4 Zeichen des letzten 33-Zeichen-Blocks im Datenfeld (Excel: <c>LINKS(RECHTS(D;33);4)</c>).</summary>
+    public required string Target { get; init; }
+
+    /// <summary>Anzeigetext inkl. Klartext aus <c>DestinationLabels</c>, z. B. <c>GA51 (Kommissionierung)</c>.</summary>
+    public required string Label { get; init; }
+
+    public required int Count { get; init; }
+
+    /// <summary>Anteil an den <c>TSPORD</c>-Telegrammen des Punkts über das ganze Fenster in Prozent.</summary>
+    public required double Percent { get; init; }
+}
+
 /// <summary>Auslastung eines Ressourcenpunkts über das betrachtete Zeitfenster.</summary>
 public sealed record ResourcePointUtilization
 {
@@ -43,6 +58,9 @@ public sealed record ResourcePointUtilization
 
     /// <summary>Verlauf über das Zeitraster, lückenlos vom Fensterbeginn bis jetzt.</summary>
     public required IReadOnlyList<UtilizationBucket> Series { get; init; }
+
+    /// <summary>Endziele mit ihrem Anteil, absteigend nach Menge.</summary>
+    public required IReadOnlyList<DestinationShare> Destinations { get; init; }
 }
 
 /// <summary>Zusammenfassung einer Gruppe von Ressourcenpunkten.</summary>
@@ -124,8 +142,12 @@ public sealed record TelegramUtilization
         DateTime windowEnd,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         int bucketMinutes = 5,
-        int rateMinutes = 5)
+        int rateMinutes = 5,
+        IReadOnlyDictionary<string, string>? destinationLabels = null)
     {
+        var destLabels = destinationLabels is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(destinationLabels, StringComparer.OrdinalIgnoreCase);
         var now = windowEnd;
         var rate = Math.Max(1, rateMinutes);
         var rateFrom = now.AddMinutes(-rate);
@@ -147,6 +169,12 @@ public sealed record TelegramUtilization
         var stats = names.ToDictionary(
             n => n,
             _ => (Count: 0, Recent: 0, Errors: 0, Latest: (DateTime?)null),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Endziel je Punkt: erste 4 Zeichen des letzten 33er-Blocks (Excel LINKS(RECHTS(D;33);4)).
+        var destinations = names.ToDictionary(
+            n => n,
+            _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
             StringComparer.OrdinalIgnoreCase);
 
         // Zeitraster: der letzte Eimer endet bei 'now', der erste beginnt am Fensteranfang.
@@ -171,6 +199,13 @@ public sealed record TelegramUtilization
             var slot = (int)((telegram.DateTime - from).TotalMinutes / bucketWidth);
             if (slot >= 0 && slot < bucketCount)
                 buckets[point][slot]++;
+
+            var dest = Destination(telegram.Data);
+            if (dest.Length > 0)
+            {
+                var map = destinations[point];
+                map[dest] = map.TryGetValue(dest, out var dc) ? dc + 1 : 1;
+            }
 
             var error = Field(fields, errorCode);
             stats[point] = (
@@ -207,6 +242,19 @@ public sealed record TelegramUtilization
                 Errors = s.Errors,
                 LatestAt = s.Latest,
                 Series = buckets[name].Select(Bucket).ToList(),
+                Destinations = destinations[name]
+                    .OrderByDescending(kv => kv.Value)
+                    .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+                    .Select(kv => new DestinationShare
+                    {
+                        Target = kv.Key,
+                        Label = destLabels.TryGetValue(kv.Key, out var text) && !string.IsNullOrWhiteSpace(text)
+                            ? $"{kv.Key} ({text})"
+                            : kv.Key,
+                        Count = kv.Value,
+                        Percent = s.Count > 0 ? Math.Round(kv.Value * 100.0 / s.Count, 1) : 0,
+                    })
+                    .ToList(),
             };
         }).ToList();
 
@@ -254,6 +302,15 @@ public sealed record TelegramUtilization
 
     static string Field(IReadOnlyList<string> fields, int index) =>
         index >= 0 && index < fields.Count ? fields[index].Trim() : "";
+
+    /// <summary>Endziel: <c>LINKS(RECHTS(D;33);4)</c> auf dem Rohdatenfeld, ohne Füllzeichen.</summary>
+    static string Destination(string? data)
+    {
+        if (string.IsNullOrEmpty(data)) return "";
+        var right = data.Length <= 33 ? data : data[^33..];
+        var head = right.Length <= 4 ? right : right[..4];
+        return head.Trim('.', ' ', '\0');
+    }
 
     static int FieldIndex(TelegramFormat format, string name)
     {

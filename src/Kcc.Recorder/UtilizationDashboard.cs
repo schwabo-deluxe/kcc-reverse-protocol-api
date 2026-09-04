@@ -27,6 +27,7 @@ public static class UtilizationDashboard
           .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; }
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+          .tile .label .code { color: #7a8494; font-weight: 400; }
           .tile .sub { color: #9aa4b2; font-size: 12px; }
           .tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
           /* Tacho links, Verlauf rechts, auf gleicher Höhe. */
@@ -46,6 +47,9 @@ public static class UtilizationDashboard
           .spark .hit { fill: transparent; }
           .spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
           .axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
+          table.dest { margin: 10px 0 0; border: 0; border-radius: 0; background: none; }
+          table.dest th, table.dest td { padding: 3px 8px; font-size: 12px; border-bottom: 1px solid #232830; }
+          table.dest tbody tr:last-child td { border-bottom: 0; }
           .grp { margin-bottom: 24px; }
           .grp-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 2px 12px; }
           .grp-name { font-size: 13px; font-weight: 600; color: #cdd6e0; text-transform: uppercase; letter-spacing: .04em; }
@@ -169,11 +173,31 @@ public static class UtilizationDashboard
 
           const byName = n => data.points.find(p => p.resourcePoint === n);
 
+          // Label ersetzt den Punkt nicht, es ergänzt ihn — der Code bleibt immer sichtbar.
+          const heading = p => (p.label && p.label !== p.resourcePoint)
+            ? `${p.label} <span class="code">${p.resourcePoint}</span>`
+            : p.resourcePoint;
+          const rowName = p => (p.label && p.label !== p.resourcePoint)
+            ? `${p.label} · ${p.resourcePoint}`
+            : p.resourcePoint;
+
+          // Endziele: LINKS(RECHTS(Datenfeld;33);4). Anteil, welches Ziel den Punkt überfährt.
+          const destTable = p => {
+            const d = p.destinations || [];
+            if (!d.length) return '';
+            const rows = d.slice(0, 8).map(x =>
+              `<tr><td>${x.label || x.target}</td><td>${fmt(x.percent)} %</td><td>${x.count}</td></tr>`).join('');
+            const rest = d.length > 8
+              ? `<tr><td>… ${d.length - 8} weitere</td><td>${fmt(d.slice(8).reduce((a, x) => a + x.percent, 0))} %</td><td>${d.slice(8).reduce((a, x) => a + x.count, 0)}</td></tr>`
+              : '';
+            return `<table class="dest"><thead><tr><th>Ziel</th><th>Anteil</th><th>n</th></tr></thead><tbody>${rows}${rest}</tbody></table>`;
+          };
+
           // Tacho links, Verlauf rechts auf gleicher Höhe.
           const tile = p => `
             <div class="tile">
               <div class="tile-head">
-                <span class="label">${p.label || p.resourcePoint}</span>
+                <span class="label">${heading(p)}</span>
                 <span class="sub">${fmt(p.uph)} UPH/h · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
               </div>
               <div class="tile-body">
@@ -186,6 +210,7 @@ public static class UtilizationDashboard
                   <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
                 </div>
               </div>
+              ${destTable(p)}
             </div>`;
 
           // Kacheln nach Gruppe gebündelt.
@@ -209,7 +234,7 @@ public static class UtilizationDashboard
             </tr>
             ${g.points.map(n => byName(n)).map(p => `
               <tr>
-                <td class="sub-row">${p.label || p.resourcePoint}</td>
+                <td class="sub-row">${rowName(p)}</td>
                 <td>${p.count}</td><td>${fmt(p.uph)}</td>
                 <td style="color:${color(p.percent)}">${fmt(p.percent)} %</td>
                 <td class="${p.errors ? 'err' : ''}">${p.errors}</td>

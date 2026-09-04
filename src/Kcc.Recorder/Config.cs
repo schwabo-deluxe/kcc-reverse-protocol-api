@@ -123,6 +123,13 @@ public sealed class KccConfig
     /// </summary>
     public List<ResourcePointConfig> ResourcePoints { get; set; } = [];
 
+    /// <summary>
+    /// Klartext für Endziele (erste 4 Zeichen des letzten 33er-Blocks), z. B.
+    /// <c>{ "GA51": "Kommissionierung" }</c>. Wird in der Zieltabelle als <c>GA51 (Kommissionierung)</c>
+    /// angezeigt. Unbekannte Ziele bleiben roh.
+    /// </summary>
+    public Dictionary<string, string> DestinationLabels { get; set; } = [];
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

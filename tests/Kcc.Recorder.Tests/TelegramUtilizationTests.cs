@@ -10,14 +10,17 @@ public class TelegramUtilizationTests
     // TelegramType(2) SequenceNumber(2) Sender(4) Receiver(4) TelegramCount(2) ErrorCode(2)
     // MessageCode(6) Length(4) ResourcePoint(10) …
     // Die Anlage füllt Felder rechts mit Punkten auf.
-    static string Data(string messageCode, string resourcePoint, string errorCode = "00") =>
+    static string Data(string messageCode, string resourcePoint, string errorCode = "00",
+        string destination = "WA01") =>
         "DM" + "01" + "MFC1" + "CS01" + "01" + errorCode +
-        messageCode.PadRight(6, '.') + "0166" + resourcePoint.PadRight(10, '.');
+        messageCode.PadRight(6, '.') + "0166" + resourcePoint.PadRight(10, '.') +
+        // Letzter 33er-Block beginnt mit dem Endziel (Excel LINKS(RECHTS(D;33);4)).
+        destination.PadRight(4, '.') + new string('.', 29);
 
     static Telegram T(long id, int minutesAgo, string resourcePoint,
-        string messageCode = "TSPORD", string errorCode = "00") =>
+        string messageCode = "TSPORD", string errorCode = "00", string destination = "WA01") =>
         new(id, Now.AddMinutes(-minutesAgo), TelegramDirection.FromPlc, "L1",
-            Data(messageCode, resourcePoint, errorCode), null);
+            Data(messageCode, resourcePoint, errorCode, destination), null);
 
     static ResourcePointUtilization Point(TelegramUtilization u, string name) =>
         u.Points.Single(p => p.ResourcePoint == name);
@@ -143,6 +146,42 @@ public class TelegramUtilizationTests
         Assert.Equal(0, me71.RateCount);
         Assert.Equal(0, me71.Uph);
         Assert.Null(me71.LatestAt);
+        Assert.Empty(me71.Destinations);
+    }
+
+    [Fact]
+    public void Schluesselt_Endziele_je_Ressourcenpunkt_auf()
+    {
+        var window = new[]
+        {
+            T(1, 10, "DA21", destination: "WA01"),
+            T(2, 9, "DA21", destination: "WA01"),
+            T(3, 8, "DA21", destination: "WA01"),
+            T(4, 7, "DA21", destination: "DA07"),
+        };
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now);
+
+        var d = Point(u, "DA21").Destinations;
+        Assert.Equal(["WA01", "DA07"], d.Select(x => x.Target));
+        Assert.Equal(3, d[0].Count);
+        Assert.Equal(75, d[0].Percent);
+        Assert.Equal(25, d[1].Percent);
+        Assert.Equal("WA01", d[0].Label);  // ohne Mapping bleibt das Ziel roh
+    }
+
+    [Fact]
+    public void Setzt_Klartext_aus_dem_Ziel_Mapping()
+    {
+        var u = TelegramUtilization.Compute(
+            [T(1, 5, "DA21", destination: "GA51"), T(2, 4, "DA21", destination: "XX99")],
+            TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            destinationLabels: new Dictionary<string, string> { ["GA51"] = "Kommissionierung" });
+
+        var d = Point(u, "DA21").Destinations;
+        Assert.Equal("GA51 (Kommissionierung)", d.Single(x => x.Target == "GA51").Label);
+        Assert.Equal("XX99", d.Single(x => x.Target == "XX99").Label);
     }
 
     [Fact]
