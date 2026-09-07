@@ -62,6 +62,7 @@ public static class ContourDashboard
         </style>
         </head>
         <body>
+        <!--nav-->
         <header>
           <h1>Konturkontrollen</h1>
           <div class="ranges" id="ranges">
@@ -109,7 +110,7 @@ public static class ContourDashboard
         const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
         const API_BASE = (new URLSearchParams(location.search).get('api')
-          || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8080'))
+          || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8082'))
           .replace(/\/+$/, '');
 
         let minutes = 480;

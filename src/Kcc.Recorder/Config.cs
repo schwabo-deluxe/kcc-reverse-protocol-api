@@ -144,7 +144,7 @@ public sealed class KccConfig
     /// Adresse der Lese-API samt Dashboard im Normalbetrieb. HttpListener-Präfix;
     /// <c>http://localhost:PORT/</c> braucht unter Windows keine Rechte.
     /// </summary>
-    public string ApiUrl { get; set; } = "http://localhost:8080/";
+    public string ApiUrl { get; set; } = "http://+:8082/";
 
     /// <summary>Ob der Standardlauf Telegramme aufzeichnet.</summary>
     public bool Record { get; set; } = true;

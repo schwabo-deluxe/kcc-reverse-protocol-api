@@ -55,6 +55,7 @@ public static class UphHistoryDashboard
         </style>
         </head>
         <body>
+        <!--nav-->
         <header>
           <h1>UPH-Historie</h1>
           <div class="ranges" id="ranges">
@@ -102,7 +103,7 @@ public static class UphHistoryDashboard
         const colorFor = i => PALETTE[i % PALETTE.length];
 
         const API_BASE = (new URLSearchParams(location.search).get('api')
-          || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8080'))
+          || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8082'))
           .replace(/\/+$/, '');
 
         let hours = 8;

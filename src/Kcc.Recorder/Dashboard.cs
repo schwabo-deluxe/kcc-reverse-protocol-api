@@ -43,6 +43,7 @@ public static class Dashboard
         </style>
         </head>
         <body>
+        <!--nav-->
         <header>
           <h1>kcc Dashboard</h1>
           <span class="meta" id="window"></span>
@@ -63,7 +64,7 @@ public static class Dashboard
           // Über die API ausgeliefert: eigene Herkunft. Als lose Datei (file://): fest auf den
           // lokalen Standard. Mit "?api=http://host:port" überschreibbar.
           const API_BASE = (new URLSearchParams(location.search).get("api")
-            || (/^https?:$/.test(location.protocol) ? location.origin : "http://localhost:8080"))
+            || (/^https?:$/.test(location.protocol) ? location.origin : "http://localhost:8082"))
             .replace(/\/+$/, "");
 
           const tile = (label, value, cls = "") =>

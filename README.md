@@ -14,8 +14,11 @@ kcc login-test --url wss://10.20.220.33/ws --user MEINUSER --insecure
 kcc
 ```
 
-`kcc` ohne Argumente ist der Normalbetrieb: Aufzeichnung und Lese-API samt Dashboard laufen
-gemeinsam in einem Prozess, gesteuert über `appsettings.json` (`Record`, `Serve`, `ApiUrl`).
+`kcc` ohne Argumente ist der Normalbetrieb: Aufzeichnung und Website (Dashboards + API) laufen
+gemeinsam in einem Prozess, gesteuert über `appsettings.json` (`Record`, `Serve`, `ApiUrl`). Die
+Website hört ab Werk auf **`http://+:8082/`** (alle Schnittstellen) — aus dem Netz unter
+`http://<host>:8082/`. Unter Windows dafür einmalig `kcc urlacl` als Admin ausführen; sonst läuft
+sie nur lokal (`http://localhost:8082/`).
 
 Beim ersten Lauf setzt der Recorder am aktuellen Ende der Protokolltabelle an und lädt die
 letzten `StartupBackfillMinutes` (Standard 4 Stunden) einmalig nach, damit das Dashboard sofort
@@ -32,6 +35,7 @@ zuletzt gesehenen Id wieder an.
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen (baut anschließend die UPH-Historie neu auf) |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
 | `kcc uph-rebuild` | UPH-Historie (`/verlauf`) aus den vorhandenen Telegrammen neu aufbauen — nach einem separaten `backfill` oder Änderung der `UphHistory*`-Optionen |
+| `kcc urlacl` | `ApiUrl` (z. B. `http://+:8082/`) im Windows-HTTP-Stack freigeben, damit die Website aus dem Netz erreichbar ist (startet `netsh` als Admin, einmalig) |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -127,15 +131,23 @@ aufzuzeichnen.
 
 ## Dashboard / API
 
-Der Normalbetrieb (`kcc` ohne Argumente) stellt neben der Aufzeichnung eine kleine **Lese-API**
-(auf `HttpListener`, keine zusätzliche Abhängigkeit) samt eingebettetem Dashboard bereit.
-Adresse und Betriebsart stehen in `appsettings.json`:
+Der Normalbetrieb (`kcc` ohne Argumente) stellt neben der Aufzeichnung eine kleine **Website**
+(Lese-API + Dashboards, auf `HttpListener`, keine zusätzliche Abhängigkeit) bereit. Adresse und
+Betriebsart stehen in `appsettings.json`:
 
 ```json
-"ApiUrl": "http://localhost:8080/",
+"ApiUrl": "http://+:8082/",
 "Record": true,
 "Serve": true
 ```
+
+`http://+:8082/` bindet **alle Netzwerk-Schnittstellen** des Hosts — die Seiten sind dann unter
+`http://<host>:8082/` aus dem Netz erreichbar. Jede Seite hat oben eine Navigationsleiste
+(KPIs · Auslastung · Verlauf · Kontur).
+
+Unter Windows braucht `+` bzw. ein fester Hostname eine einmalige URL-Freigabe: **`kcc urlacl`**
+als Administrator ausführen (startet `netsh http add urlacl …`). Ohne die Freigabe weicht der
+Server automatisch auf `http://localhost:8082/` aus (nur lokal erreichbar) und meldet das.
 
 | Endpunkt | Zweck |
 |---|---|
@@ -165,7 +177,8 @@ API gibt sie als echtes UTC-ISO (`…Z`) aus, sodass die Dashboards sie in die *
 Betrachters** umrechnen. `GET /api/telegrams` liefert dieselben Werte, ebenfalls als UTC.
 
 `http://localhost:PORT/` läuft unter Windows ohne Sonderrechte. Für `http://+:PORT/` oder einen
-festen Hostnamen ist einmalig `netsh http add urlacl url=http://+:PORT/ user=<DOMAIN\User>` nötig.
+festen Hostnamen ist einmalig eine URL-Freigabe nötig — am einfachsten `kcc urlacl` (als Admin),
+sonst manuell `netsh http add urlacl url=http://+:8082/ user=<DOMAIN\User>`.
 
 ## Wie es funktioniert
 
@@ -198,7 +211,7 @@ Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das 
 `kontur.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards,
 die die API unter `/`, `/auslastung`, `/verlauf` bzw. `/kontur` ausliefert —
 `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
-Als lose Datei geöffnet fragen sie fest `http://localhost:8080` ab; mit `?api=http://host:port`
+Als lose Datei geöffnet fragen sie fest `http://localhost:8082` ab; mit `?api=http://host:port`
 lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
 
 ## Hinweis

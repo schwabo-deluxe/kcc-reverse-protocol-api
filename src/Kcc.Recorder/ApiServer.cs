@@ -59,20 +59,37 @@ public static class ApiServer
             ? TelegramFormat.Parse(spec)
             : TelegramFormat.Default;
 
-        using var listener = new HttpListener();
-        listener.Prefixes.Add(prefix);
+        // Ein fehlgeschlagenes Start() lässt den HttpListener unbrauchbar zurück — für den
+        // Fallback also eine frische Instanz.
+        static HttpListener Bind(string p)
+        {
+            var l = new HttpListener();
+            l.Prefixes.Add(p);
+            l.Start();
+            return l;
+        }
+
+        HttpListener listener;
         try
         {
-            listener.Start();
+            listener = Bind(prefix);
         }
         catch (HttpListenerException ex)
         {
-            throw new InvalidOperationException(
-                $"API-Endpunkt {prefix} konnte nicht geöffnet werden: {ex.Message}. " +
-                "Bei '+' oder festem Hostnamen ist unter Windows 'netsh http add urlacl' nötig; " +
-                "'http://localhost:PORT/' geht ohne Rechte.", ex);
+            // '+' / fester Hostname braucht unter Windows eine URL-ACL. Nicht abbrechen, sondern
+            // auf localhost ausweichen, damit die Seite wenigstens lokal läuft.
+            var fallback = LocalhostPrefix(prefix);
+            if (fallback is null || string.Equals(fallback, prefix, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"API-Endpunkt {prefix} konnte nicht geöffnet werden: {ex.Message}.", ex);
+
+            log($"{prefix} nicht freigegeben ({ex.Message}). Für den Zugriff aus dem Netz einmalig " +
+                $"'kcc urlacl' als Administrator ausführen. Läuft vorerst nur lokal: {fallback}");
+            prefix = fallback;
+            listener = Bind(prefix);
         }
 
+        using var httpListener = listener;
         log($"API + Dashboard: {prefix}  (Strg+C beendet)");
         using var stopOnCancel = ct.Register(listener.Stop);
 
@@ -114,19 +131,19 @@ public static class ApiServer
             {
                 case "/":
                 case "/index.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", Dashboard.Html);
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(Dashboard.Html, "/"));
                     break;
                 case "/auslastung":
                 case "/auslastung.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", UtilizationDashboard.Html);
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(UtilizationDashboard.Html, "/auslastung"));
                     break;
                 case "/verlauf":
                 case "/verlauf.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", UphHistoryDashboard.Html);
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(UphHistoryDashboard.Html, "/verlauf"));
                     break;
                 case "/kontur":
                 case "/kontur.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", ContourDashboard.Html);
+                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(ContourDashboard.Html, "/kontur"));
                     break;
                 case "/api/kontur":
                     await WriteJsonAsync(res, 200, Contour(config, format, ContourMinutes(ctx, config)));
@@ -350,10 +367,21 @@ public static class ApiServer
     static int Clamp(string? raw, int fallback, int min, int max) =>
         int.TryParse(raw, out var v) ? Math.Clamp(v, min, max) : fallback;
 
-    static string NormalizePrefix(string? url)
+    internal static string NormalizePrefix(string? url)
     {
-        var u = string.IsNullOrWhiteSpace(url) ? "http://localhost:8080/" : url.Trim();
+        var u = string.IsNullOrWhiteSpace(url) ? "http://+:8082/" : url.Trim();
         return u.EndsWith('/') ? u : u + "/";
+    }
+
+    /// <summary>Ersetzt den Host in einem Präfix durch <c>localhost</c>, oder <c>null</c> bei ungültiger Form.</summary>
+    static string? LocalhostPrefix(string prefix)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(prefix, @"^(https?://)([^/:]+)(:\d+)?(/.*)?$");
+        if (!m.Success)
+            return null;
+        var port = m.Groups[3].Success ? m.Groups[3].Value : "";
+        var pathPart = m.Groups[4].Success ? m.Groups[4].Value : "/";
+        return $"{m.Groups[1].Value}localhost{port}{pathPart}";
     }
 
     static async Task WriteJsonAsync(HttpListenerResponse res, int status, object body)
