@@ -62,6 +62,16 @@ public sealed class ResourcePointConfig
     /// </summary>
     public double? TargetUph { get; set; }
 
+    /// <summary>
+    /// RBG-Verbindung dieses Auslagerplatzes (Telegramm-Feld <c>ConnectionName</c>, z. B.
+    /// <c>RBG01</c>). Gesetzt ⇒ die Kachel bekommt zusätzlich die Spielauswertung
+    /// (Voll-/Halbspiele, Leerlaufzeit, Auftragsdauer).
+    /// </summary>
+    public string? Connection { get; set; }
+
+    /// <summary>Maximale Vollspiele pro Stunde dieses RBG. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
+    public int? MaxCyclesPerHour { get; set; }
+
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
 }
@@ -200,6 +210,21 @@ public sealed class KccConfig
 
     /// <summary>Zeitfenster der Konturauswertung in Minuten ohne <c>minutes</c>-Parameter (Standard <c>480</c>).</summary>
     public int ContourWindowMinutes { get; set; } = 480;
+
+    /// <summary>Vorgabe für die maximalen Vollspiele pro Stunde eines RBG (Standard <c>60</c>).</summary>
+    public int RbgMaxCyclesPerHour { get; set; } = 60;
+
+    /// <summary>MessageCodes einer abgeschlossenen Einlagerung (Bringen). Leer ⇒ <c>["ENDDEP"]</c>.</summary>
+    public List<string> RbgPutDoneCodes { get; set; } = [];
+
+    /// <summary>MessageCodes einer abgeschlossenen Auslagerung (Holen). Leer ⇒ <c>["ENDPUP"]</c>.</summary>
+    public List<string> RbgFetchDoneCodes { get; set; } = [];
+
+    /// <summary>MessageCodes der Auftragserteilung Einlagerung. Leer ⇒ <c>["DEPORD"]</c>.</summary>
+    public List<string> RbgPutOrderCodes { get; set; } = [];
+
+    /// <summary>MessageCodes der Auftragserteilung Auslagerung. Leer ⇒ <c>["PUPORD"]</c>.</summary>
+    public List<string> RbgFetchOrderCodes { get; set; } = [];
 
     /// <summary>
     /// Klartext für Endziele (führendes Token des letzten 33er-Blocks, 4–5 Zeichen), z. B.

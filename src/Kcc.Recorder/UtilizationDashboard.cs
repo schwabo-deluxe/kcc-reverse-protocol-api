@@ -32,6 +32,8 @@ public static class UtilizationDashboard
           .tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
           /* Tacho links, Verlauf rechts, auf gleicher Höhe. */
           .tile-body { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+          .rbg { margin-top: 8px; padding-top: 8px; border-top: 1px solid #232830; font-size: 12px; color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 3px 12px; }
+          .rbg b { color: #e6e6e6; font-weight: 600; }
           .gauge-col { flex: 0 0 auto; text-align: center; }
           .spark-col { flex: 1 1 0; min-width: 0; }
           .gauge { display: block; width: 128px; height: 66px; overflow: visible; }
@@ -193,6 +195,23 @@ public static class UtilizationDashboard
             return `<table class="dest"><thead><tr><th>Ziel</th><th>Anteil</th><th>n</th></tr></thead><tbody>${rows}${rest}</tbody></table>`;
           };
 
+          // Dauer lesbar: Sekunden bzw. m:ss.
+          const dur = s => s < 60 ? `${Math.round(s)} s`
+            : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min`;
+
+          const rbgRow = p => {
+            const r = p.rbg;
+            if (!r) return '';
+            return `<div class="rbg">
+              <span>RBG <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
+              <span>Vollspiele <b>${r.fullCycles}</b></span>
+              <span>Halbspiele <b>${r.halfCycles}</b></span>
+              <span>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
+              <span>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
+              <span>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
+            </div>`;
+          };
+
           // Tacho links, Verlauf rechts auf gleicher Höhe.
           const tile = p => `
             <div class="tile">
@@ -210,6 +229,7 @@ public static class UtilizationDashboard
                   <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
                 </div>
               </div>
+              ${rbgRow(p)}
               ${destTable(p)}
             </div>`;
 

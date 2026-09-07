@@ -183,7 +183,7 @@ public static class ApiServer
         var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
             w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
-            config.DestinationLabels, config.GroupOrder, seriesStep);
+            config.DestinationLabels, config.GroupOrder, seriesStep, RbgOptions.From(config));
     }
 
     static UphHistoryReport UphHistory(

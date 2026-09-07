@@ -64,6 +64,9 @@ public sealed record ResourcePointUtilization
 
     /// <summary>Endziele mit ihrem Anteil, absteigend nach Menge.</summary>
     public required IReadOnlyList<DestinationShare> Destinations { get; init; }
+
+    /// <summary>Spielauswertung der zugeordneten RBG-Verbindung, sofern konfiguriert.</summary>
+    public RbgCycleStats? Rbg { get; init; }
 }
 
 /// <summary>Zusammenfassung einer Gruppe von Ressourcenpunkten.</summary>
@@ -154,7 +157,8 @@ public sealed record TelegramUtilization
         int rateMinutes = 5,
         IReadOnlyDictionary<string, string>? destinationLabels = null,
         IReadOnlyList<string>? groupOrder = null,
-        int seriesStepMinutes = 1)
+        int seriesStepMinutes = 1,
+        RbgOptions? rbg = null)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
@@ -289,6 +293,11 @@ public sealed record TelegramUtilization
                         Percent = s.Count > 0 ? Math.Round(kv.Value * 100.0 / s.Count, 1) : 0,
                     })
                     .ToList(),
+                Rbg = rbg is not null && !string.IsNullOrWhiteSpace(d.Connection)
+                    ? RbgReport.Compute(window, format, d.Connection!.Trim(),
+                        d.MaxCyclesPerHour is > 0 ? d.MaxCyclesPerHour.Value : rbg.MaxCyclesPerHour,
+                        from, now, rbg)
+                    : null,
             };
         }).ToList();
 
