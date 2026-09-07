@@ -11,16 +11,26 @@ public sealed record RbgCycleStats
     /// <summary>Abgeschlossene Auslagerungen (Holen) im Fenster.</summary>
     public required int Fetches { get; init; }
 
-    /// <summary>Vollspiele = <c>min(Puts, Fetches)</c> — gepaarte Ein- und Auslagerung.</summary>
-    public required int FullCycles { get; init; }
+    /// <summary>Doppelspiele = <c>min(Puts, Fetches)</c> — gepaarte Ein- und Auslagerung.</summary>
+    public required int DoubleCycles { get; init; }
 
-    /// <summary>Halbspiele = <c>|Puts − Fetches|</c> — ungepaarte Einzelfahrten.</summary>
-    public required int HalfCycles { get; init; }
+    /// <summary>Einzelspiele = <c>|Puts − Fetches|</c> — ungepaarte Einzelfahrten.</summary>
+    public required int SingleCycles { get; init; }
 
     public required int MaxCyclesPerHour { get; init; }
 
-    /// <summary>Auslastung: <c>(Vollspiele + Halbspiele/2) / (MaxCyclesPerHour · Stunden) · 100</c>.</summary>
+    /// <summary>
+    /// Leistungsgrad gegen die Kapazität: <c>(Doppelspiele + Einzelspiele/2) / (MaxCyclesPerHour ·
+    /// Stunden) · 100</c>. Entspricht den erreichten Lagerspielen relativ zu den nominalen
+    /// Doppelspielen/h (FEM 9.851: ein Doppelspiel = 2 Lagerbewegungen).
+    /// </summary>
     public required double Percent { get; init; }
+
+    /// <summary>
+    /// Zeitbasierter Auslastungsgrad in Prozent = belegte Auftragszeit ÷ Fenster (FEM-üblicher
+    /// Auslastungsgrad; auf 100 begrenzt bei überlappenden Aufträgen).
+    /// </summary>
+    public required double BusyPercent { get; init; }
 
     /// <summary>Leerlaufzeit in Sekunden im Fenster = Fenster − belegte Auftragszeit.</summary>
     public required double IdleSeconds { get; init; }
@@ -32,6 +42,13 @@ public sealed record RbgCycleStats
     public required double AvgFetchSeconds { get; init; }
 
     public required DateTime? LatestAt { get; init; }
+
+    /// <summary>
+    /// Gleitender Verlauf über das Fenster: <see cref="UtilizationBucket.Uph"/> = Spiele/h
+    /// (Doppelspiel-Äquivalent, also <c>Doppel + Einzel/2</c> je Stunde), <see cref="UtilizationBucket.Count"/>
+    /// = abgeschlossene Fahrten im Fenster. Der letzte Punkt endet bei <c>to</c>.
+    /// </summary>
+    public required IReadOnlyList<UtilizationBucket> Series { get; init; }
 }
 
 /// <summary>MessageCode-Sätze der RBG-Spielauswertung (aus <see cref="KccConfig"/>).</summary>
@@ -57,10 +74,15 @@ public sealed record RbgOptions
 }
 
 /// <summary>
-/// Wertet die Fahraufträge einer RBG-Verbindung aus: zählt abgeschlossene Ein-/Auslagerungen
-/// (<c>ENDDEP</c>/<c>ENDPUP</c>), bildet daraus Voll- und Halbspiele und die Auslastung gegen die
-/// Kapazität, und misst über die Auftragspaare (<c>DEPORD</c>→<c>ENDDEP</c>, <c>PUPORD</c>→<c>ENDPUP</c>)
-/// die Ø Ausführungsdauer und die Leerlaufzeit. Reine Funktion über einem Zeitfenster.
+/// Wertet die Fahraufträge einer RBG-Verbindung aus. Begriffe nach FEM 9.851 / Wikipedia
+/// „Regalbediengerät": ein <b>Einzelspiel</b> ist eine reine Ein- oder Auslagerung, ein
+/// <b>Doppelspiel</b> (kombiniertes Spiel) eine Ein- <em>und</em> Auslagerung in einer Fahrt.
+///
+/// Gezählt werden die abgeschlossenen Fahrten (<c>ENDDEP</c>/<c>ENDPUP</c>); daraus
+/// Doppelspiele = <c>min(Ein, Aus)</c>, Einzelspiele = <c>|Ein − Aus|</c> und die Auslastung
+/// gegen die Kapazität. Über die Auftragspaare (<c>DEPORD</c>→<c>ENDDEP</c>,
+/// <c>PUPORD</c>→<c>ENDPUP</c>) werden Ø Ausführungsdauer und Leerlaufzeit gemessen. Reine
+/// Funktion über einem Zeitfenster.
 ///
 /// Die Anlage sendet jedes Ereignis doppelt (TelegramType <c>DM</c>/<c>AK</c>, ~0,1&#160;s Abstand,
 /// gleiche Felder) — das wird hier zusammengeführt.
@@ -85,7 +107,9 @@ public static class RbgReport
         int maxCyclesPerHour,
         DateTime from,
         DateTime to,
-        RbgOptions options)
+        RbgOptions options,
+        int bucketMinutes = 5,
+        int stepMinutes = 1)
     {
         var mcIdx = FieldIndex(format, "MessageCode");
         var labelIdx = FieldIndex(format, "ResourceLabel");
@@ -137,15 +161,19 @@ public static class RbgReport
 
         var (avgPut, busyPut) = PairDurations(events, Kind.PutDone, Kind.PutOrder, from, to);
         var (avgFetch, busyFetch) = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, from, to);
-        var idle = Math.Max(0, (to - from).TotalSeconds - (busyPut + busyFetch));
+        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
+        var busy = busyPut + busyFetch;
+        var idle = Math.Max(0, windowSeconds - busy);
 
         return new RbgCycleStats
         {
+            BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
+            Series = RollingSeries(events, from, to, bucketMinutes, stepMinutes),
             Connection = connection,
             Puts = puts,
             Fetches = fetches,
-            FullCycles = full,
-            HalfCycles = half,
+            DoubleCycles = full,
+            SingleCycles = half,
             MaxCyclesPerHour = maxCyclesPerHour,
             Percent = percent,
             IdleSeconds = Math.Round(idle, 1),
@@ -153,6 +181,56 @@ public static class RbgReport
             AvgFetchSeconds = avgFetch,
             LatestAt = doneInWindow.Count > 0 ? doneInWindow.Max(e => e.At) : null,
         };
+    }
+
+    /// <summary>
+    /// Gleitender Verlauf der Spiele/h: feine Abtastung der Abschluss-Ereignisse (Schritt), je
+    /// Stützpunkt die Summe der letzten <paramref name="bucketMinutes"/> Minuten, umgerechnet auf
+    /// Doppelspiel-Äquivalent pro Stunde. Letzter Stützpunkt endet bei <paramref name="to"/>.
+    /// </summary>
+    static List<UtilizationBucket> RollingSeries(
+        List<Ev> events, DateTime from, DateTime to, int bucketMinutes, int stepMinutes)
+    {
+        var step = Math.Max(1, stepMinutes);
+        var win = Math.Max(step, bucketMinutes);
+        var fineCount = Math.Max(1, (int)Math.Ceiling((to - from).TotalMinutes / step));
+        var winSteps = Math.Max(1, (int)Math.Round(win / (double)step));
+
+        var finePut = new int[fineCount];
+        var fineFetch = new int[fineCount];
+        foreach (var e in events)
+        {
+            if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.FetchDone))
+                continue;
+            var slot = (int)((e.At - from).TotalMinutes / step);
+            if (slot < 0 || slot >= fineCount)
+                continue;
+            if (e.Kind == Kind.PutDone) finePut[slot]++;
+            else fineFetch[slot]++;
+        }
+
+        var winHours = winSteps * step / 60.0;
+        var series = new List<UtilizationBucket>(fineCount);
+        int accPut = 0, accFetch = 0;
+        for (var i = 0; i < fineCount; i++)
+        {
+            accPut += finePut[i];
+            accFetch += fineFetch[i];
+            if (i >= winSteps)
+            {
+                accPut -= finePut[i - winSteps];
+                accFetch -= fineFetch[i - winSteps];
+            }
+            var full = Math.Min(accPut, accFetch);
+            var half = Math.Abs(accPut - accFetch);
+            series.Add(new UtilizationBucket
+            {
+                At = from.AddMinutes((i + 1) * step),
+                Count = accPut + accFetch,
+                Uph = Math.Round((full + half / 2.0) / winHours, 1),
+            });
+        }
+        return series;
     }
 
     /// <summary>

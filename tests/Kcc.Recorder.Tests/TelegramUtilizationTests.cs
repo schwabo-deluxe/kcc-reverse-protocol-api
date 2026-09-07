@@ -26,8 +26,8 @@ public class TelegramUtilizationTests
         u.Points.Single(p => p.ResourcePoint == name);
 
     static ResourcePointConfig RP(string name, string? group = null, string? label = null,
-        int? order = null, double? targetUph = null) =>
-        new() { Name = name, Group = group, Label = label, Order = order, TargetUph = targetUph };
+        int? order = null, double? targetUph = null, string? connection = null) =>
+        new() { Name = name, Group = group, Label = label, Order = order, TargetUph = targetUph, Connection = connection };
 
     [Fact]
     public void Uph_und_Prozent_kommen_aus_dem_Rate_Fenster()
@@ -308,6 +308,39 @@ public class TelegramUtilizationTests
         var g = u.Groups.Single();
         Assert.Equal(300, g.TargetUph);             // 100 + 200
         Assert.Equal(54, g.Percent);                // Mittel aus 72 % und 36 %
+    }
+
+    [Fact]
+    public void RBG_Kachel_nimmt_Prozent_und_Verlauf_aus_der_Spielauswertung()
+    {
+        // ResourceLabel(20) beginnt bei Offset 26+10 = 36; hier bauen wir ein RBG-Telegramm.
+        static string RbgData(string mc) =>
+            ("DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150").PadRight(166, '.');
+        Telegram Rb(long id, int minAgo, string mc) =>
+            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01", RbgData(mc), null);
+
+        // 30 abgeschlossene Ein- und 30 Auslagerungen in der letzten Stunde -> 30 Doppelspiele
+        // bei Kapazität 60/h -> 50 %.
+        var window = new System.Collections.Generic.List<Telegram>();
+        long id = 1;
+        for (var i = 0; i < 30; i++)
+        {
+            window.Add(Rb(id++, 58 - i, "ENDDEP"));
+            window.Add(Rb(id++, 58 - i, "ENDPUP"));
+        }
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints: [RP("MA72", "RBG", "RBG 1", targetUph: 999, connection: "RBG01")],
+            rbg: RbgOptions.From(new KccConfig()));
+
+        var p = Point(u, "MA72");
+        Assert.NotNull(p.Rbg);
+        Assert.Equal(30, p.Rbg!.DoubleCycles);
+        Assert.Equal(0, p.Rbg.SingleCycles);
+        Assert.Equal(50, p.Rbg.Percent);          // (30 + 0) / (60 * 1 h) * 100
+        Assert.Equal(p.Rbg.Percent, p.Percent);   // Kachel-Kennzahl kommt aus der Spielauswertung
+        Assert.NotEmpty(p.Rbg.Series);
     }
 
     [Fact]

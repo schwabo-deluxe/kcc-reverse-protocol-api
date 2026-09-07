@@ -77,12 +77,18 @@ public class RbgReportTests
 
         Assert.Equal(4, r.Puts);        // ENDDEP L2,L4,L6,L8
         Assert.Equal(5, r.Fetches);     // ENDPUP L1,L3,L5,L7,L9
-        Assert.Equal(4, r.FullCycles);
-        Assert.Equal(1, r.HalfCycles);
+        Assert.Equal(4, r.DoubleCycles);
+        Assert.Equal(1, r.SingleCycles);
         Assert.Equal(112.5, r.Percent); // (4 + 0.5) / (60 * 240/3600) * 100
         Assert.Equal(25, r.AvgPutSeconds);
         Assert.Equal(25, r.AvgFetchSeconds);
         Assert.Equal(15, r.IdleSeconds); // 240 - (4*25 + 5*25)
+        Assert.Equal(93.8, r.BusyPercent); // 225 / 240 * 100
+
+        // Gleitender Verlauf: ein Stützpunkt je Schritt, letzter endet bei 'to', Spiele/h > 0.
+        Assert.Equal(T0.AddSeconds(240), r.Series[^1].At);
+        Assert.All(r.Series, b => Assert.True(b.At > T0 && b.At <= T0.AddSeconds(240)));
+        Assert.Contains(r.Series, b => b.Uph > 0);
     }
 
     [Fact]
@@ -93,12 +99,13 @@ public class RbgReportTests
         Assert.Equal(0, r.Puts);
         Assert.Equal(0, r.Fetches);
         Assert.Equal(0, r.Percent);
+        Assert.Equal(0, r.BusyPercent);
         Assert.Equal(3600, r.IdleSeconds);
         Assert.Null(r.LatestAt);
     }
 
     [Fact]
-    public void Nur_Auslagerungen_ergibt_lauter_Halbspiele()
+    public void Nur_Auslagerungen_ergibt_lauter_Einzelspiele()
     {
         var feed = new Feed();
         for (var i = 0; i < 6; i++)
@@ -108,7 +115,7 @@ public class RbgReportTests
 
         Assert.Equal(0, r.Puts);
         Assert.Equal(6, r.Fetches);
-        Assert.Equal(0, r.FullCycles);
-        Assert.Equal(6, r.HalfCycles);
+        Assert.Equal(0, r.DoubleCycles);
+        Assert.Equal(6, r.SingleCycles);
     }
 }

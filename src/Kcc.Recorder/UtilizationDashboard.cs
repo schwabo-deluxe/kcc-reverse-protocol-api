@@ -132,10 +132,9 @@ public static class UtilizationDashboard
           </svg>`;
         }
 
-        // Verlauf als Sparkline: gemeinsame Y-Skala über alle Punkte, damit die Kacheln
-        // untereinander vergleichbar bleiben. Gestrichelt: der Richtwert.
+        // Verlauf als Sparkline. Bei RBG-Kacheln zählt der Spiele/h-Verlauf, sonst die UPH-Reihe.
         function spark(point, scaleMax, target) {
-          const w = 240, h = 54, s = point.series;
+          const w = 240, h = 54, s = point.rbg ? point.rbg.series : point.series;
           if (s.length < 2) return '<svg class="spark" viewBox="0 0 240 54"></svg>';
 
           const x = i => (i / (s.length - 1)) * w;
@@ -168,10 +167,10 @@ public static class UtilizationDashboard
           $('bucket').value = data.bucketMinutes;
           $('rate').value = data.rateMinutes;
 
-          // Eine Skala für alle Kacheln — mindestens bis zum Richtwert.
+          // Eine UPH-Skala für alle Nicht-RBG-Kacheln — mindestens bis zum Richtwert.
           const peak = Math.max(
             data.targetUph,
-            ...data.points.flatMap(p => p.series.map(b => b.uph)));
+            ...data.points.filter(p => !p.rbg).flatMap(p => p.series.map(b => b.uph)));
 
           const byName = n => data.points.find(p => p.resourcePoint === n);
 
@@ -203,9 +202,10 @@ public static class UtilizationDashboard
             const r = p.rbg;
             if (!r) return '';
             return `<div class="rbg">
-              <span>RBG <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
-              <span>Vollspiele <b>${r.fullCycles}</b></span>
-              <span>Halbspiele <b>${r.halfCycles}</b></span>
+              <span>Auslastung <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
+              <span>Leistung <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
+              <span>Doppelspiele <b>${r.doubleCycles}</b></span>
+              <span>Einzelspiele <b>${r.singleCycles}</b></span>
               <span>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
               <span>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
               <span>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
@@ -213,7 +213,12 @@ public static class UtilizationDashboard
           };
 
           // Tacho links, Verlauf rechts auf gleicher Höhe.
-          const tile = p => `
+          const tile = p => {
+            const sMax = p.rbg
+              ? Math.max(p.rbg.maxCyclesPerHour * 1.3, 1, ...p.rbg.series.map(b => b.uph))
+              : peak;
+            const sTarget = p.rbg ? p.rbg.maxCyclesPerHour : data.targetUph;
+            return `
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${heading(p)}</span>
@@ -225,13 +230,14 @@ public static class UtilizationDashboard
                   <div class="pct" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
                 </div>
                 <div class="spark-col">
-                  ${spark(p, peak, data.targetUph)}
+                  ${spark(p, sMax, sTarget)}
                   <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
                 </div>
               </div>
               ${rbgRow(p)}
               ${destTable(p)}
             </div>`;
+          };
 
           // Kacheln nach Gruppe gebündelt.
           $('tiles').innerHTML = data.groups.map(g => `
@@ -271,11 +277,12 @@ public static class UtilizationDashboard
         function nearest(svg, clientX) {
           const box = svg.getBoundingClientRect();
           const point = current?.points.find(p => p.resourcePoint === svg.dataset.point);
-          if (!point || point.series.length < 2 || box.width === 0) return null;
+          const s = point && point.rbg ? point.rbg.series : point && point.series;
+          if (!s || s.length < 2 || box.width === 0) return null;
 
           const ratio = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
-          const i = Math.round(ratio * (point.series.length - 1));
-          return { point, i, bucket: point.series[i] };
+          const i = Math.round(ratio * (s.length - 1));
+          return { point, i, bucket: s[i], rbg: !!point.rbg };
         }
 
         document.addEventListener('mousemove', e => {
@@ -299,7 +306,9 @@ public static class UtilizationDashboard
           const tip = $('tip');
           tip.innerHTML =
             `<b>${hit.point.resourcePoint}</b> · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
-            `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`;
+            (hit.rbg
+              ? `<br>${fmt(hit.bucket.uph)} Spiele/h · ${hit.bucket.count} Fahrten`
+              : `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`);
           tip.style.opacity = 1;
           tip.style.left = Math.min(window.innerWidth - 180, e.clientX + 12) + 'px';
           tip.style.top = (e.clientY + 14) + 'px';

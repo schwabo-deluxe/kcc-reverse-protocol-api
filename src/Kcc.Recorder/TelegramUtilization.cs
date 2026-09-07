@@ -269,6 +269,15 @@ public sealed record TelegramUtilization
             var s = stats[name];
             var uph = s.Recent / rateHours;
             var pointTarget = d.TargetUph is > 0 ? d.TargetUph.Value : targetUph;
+
+            // Auslagerplatz mit RBG-Verbindung: die Spielauswertung ist die Kennzahl der Kachel
+            // (Tacho + Linienchart); die TSPORD-Zähler dienen nur noch der Ziel-Identifikation.
+            var rbgStats = rbg is not null && !string.IsNullOrWhiteSpace(d.Connection)
+                ? RbgReport.Compute(window, format, d.Connection!.Trim(),
+                    d.MaxCyclesPerHour is > 0 ? d.MaxCyclesPerHour.Value : rbg.MaxCyclesPerHour,
+                    from, now, rbg, bucketWidth, step)
+                : null;
+
             return new ResourcePointUtilization
             {
                 ResourcePoint = name,
@@ -278,7 +287,9 @@ public sealed record TelegramUtilization
                 RateCount = s.Recent,
                 Uph = Math.Round(uph, 1),
                 TargetUph = pointTarget,
-                Percent = pointTarget > 0 ? Math.Round(uph / pointTarget * 100, 1) : 0,
+                Percent = rbgStats is not null
+                    ? rbgStats.Percent
+                    : pointTarget > 0 ? Math.Round(uph / pointTarget * 100, 1) : 0,
                 Errors = s.Errors,
                 LatestAt = s.Latest,
                 Series = RollingSeries(buckets[name]),
@@ -293,11 +304,7 @@ public sealed record TelegramUtilization
                         Percent = s.Count > 0 ? Math.Round(kv.Value * 100.0 / s.Count, 1) : 0,
                     })
                     .ToList(),
-                Rbg = rbg is not null && !string.IsNullOrWhiteSpace(d.Connection)
-                    ? RbgReport.Compute(window, format, d.Connection!.Trim(),
-                        d.MaxCyclesPerHour is > 0 ? d.MaxCyclesPerHour.Value : rbg.MaxCyclesPerHour,
-                        from, now, rbg)
-                    : null,
+                Rbg = rbgStats,
             };
         }).ToList();
 
