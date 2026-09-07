@@ -14,6 +14,7 @@ public class DashboardNavTests
         Assert.Contains("<a href=\"/auslastung\">Auslastung</a>", nav);
         Assert.Contains("<a href=\"/verlauf\" class=\"on\">Verlauf</a>", nav);
         Assert.Contains("<a href=\"/kontur\">Kontur</a>", nav);
+        Assert.Contains("<a href=\"/wand\">Wand</a>", nav);
     }
 
     [Fact]
@@ -37,6 +38,7 @@ public class DashboardNavTests
         foreach (var html in new[]
         {
             Dashboard.Html, UtilizationDashboard.Html, UphHistoryDashboard.Html, ContourDashboard.Html,
+            WallboardDashboard.Html,
         })
             Assert.Contains(DashboardNav.Placeholder, html);
     }

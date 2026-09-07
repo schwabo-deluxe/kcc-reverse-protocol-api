@@ -111,6 +111,7 @@ public static class ApiServer
                 "/auslastung" or "/auslastung.html" => Html(UtilizationDashboard.Html, "/auslastung"),
                 "/verlauf" or "/verlauf.html" => Html(UphHistoryDashboard.Html, "/verlauf"),
                 "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
+                "/wand" or "/wand.html" => Html(WallboardDashboard.Html, "/wand"),
                 "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),
                 "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), SeriesStep(q, config))),
                 "/api/uph-history" => Ok(UphHistory(config, format,

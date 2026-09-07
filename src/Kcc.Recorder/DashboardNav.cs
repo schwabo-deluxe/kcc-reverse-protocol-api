@@ -15,6 +15,7 @@ public static class DashboardNav
         ("/auslastung", "Auslastung"),
         ("/verlauf", "Verlauf"),
         ("/kontur", "Kontur"),
+        ("/wand", "Wand"),
     ];
 
     /// <summary>Navigationsleiste mit hervorgehobenem <paramref name="activePath"/>.</summary>

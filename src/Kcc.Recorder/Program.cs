@@ -331,6 +331,7 @@ int DumpDashboards(CommandLine cli)
         ("auslastung.html", UtilizationDashboard.Html),
         ("verlauf.html", UphHistoryDashboard.Html),
         ("kontur.html", ContourDashboard.Html),
+        ("wand.html", WallboardDashboard.Html),
     };
     foreach (var (name, html) in files)
         File.WriteAllText(Path.Combine(dir, name), DashboardNav.Strip(html), new UTF8Encoding(false));
@@ -422,7 +423,7 @@ static void PrintUsage() => Console.WriteLine(
                                        nach 'backfill' oder Änderung von UphHistory*-Optionen
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
-      dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur.html herausschreiben
+      dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur/wand.html herausschreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)

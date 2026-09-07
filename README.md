@@ -157,6 +157,7 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand; `rolling=<min>` schaltet auf ein gleitendes Fenster aus den Rohtelegrammen um (`bucket` wird dann der Abtastschritt); `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /kontur` | Auswertung der Konturkontrollen: welche Konturfehler an welchem Kontrollpunkt auflaufen. Zerlegt das `Status`-Feld (`Kxyz`) der Telegramme aus `ContourCheckpoints` in benannte Fehlerbits (`ContourFlags`). KPIs, Balken je Fehlerart, Kreuztabelle Kontrollpunkt × Fehlerart, sowie je Kontrollpunkt die letzten 10 Fehler mit Zeit, LE-/ID-Nummer und aufgelösten Fehlern |
 | `GET /api/kontur?minutes=480` | Dieselbe Auswertung als JSON |
+| `GET /wand` | Wandansicht derselben Auslastungsdaten (`/api/utilization`): erkennt per `orientation: landscape` das Querformat und legt jede `Group` (RBG, Fördertechnik …) als eigene, klar getrennte, formatfüllende Spalte ohne Seiten-Scroll ab. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Doppel-/Einzelspiele/Leerlauf. Vollbild-Schaltfläche. Im Hochformat stapeln sich die Spalten |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
@@ -204,8 +205,8 @@ abhängigen `dotnet test`/`run` auch neuere Runtimes (der Publish bleibt bei net
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
 (`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`,
-`kontur.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards,
-die die API unter `/`, `/auslastung`, `/verlauf` bzw. `/kontur` ausliefert —
+`kontur.html`, `wand.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards,
+die die API unter `/`, `/auslastung`, `/verlauf`, `/kontur` bzw. `/wand` ausliefert —
 `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
 Als lose Datei geöffnet fragen sie fest `http://localhost:8082` ab; mit `?api=http://host:port`
 lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
