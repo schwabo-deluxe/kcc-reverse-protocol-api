@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Kcc.Recorder;
@@ -41,7 +40,6 @@ try
         "backfill" => await BackfillAsync(config, cli, cancellation.Token),
         "prune" => Prune(config, cli),
         "uph-rebuild" => UphRebuild(config),
-        "urlacl" => AddUrlAcl(config),
         "export" => Export(config, cli),
         "dump-dashboards" => DumpDashboards(cli),
         _ => UnknownCommand(cli.Command),
@@ -322,37 +320,6 @@ int Prune(KccConfig config, CommandLine cli)
 }
 
 // Schreibt die eingebetteten Dashboards als eigenständige HTML-Dateien heraus — u. a. fürs Release-Zip.
-// Gibt den in ApiUrl gesetzten Endpunkt (z. B. http://+:8082/) im Windows-HTTP-Stack frei, damit
-// die Website auch aus dem Netz erreichbar ist. Startet netsh mit Adminrechten (UAC-Abfrage).
-int AddUrlAcl(KccConfig config)
-{
-    var prefix = ApiServer.NormalizePrefix(config.ApiUrl);
-    var user = $"{Environment.UserDomainName}\\{Environment.UserName}";
-    var args = $"http add urlacl url={prefix} user=\"{user}\"";
-    Log($"netsh {args}");
-
-    if (!OperatingSystem.IsWindows())
-    {
-        Log("Nur unter Windows nötig — auf anderen Systemen bindet HttpListener direkt.");
-        return 0;
-    }
-
-    try
-    {
-        var proc = Process.Start(new ProcessStartInfo("netsh", args) { UseShellExecute = true, Verb = "runas" });
-        proc!.WaitForExit();
-        Log(proc.ExitCode == 0
-            ? $"Freigegeben: {prefix} für {user}. 'kcc' neu starten."
-            : $"netsh endete mit Code {proc.ExitCode}.");
-        return proc.ExitCode;
-    }
-    catch (Exception ex)
-    {
-        Log($"Fehlgeschlagen ({ex.Message}). Manuell in einer Admin-Eingabeaufforderung:\n  netsh {args}");
-        return 1;
-    }
-}
-
 int DumpDashboards(CommandLine cli)
 {
     var dir = cli.GetString("out") ?? ".";
@@ -453,9 +420,6 @@ static void PrintUsage() => Console.WriteLine(
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
       uph-rebuild                      UPH-Historie (/verlauf) aus den Telegrammen neu aufbauen —
                                        nach 'backfill' oder Änderung von UphHistory*-Optionen
-      urlacl                           ApiUrl (z. B. http://+:8082/) im Windows-HTTP-Stack
-                                       freigeben, damit die Website aus dem Netz erreichbar ist
-                                       (startet netsh als Admin, einmalig)
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
       dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur.html herausschreiben

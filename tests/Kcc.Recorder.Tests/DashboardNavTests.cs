@@ -41,11 +41,12 @@ public class DashboardNavTests
             Assert.Contains(DashboardNav.Placeholder, html);
     }
 
-    [Fact]
-    public void NormalizePrefix_setzt_Vorgabe_und_abschliessenden_Slash()
-    {
-        Assert.Equal("http://+:8082/", ApiServer.NormalizePrefix(null));
-        Assert.Equal("http://+:8082/", ApiServer.NormalizePrefix("http://+:8082"));
-        Assert.Equal("http://host:9000/", ApiServer.NormalizePrefix("  http://host:9000/  "));
-    }
+    [Theory]
+    [InlineData(null, "+", 8082)]
+    [InlineData("http://+:8082/", "+", 8082)]
+    [InlineData("http://0.0.0.0:9000", "0.0.0.0", 9000)]
+    [InlineData("http://localhost:8082/", "localhost", 8082)]
+    [InlineData("  http://192.168.1.5:80/  ", "192.168.1.5", 80)]
+    public void ParseApiUrl_trennt_Host_und_Port(string? url, string host, int port) =>
+        Assert.Equal((host, port), ApiServer.ParseApiUrl(url));
 }

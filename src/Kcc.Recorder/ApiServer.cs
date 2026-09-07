@@ -1,13 +1,17 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Kcc.Recorder;
 
 /// <summary>
-/// Kleine Lese-API auf Basis von <see cref="HttpListener"/> (keine zusätzliche Abhängigkeit) plus
-/// eingebettetem Dashboard. Endpunkte:
+/// Kleine Lese-Website auf Kestrel: bindet direkt einen Socket (kein <c>http.sys</c>, keine
+/// URL-Freigabe nötig) und liefert die Dashboards samt JSON-API aus. Endpunkte:
 /// <list type="bullet">
 ///   <item><c>GET /</c> — Dashboard</item>
 ///   <item><c>GET /api/kpis?minutes=240</c> — Kennzahlen über das Zeitfenster</item>
@@ -54,134 +58,75 @@ public static class ApiServer
 
     public static async Task RunAsync(KccConfig config, Action<string> log, CancellationToken ct)
     {
-        var prefix = NormalizePrefix(config.ApiUrl);
         var format = config.DataFormat is { Length: > 0 } spec
             ? TelegramFormat.Parse(spec)
             : TelegramFormat.Default;
+        var (host, port) = ParseApiUrl(config.ApiUrl);
 
-        // Ein fehlgeschlagenes Start() lässt den HttpListener unbrauchbar zurück — für den
-        // Fallback also eine frische Instanz.
-        static HttpListener Bind(string p)
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();   // eigene Log-Ausgabe über 'log'
+        // Kestrel bindet den Socket direkt — '+'/'*' = alle Schnittstellen, ohne URL-Freigabe.
+        builder.WebHost.UseUrls($"http://{host}:{port}");
+
+        var app = builder.Build();
+        app.Run(async ctx =>
         {
-            var l = new HttpListener();
-            l.Prefixes.Add(p);
-            l.Start();
-            return l;
-        }
+            ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
+            var (status, contentType, body) = Handle(
+                ctx.Request.Method, ctx.Request.Path.Value ?? "/",
+                key => ctx.Request.Query.TryGetValue(key, out var v) && v.Count > 0 ? v[0] : null,
+                config, format, log);
+            ctx.Response.StatusCode = status;
+            ctx.Response.ContentType = contentType;
+            await ctx.Response.WriteAsync(body, ctx.RequestAborted);
+        });
 
-        HttpListener listener;
-        try
-        {
-            listener = Bind(prefix);
-        }
-        catch (HttpListenerException ex)
-        {
-            // '+' / fester Hostname braucht unter Windows eine URL-ACL. Nicht abbrechen, sondern
-            // auf localhost ausweichen, damit die Seite wenigstens lokal läuft.
-            var fallback = LocalhostPrefix(prefix);
-            if (fallback is null || string.Equals(fallback, prefix, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"API-Endpunkt {prefix} konnte nicht geöffnet werden: {ex.Message}.", ex);
-
-            log($"{prefix} nicht freigegeben ({ex.Message}). Für den Zugriff aus dem Netz einmalig " +
-                $"'kcc urlacl' als Administrator ausführen. Läuft vorerst nur lokal: {fallback}");
-            prefix = fallback;
-            listener = Bind(prefix);
-        }
-
-        using var httpListener = listener;
-        log($"API + Dashboard: {prefix}  (Strg+C beendet)");
-        using var stopOnCancel = ct.Register(listener.Stop);
-
-        while (!ct.IsCancellationRequested)
-        {
-            HttpListenerContext context;
-            try
-            {
-                context = await listener.GetContextAsync();
-            }
-            catch (Exception) when (ct.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (HttpListenerException)
-            {
-                break;
-            }
-
-            _ = Task.Run(() => HandleAsync(context, config, format, log), CancellationToken.None);
-        }
+        var anyHost = host is "+" or "*" or "" or "0.0.0.0" or "::";
+        log($"API + Dashboard: http://{(anyHost ? "<host>" : host)}:{port}/  (Strg+C beendet)");
+        await app.RunAsync(ct);
     }
 
-    static async Task HandleAsync(
-        HttpListenerContext ctx, KccConfig config, TelegramFormat format, Action<string> log)
+    const string JsonContentType = "application/json; charset=utf-8";
+    const string HtmlContentType = "text/html; charset=utf-8";
+
+    static (int Status, string ContentType, string Body) Ok(object body) =>
+        (200, JsonContentType, JsonSerializer.Serialize(body, Json));
+
+    static (int Status, string ContentType, string Body) Html(string page, string activePath) =>
+        (200, HtmlContentType, DashboardNav.Inject(page, activePath));
+
+    /// <summary>Bearbeitet eine Anfrage transportunabhängig; gibt Status, Content-Type und Rumpf zurück.</summary>
+    static (int Status, string ContentType, string Body) Handle(
+        string method, string path, Func<string, string?> q,
+        KccConfig config, TelegramFormat format, Action<string> log)
     {
-        var res = ctx.Response;
-        res.AddHeader("Access-Control-Allow-Origin", "*");
+        if (!string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
+            return (405, JsonContentType, JsonSerializer.Serialize(new { error = "method not allowed" }, Json));
+
         try
         {
-            if (ctx.Request.HttpMethod != "GET")
+            return path switch
             {
-                await WriteJsonAsync(res, 405, new { error = "method not allowed" });
-                return;
-            }
-
-            var path = ctx.Request.Url?.AbsolutePath ?? "/";
-            switch (path)
-            {
-                case "/":
-                case "/index.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(Dashboard.Html, "/"));
-                    break;
-                case "/auslastung":
-                case "/auslastung.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(UtilizationDashboard.Html, "/auslastung"));
-                    break;
-                case "/verlauf":
-                case "/verlauf.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(UphHistoryDashboard.Html, "/verlauf"));
-                    break;
-                case "/kontur":
-                case "/kontur.html":
-                    await WriteTextAsync(res, 200, "text/html; charset=utf-8", DashboardNav.Inject(ContourDashboard.Html, "/kontur"));
-                    break;
-                case "/api/kontur":
-                    await WriteJsonAsync(res, 200, Contour(config, format, ContourMinutes(ctx, config)));
-                    break;
-                case "/api/utilization":
-                    await WriteJsonAsync(res, 200, Utilization(config, format, UtilMinutes(ctx, config), Target(ctx, config), Bucket(ctx, config), Rate(ctx, config), SeriesStep(ctx, config)));
-                    break;
-                case "/api/uph-history":
-                    await WriteJsonAsync(res, 200, UphHistory(config, format,
-                        HistHours(ctx), HistBucket(ctx, config), HistGroupBy(ctx), ctx.Request.QueryString["rp"],
-                        HistStamp(ctx, "from"), HistStamp(ctx, "to"), HistRolling(ctx)));
-                    break;
-                case "/health":
-                    await WriteJsonAsync(res, 200, Health(config));
-                    break;
-                case "/api/kpis":
-                    await WriteJsonAsync(res, 200, Kpis(config, format, Minutes(ctx, config)));
-                    break;
-                case "/api/telegrams":
-                    await WriteJsonAsync(res, 200, Telegrams(config, Minutes(ctx, config), Limit(ctx)));
-                    break;
-                case "/api/fields":
-                    await WriteJsonAsync(res, 200, Fields(config, format, Minutes(ctx, config), Limit(ctx)));
-                    break;
-                default:
-                    await WriteJsonAsync(res, 404, new { error = "not found", path });
-                    break;
-            }
+                "/" or "/index.html" => Html(Dashboard.Html, "/"),
+                "/auslastung" or "/auslastung.html" => Html(UtilizationDashboard.Html, "/auslastung"),
+                "/verlauf" or "/verlauf.html" => Html(UphHistoryDashboard.Html, "/verlauf"),
+                "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
+                "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),
+                "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), SeriesStep(q, config))),
+                "/api/uph-history" => Ok(UphHistory(config, format,
+                    HistHours(q), HistBucket(q, config), HistGroupBy(q), q("rp"),
+                    HistStamp(q, "from"), HistStamp(q, "to"), HistRolling(q))),
+                "/health" => Ok(Health(config)),
+                "/api/kpis" => Ok(Kpis(config, format, Minutes(q, config))),
+                "/api/telegrams" => Ok(Telegrams(config, Minutes(q, config), Limit(q))),
+                "/api/fields" => Ok(Fields(config, format, Minutes(q, config), Limit(q))),
+                _ => (404, JsonContentType, JsonSerializer.Serialize(new { error = "not found", path }, Json)),
+            };
         }
         catch (Exception ex)
         {
             log($"API-Fehler: {ex.Message}");
-            try { await WriteJsonAsync(res, 500, new { error = ex.Message }); }
-            catch { /* Antwort ggf. schon geschlossen */ }
-        }
-        finally
-        {
-            res.Close();
+            return (500, JsonContentType, JsonSerializer.Serialize(new { error = ex.Message }, Json));
         }
     }
 
@@ -312,53 +257,53 @@ public static class ApiServer
         return (store.Read(start, null).ToList(), start, end);
     }
 
-    static int Minutes(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["minutes"], fallback: config.WindowMinutes, min: 1, max: 1440);
+    static int Minutes(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("minutes"), fallback: config.WindowMinutes, min: 1, max: 1440);
 
-    static int UtilMinutes(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["minutes"], fallback: config.UtilizationWindowMinutes, min: 1, max: 1440);
+    static int UtilMinutes(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("minutes"), fallback: config.UtilizationWindowMinutes, min: 1, max: 1440);
 
-    static int ContourMinutes(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["minutes"], fallback: config.ContourWindowMinutes, min: 1, max: 60 * 24 * 30);
+    static int ContourMinutes(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("minutes"), fallback: config.ContourWindowMinutes, min: 1, max: 60 * 24 * 30);
 
-    static int Limit(HttpListenerContext ctx) =>
-        Clamp(ctx.Request.QueryString["limit"], fallback: 2000, min: 1, max: 20000);
+    static int Limit(Func<string, string?> q) =>
+        Clamp(q("limit"), fallback: 2000, min: 1, max: 20000);
 
-    static int Bucket(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UtilizationBucketMinutes, min: 1, max: 120);
+    static int Bucket(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("bucket"), fallback: config.UtilizationBucketMinutes, min: 1, max: 120);
 
-    static int Rate(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["rate"], fallback: config.UtilizationRateMinutes, min: 1, max: 240);
+    static int Rate(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("rate"), fallback: config.UtilizationRateMinutes, min: 1, max: 240);
 
-    static int SeriesStep(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["step"], fallback: config.UtilizationSeriesStepMinutes, min: 1, max: 30);
+    static int SeriesStep(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("step"), fallback: config.UtilizationSeriesStepMinutes, min: 1, max: 30);
 
     // UPH-Historie: Zeitraum bis 4 Wochen, Anzeigeraster bis 1 Tag.
-    static int HistHours(HttpListenerContext ctx) =>
-        Clamp(ctx.Request.QueryString["hours"], fallback: 168, min: 1, max: 24 * 28);
+    static int HistHours(Func<string, string?> q) =>
+        Clamp(q("hours"), fallback: 168, min: 1, max: 24 * 28);
 
-    static int HistBucket(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UphHistoryIntervalMinutes, min: 1, max: 1440);
+    static int HistBucket(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("bucket"), fallback: config.UphHistoryIntervalMinutes, min: 1, max: 1440);
 
     // > 0 ⇒ gleitendes Fenster (Minuten) aus Rohtelegrammen statt fester Eimer aus der Rollup-Tabelle.
-    static int HistRolling(HttpListenerContext ctx) =>
-        Clamp(ctx.Request.QueryString["rolling"], fallback: 0, min: 0, max: 240);
+    static int HistRolling(Func<string, string?> q) =>
+        Clamp(q("rolling"), fallback: 0, min: 0, max: 240);
 
-    static UphHistoryGroupBy HistGroupBy(HttpListenerContext ctx) =>
-        string.Equals(ctx.Request.QueryString["groupBy"], "resourcePoint", StringComparison.OrdinalIgnoreCase)
+    static UphHistoryGroupBy HistGroupBy(Func<string, string?> q) =>
+        string.Equals(q("groupBy"), "resourcePoint", StringComparison.OrdinalIgnoreCase)
             ? UphHistoryGroupBy.ResourcePoint
             : UphHistoryGroupBy.Destination;
 
     // Zeitzonenfrei geparst — passend zur Ablage in Anlagenzeit.
-    static DateTime? HistStamp(HttpListenerContext ctx, string key) =>
-        DateTime.TryParse(ctx.Request.QueryString[key],
+    static DateTime? HistStamp(Func<string, string?> q, string key) =>
+        DateTime.TryParse(q(key),
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None, out var v)
             ? DateTime.SpecifyKind(v, DateTimeKind.Unspecified)
             : null;
 
-    static double Target(HttpListenerContext ctx, KccConfig config) =>
-        double.TryParse(ctx.Request.QueryString["target"],
+    static double Target(Func<string, string?> q, KccConfig config) =>
+        double.TryParse(q("target"),
             System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0
             ? v
@@ -367,38 +312,13 @@ public static class ApiServer
     static int Clamp(string? raw, int fallback, int min, int max) =>
         int.TryParse(raw, out var v) ? Math.Clamp(v, min, max) : fallback;
 
-    internal static string NormalizePrefix(string? url)
+    /// <summary>Zerlegt <c>ApiUrl</c> in Host (ggf. <c>+</c>/<c>*</c> für „alle") und Port.</summary>
+    internal static (string Host, int Port) ParseApiUrl(string? url)
     {
         var u = string.IsNullOrWhiteSpace(url) ? "http://+:8082/" : url.Trim();
-        return u.EndsWith('/') ? u : u + "/";
-    }
-
-    /// <summary>Ersetzt den Host in einem Präfix durch <c>localhost</c>, oder <c>null</c> bei ungültiger Form.</summary>
-    static string? LocalhostPrefix(string prefix)
-    {
-        var m = System.Text.RegularExpressions.Regex.Match(prefix, @"^(https?://)([^/:]+)(:\d+)?(/.*)?$");
-        if (!m.Success)
-            return null;
-        var port = m.Groups[3].Success ? m.Groups[3].Value : "";
-        var pathPart = m.Groups[4].Success ? m.Groups[4].Value : "/";
-        return $"{m.Groups[1].Value}localhost{port}{pathPart}";
-    }
-
-    static async Task WriteJsonAsync(HttpListenerResponse res, int status, object body)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(body, Json);
-        res.StatusCode = status;
-        res.ContentType = "application/json; charset=utf-8";
-        res.ContentLength64 = bytes.Length;
-        await res.OutputStream.WriteAsync(bytes);
-    }
-
-    static async Task WriteTextAsync(HttpListenerResponse res, int status, string contentType, string text)
-    {
-        var bytes = Encoding.UTF8.GetBytes(text);
-        res.StatusCode = status;
-        res.ContentType = contentType;
-        res.ContentLength64 = bytes.Length;
-        await res.OutputStream.WriteAsync(bytes);
+        var m = System.Text.RegularExpressions.Regex.Match(u, @"^https?://([^/:]*)(?::(\d+))?");
+        var host = m.Success && m.Groups[1].Value.Length > 0 ? m.Groups[1].Value : "+";
+        var port = m.Success && m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 8082;
+        return (host, port);
     }
 }

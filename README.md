@@ -16,9 +16,9 @@ kcc
 
 `kcc` ohne Argumente ist der Normalbetrieb: Aufzeichnung und Website (Dashboards + API) laufen
 gemeinsam in einem Prozess, gesteuert über `appsettings.json` (`Record`, `Serve`, `ApiUrl`). Die
-Website hört ab Werk auf **`http://+:8082/`** (alle Schnittstellen) — aus dem Netz unter
-`http://<host>:8082/`. Unter Windows dafür einmalig `kcc urlacl` als Admin ausführen; sonst läuft
-sie nur lokal (`http://localhost:8082/`).
+Website läuft auf **Kestrel** und hört ab Werk auf **`http://+:8082/`** (alle Schnittstellen) —
+aus dem Netz unter `http://<host>:8082/`, **ohne Admin oder URL-Freigabe**. Für nur lokal:
+`ApiUrl` auf `http://localhost:8082/` setzen.
 
 Beim ersten Lauf setzt der Recorder am aktuellen Ende der Protokolltabelle an und lädt die
 letzten `StartupBackfillMinutes` (Standard 4 Stunden) einmalig nach, damit das Dashboard sofort
@@ -35,7 +35,6 @@ zuletzt gesehenen Id wieder an.
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen (baut anschließend die UPH-Historie neu auf) |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
 | `kcc uph-rebuild` | UPH-Historie (`/verlauf`) aus den vorhandenen Telegrammen neu aufbauen — nach einem separaten `backfill` oder Änderung der `UphHistory*`-Optionen |
-| `kcc urlacl` | `ApiUrl` (z. B. `http://+:8082/`) im Windows-HTTP-Stack freigeben, damit die Website aus dem Netz erreichbar ist (startet `netsh` als Admin, einmalig) |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -132,8 +131,7 @@ aufzuzeichnen.
 ## Dashboard / API
 
 Der Normalbetrieb (`kcc` ohne Argumente) stellt neben der Aufzeichnung eine kleine **Website**
-(Lese-API + Dashboards, auf `HttpListener`, keine zusätzliche Abhängigkeit) bereit. Adresse und
-Betriebsart stehen in `appsettings.json`:
+(Lese-API + Dashboards) auf **Kestrel** bereit. Adresse und Betriebsart stehen in `appsettings.json`:
 
 ```json
 "ApiUrl": "http://+:8082/",
@@ -141,13 +139,11 @@ Betriebsart stehen in `appsettings.json`:
 "Serve": true
 ```
 
-`http://+:8082/` bindet **alle Netzwerk-Schnittstellen** des Hosts — die Seiten sind dann unter
-`http://<host>:8082/` aus dem Netz erreichbar. Jede Seite hat oben eine Navigationsleiste
-(KPIs · Auslastung · Verlauf · Kontur).
-
-Unter Windows braucht `+` bzw. ein fester Hostname eine einmalige URL-Freigabe: **`kcc urlacl`**
-als Administrator ausführen (startet `netsh http add urlacl …`). Ohne die Freigabe weicht der
-Server automatisch auf `http://localhost:8082/` aus (nur lokal erreichbar) und meldet das.
+`ApiUrl` gibt Host und Port vor. `+` / `*` / `0.0.0.0` = **alle Netzwerk-Schnittstellen** —
+die Seiten sind dann unter `http://<host>:8082/` erreichbar, **ohne Admin oder
+`netsh`-URL-Freigabe** (Kestrel bindet den Socket direkt, kein Windows-`http.sys`). `localhost`
+bzw. `127.0.0.1` beschränkt auf lokal, eine feste IP bindet nur diese. Jede Seite hat oben eine
+Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 
 | Endpunkt | Zweck |
 |---|---|
@@ -176,10 +172,6 @@ Zeitstempel in einer anderen Zeitzone schickt als der Rechner, auf dem `kcc` lä
 API gibt sie als echtes UTC-ISO (`…Z`) aus, sodass die Dashboards sie in die **lokale Zeit des
 Betrachters** umrechnen. `GET /api/telegrams` liefert dieselben Werte, ebenfalls als UTC.
 
-`http://localhost:PORT/` läuft unter Windows ohne Sonderrechte. Für `http://+:PORT/` oder einen
-festen Hostnamen ist einmalig eine URL-Freigabe nötig — am einfachsten `kcc urlacl` (als Admin),
-sonst manuell `netsh http add urlacl url=http://+:8082/ user=<DOMAIN\User>`.
-
 ## Wie es funktioniert
 
 Die Anlage bietet **keinen Push** für Protokolldaten — auch die Weboberfläche pollt. Da `Id`
@@ -205,6 +197,10 @@ dotnet test
 dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
   --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
+
+Die EXE bündelt das .NET- **und** das ASP.NET-Core-Runtime (für Kestrel) — self-contained, kein
+installiertes Framework nötig, dafür ~90–100 MB. `RollForward=Major` erlaubt dem framework-
+abhängigen `dotnet test`/`run` auch neuere Runtimes (der Publish bleibt bei net8).
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
 (`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`,
