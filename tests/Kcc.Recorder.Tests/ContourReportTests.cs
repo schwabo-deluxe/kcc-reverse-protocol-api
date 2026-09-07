@@ -20,7 +20,7 @@ public class ContourReportTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string resourcePoint, string messageCode, string status)
+    static string Data(string resourcePoint, string messageCode, string status, string le = "")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');
@@ -33,11 +33,12 @@ public class ContourReportTests
         Put("MessageCode", messageCode);
         Put("ResourcePoint", resourcePoint);
         Put("Status", status);
+        Put("ResourceLabel", le);
         return new string(buf);
     }
 
-    static Telegram T(long id, string rp, string mc, string status, int minutesAgo = 1) =>
-        new(id, Now.AddMinutes(-minutesAgo), TelegramDirection.FromPlc, "L1", Data(rp, mc, status), null);
+    static Telegram T(long id, string rp, string mc, string status, int minutesAgo = 1, string le = "") =>
+        new(id, Now.AddMinutes(-minutesAgo), TelegramDirection.FromPlc, "L1", Data(rp, mc, status, le), null);
 
     static ContourReport Run(params Telegram[] rows) =>
         ContourReport.Compute(rows, Fmt, 480, Now.AddMinutes(-480), Now);
@@ -128,6 +129,29 @@ public class ContourReportTests
         Assert.Equal(1, r.Unreadable);
         Assert.Equal(1, r.Total);
         Assert.Equal(1, r.Errors);
+    }
+
+    [Fact]
+    public void Detailliste_zeigt_die_letzten_zehn_Fehler_je_Kontrollpunkt()
+    {
+        var rows = new List<Telegram>();
+        // 12 Fehler-Telegramme, aufsteigend nach Id; das jüngste ist minutesAgo=1.
+        for (var i = 0; i < 12; i++)
+            rows.Add(T(100 + i, "LB21", "ENDTSP", "K411", minutesAgo: 20 - i, le: $"LE{i:00}"));
+        rows.Add(T(200, "LB21", "ENDTSP", "....", minutesAgo: 3));   // ok — nicht in der Liste
+        rows.Add(T(201, "AA41", "TSPREG", "K100", minutesAgo: 2, le: "LEX"));
+
+        var r = ContourReport.Compute(rows, Fmt, 480, Now.AddMinutes(-480), Now);
+
+        var lb21 = r.Checkpoints.Single(c => c.ResourcePoint == "LB21");
+        Assert.Equal(10, lb21.Recent.Count);
+        Assert.Equal(111, lb21.Recent[0].Id);                       // jüngstes zuerst
+        Assert.Equal("LE11", lb21.Recent[0].LoadUnit);
+        Assert.Equal(["Profil links", "Höhe", "Profil vorne"], lb21.Recent[0].Flags);
+
+        var aa41 = r.Checkpoints.Single(c => c.ResourcePoint == "AA41");
+        Assert.Equal(["LEX"], aa41.Recent.Select(e => e.LoadUnit));
+        Assert.Equal(["Daten"], aa41.Recent[0].Flags);   // K100 -> x-Nibble Bit 0
     }
 
     [Fact]

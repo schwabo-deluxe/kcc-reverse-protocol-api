@@ -48,6 +48,11 @@ public static class ContourDashboard
           td.hit { color: #fff; font-weight: 600; }
           .muted { color: #4a515c; }
           .q-ok { color: #5ccb7e; } .q-warn { color: #ffb454; } .q-bad { color: #ff6b6b; }
+          .cp-block { margin-bottom: 14px; }
+          .cp-block:last-child { margin-bottom: 0; }
+          .cp-block h3 { font-size: 12px; margin: 0 0 6px; font-weight: 600; color: #cdd6e0; }
+          table.recent td.flags { white-space: normal; color: #ffb454; }
+          table.recent td.le { color: #cdd6e0; }
           @media (max-width: 560px) {
             main { padding: 12px; }
             .card { padding: 12px; }
@@ -91,6 +96,10 @@ public static class ContourDashboard
                 <tbody id="rows"></tbody>
               </table>
             </div>
+          </div>
+          <div class="card">
+            <h2>Letzte Fehler je Kontrollpunkt</h2>
+            <div id="recent"></div>
           </div>
         </main>
         <script>
@@ -155,6 +164,24 @@ public static class ContourDashboard
             + `<tr class="sum"><td>Σ mit Fehler</td>`
             + d.checkpoints.map(c => `<td>${num(c.errors)}</td>`).join('')
             + `<td>${num(d.errors)}</td></tr>`;
+
+          // Detailliste: die letzten 10 Fehler je Kontrollpunkt.
+          const ts = s => new Date(s).toLocaleString('de-DE',
+            { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          $('recent').innerHTML = d.checkpoints.map(c => `
+            <div class="cp-block">
+              <h3>${esc(c.label)}</h3>
+              ${c.recent && c.recent.length ? `
+              <div class="scroll"><table class="recent">
+                <thead><tr><th>Zeit</th><th>LE / ID</th><th>Aufgelöste Fehler</th></tr></thead>
+                <tbody>${c.recent.map(e => `
+                  <tr>
+                    <td>${ts(e.at)}</td>
+                    <td class="le">${esc(e.loadUnit) || '–'}</td>
+                    <td class="flags">${e.flags.map(esc).join(', ')}</td>
+                  </tr>`).join('')}</tbody>
+              </table></div>` : '<div class="muted">keine Fehler im Zeitraum</div>'}
+            </div>`).join('');
 
           const from = new Date(d.from), to = new Date(d.to);
           $('meta').classList.remove('err');

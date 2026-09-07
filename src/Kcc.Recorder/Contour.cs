@@ -12,6 +12,19 @@ public sealed record ContourFlagCount
     public required double Percent { get; init; }
 }
 
+/// <summary>Ein einzelnes Telegramm mit Konturfehler — für die Detailliste je Kontrollpunkt.</summary>
+public sealed record ContourError
+{
+    public required DateTime At { get; init; }
+    public required long Id { get; init; }
+
+    /// <summary>LE-/ID-Nummer aus dem Feld <c>ResourceLabel</c>.</summary>
+    public required string LoadUnit { get; init; }
+
+    /// <summary>Die für dieses Telegramm gesetzten Fehlertypen (Klartext).</summary>
+    public required IReadOnlyList<string> Flags { get; init; }
+}
+
 /// <summary>Auswertung einer einzelnen Konturkontrolle über das Zeitfenster.</summary>
 public sealed record ContourCheckpoint
 {
@@ -34,6 +47,9 @@ public sealed record ContourCheckpoint
 
     /// <summary>Zahl je Fehlertyp (Spaltenreihenfolge wie <see cref="ContourReport.FlagLabels"/>).</summary>
     public required IReadOnlyDictionary<string, int> Flags { get; init; }
+
+    /// <summary>Die letzten 10 Telegramme mit Konturfehler, jüngstes zuerst.</summary>
+    public required IReadOnlyList<ContourError> Recent { get; init; }
 }
 
 /// <summary>
@@ -148,6 +164,7 @@ public sealed record ContourReport
         var mcIdx = FieldIndex(format, "MessageCode");
         var rpIdx = FieldIndex(format, "ResourcePoint");
         var stIdx = FieldIndex(format, "Status");
+        var leIdx = FieldIndex(format, "ResourceLabel");
 
         // Ein Datensatz je Kontrolle.
         var acc = defs.Select(d => new
@@ -156,6 +173,7 @@ public sealed record ContourReport
             Flags = flagLabels.ToDictionary(l => l, _ => 0, StringComparer.Ordinal),
             Box = new int[3],   // Total, Ok, Unreadable
             Latest = new DateTime?[1],
+            Errors = new List<ContourError>(),
         }).ToList();
 
         var byKey = acc.ToDictionary(
@@ -180,16 +198,28 @@ public sealed record ContourReport
             a.Box[0]++;   // total
             a.Latest[0] = a.Latest[0] is { } l && l > telegram.DateTime ? l : telegram.DateTime;
 
-            var hasError = false;
+            var setFlags = new List<string>();
             foreach (var f in flagDefs)
             {
                 if ((nib[f.Nibble] & (1 << f.Bit)) == 0)
                     continue;
                 a.Flags[f.Label]++;
-                hasError = true;
+                setFlags.Add(f.Label);
             }
-            if (!hasError)
+            if (setFlags.Count == 0)
+            {
                 a.Box[1]++;   // ok
+            }
+            else
+            {
+                a.Errors.Add(new ContourError
+                {
+                    At = telegram.DateTime,
+                    Id = telegram.Id,
+                    LoadUnit = Field(fields, leIdx),
+                    Flags = setFlags,
+                });
+            }
         }
 
         var checkpointResults = acc.Select(a =>
@@ -208,6 +238,7 @@ public sealed record ContourReport
                 ErrorRate = total > 0 ? Math.Round(errors * 100.0 / total, 1) : 0,
                 LatestAt = a.Latest[0],
                 Flags = a.Flags,
+                Recent = a.Errors.OrderByDescending(e => e.At).ThenByDescending(e => e.Id).Take(10).ToList(),
             };
         }).ToList();
 
