@@ -69,9 +69,13 @@ int UnknownCommand(string command)
 async Task<(KccConnection Connection, KccSession Session, KccQuery Query)> ConnectAsync(
     KccConfig config, CancellationToken ct)
 {
-    var user = config.User ?? Prompt("Benutzername: ");
-    var password = config.Password ?? PromptPassword("Passwort: ");
+    var (user, password) = ResolveCredentials(config);
+    return await ConnectWithCredentialsAsync(config, user, password, ct);
+}
 
+async Task<(KccConnection Connection, KccSession Session, KccQuery Query)> ConnectWithCredentialsAsync(
+    KccConfig config, string user, string password, CancellationToken ct)
+{
     var connection = new KccConnection(new Uri(config.Url), config.AllowUntrustedCertificate, Trace);
     await connection.ConnectAsync(ct);
 
@@ -80,6 +84,9 @@ async Task<(KccConnection Connection, KccSession Session, KccQuery Query)> Conne
 
     return (connection, session, new KccQuery(connection, session));
 }
+
+(string User, string Password) ResolveCredentials(KccConfig config) =>
+    (config.User ?? Prompt("Benutzername: "), config.Password ?? PromptPassword("Passwort: "));
 
 async Task<int> LoginTestAsync(KccConfig config, CancellationToken ct)
 {
@@ -178,22 +185,67 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
     using var store = new TelegramStore(config.Database);
     using var csv = OpenCsv(config);
     var filter = new RecordFilter(config.Filter);
+    var (user, password) = ResolveCredentials(config);
 
-    var (connection, session, query) = await ConnectAsync(config, ct);
-    await using (connection)
+    Log($"Zeichne auf nach {Path.GetFullPath(config.Database)} " +
+        $"(bereits {store.Count()} Telegramme). Beenden mit Strg+C.");
+    if (csv is not null)
+        Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
+
+    var recorder = new TelegramRecorder(
+        query: null!, store, filter, config, Log, csv, NewUphSampler(config, store));
+    var started = false;
+    var attempt = 0;
+
+    // Bei Verbindungsabbruch neu verbinden statt abzubrechen; der Recorder setzt an der zuletzt
+    // gespeicherten Id wieder an und holt bis zum aktuellen Ende auf.
+    while (!ct.IsCancellationRequested)
     {
-        Log($"Zeichne auf nach {Path.GetFullPath(config.Database)} " +
-            $"(bereits {store.Count()} Telegramme). Beenden mit Strg+C.");
-        if (csv is not null)
-            Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
+        KccConnection? connection = null;
+        KccSession? session = null;
+        try
+        {
+            KccQuery query;
+            (connection, session, query) = await ConnectWithCredentialsAsync(config, user, password, ct);
+            if (attempt > 0)
+                Log("Verbindung wiederhergestellt — hole verpasste Telegramme nach.");
+            attempt = 0;
+            recorder.UseConnection(query);
 
-        var recorder = new TelegramRecorder(query, store, filter, config, Log, csv, NewUphSampler(config, store));
-        await recorder.RunAsync(ct);
+            if (!started)
+            {
+                await recorder.StartAsync(ct);
+                started = true;
+            }
 
-        // Nach Strg+C nicht unbegrenzt auf die Abmelde-Antwort des Servers warten.
-        using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        await session.LogoffAsync(logoffTimeout.Token);
+            await recorder.PollAsync(ct);   // kehrt nur bei Strg+C zurück
+
+            using var logoffTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await session!.LogoffAsync(logoffTimeout.Token);
+            break;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            break;
+        }
+        catch (Exception ex)
+        {
+            attempt++;
+            var delay = TelegramRecorder.ReconnectDelaySeconds(
+                attempt, config.ReconnectDelaySeconds, config.ReconnectMaxDelaySeconds);
+            Log($"Verbindung verloren ({ex.Message}). Neuer Versuch #{attempt} in {delay:0} s …");
+            try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); }
+            catch (OperationCanceledException) { break; }
+        }
+        finally
+        {
+            if (connection is not null)
+            {
+                try { await connection.DisposeAsync(); } catch { /* Verbindung ohnehin hin */ }
+            }
+        }
     }
+
     return 0;
 }
 

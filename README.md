@@ -80,6 +80,8 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `ContourFlags` | Bedeutung der Fehlerbits im Konturergebnis `Kxyz`, je Eintrag `{ "Nibble": 0, "Bit": 2, "Label": "Profil links" }` — `Nibble` 0 = `x`, 1 = `y`, 2 = `z`; `Bit` 0…3. Leere Liste ⇒ eingebaute Tabelle laut Doku „Konturenfehler (Kxyz)". `Status = "…."` (leer) = kein Konturfehler. |
 | `ContourWindowMinutes` | Zeitfenster der Konturauswertung ohne `minutes`-Parameter (Standard: `480` = 8 h) |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
+| `ReconnectDelaySeconds` | Wartezeit vor dem ersten Reconnect nach Verbindungsabbruch (Standard `5`); verdoppelt sich je Fehlversuch bis `ReconnectMaxDelaySeconds`. Nach dem Reconnect wird bis zum aktuellen Ende nachgeholt. |
+| `ReconnectMaxDelaySeconds` | Obergrenze der Reconnect-Wartezeit (Standard `60`). |
 
 Die CSV wird im Anhänge-Modus geführt: ein Neustart schreibt weiter, die Kopfzeile nur einmal.
 Gleiches Semikolon-Format wie `kcc export` (UTF-8 mit BOM, für Excel im deutschen Gebietsschema).
@@ -168,6 +170,11 @@ Die Anlage bietet **keinen Push** für Protokolldaten — auch die Weboberfläch
 monoton vergeben wird, fragt der Recorder wiederholt „alles mit `Id > zuletzt gesehen`", aufsteigend
 sortiert. Das ist lückenlos und wiederholbar; ein Neustart setzt exakt dort wieder an, weil der
 Stand in der Datenbank liegt.
+
+**Reconnect:** Bricht die WebSocket-Verbindung ab, beendet sich der Recorder nicht, sondern
+verbindet neu — mit wachsender Wartezeit (`ReconnectDelaySeconds`, verdoppelt bis
+`ReconnectMaxDelaySeconds`). Nach dem Reconnect holt er aus derselben `Id`-Logik alle in der
+Auszeit angefallenen Telegramme bis zum aktuellen Ende nach. Beenden weiterhin mit Strg+C.
 
 Die Anmeldung folgt dem Browser-Client: `Subscribe` liefert `SessionId` und den öffentlichen
 RSA-Schlüssel im .NET-XML-Format, das Passwort wird mit **RSA-2048/OAEP-SHA1** verschlüsselt und als

@@ -221,6 +221,16 @@ public sealed class KccConfig
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 
+    /// <summary>
+    /// Wartezeit vor dem ersten Reconnect nach einem Verbindungsabbruch (Sekunden, Standard <c>5</c>).
+    /// Verdoppelt sich je Fehlversuch bis <see cref="ReconnectMaxDelaySeconds"/>. Nach dem Reconnect
+    /// holt der Recorder verpasste Telegramme bis zum aktuellen Ende nach.
+    /// </summary>
+    public int ReconnectDelaySeconds { get; set; } = 5;
+
+    /// <summary>Obergrenze für die Reconnect-Wartezeit (Sekunden, Standard <c>60</c>).</summary>
+    public int ReconnectMaxDelaySeconds { get; set; } = 60;
+
     /// <summary>Zeilen pro Abfrage.</summary>
     public int BatchSize { get; set; } = 500;
 

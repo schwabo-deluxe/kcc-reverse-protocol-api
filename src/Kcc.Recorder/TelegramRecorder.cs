@@ -9,7 +9,7 @@ namespace Kcc.Recorder;
 /// </summary>
 public sealed class TelegramRecorder
 {
-    readonly KccQuery _query;
+    KccQuery _query;
     readonly TelegramStore _store;
     readonly RecordFilter _filter;
     readonly KccConfig _config;
@@ -36,17 +36,26 @@ public sealed class TelegramRecorder
     }
 
     DateTime _nextRetentionCheck = DateTime.MinValue;
+    long _recorded;
+    long _seen;
 
-    public async Task RunAsync(CancellationToken ct)
+    /// <summary>Tauscht die Verbindung nach einem Reconnect aus; der Poll-Stand bleibt erhalten.</summary>
+    public void UseConnection(KccQuery query) => _query = query;
+
+    /// <summary>
+    /// Einmalige Startarbeit: Aufbewahrung, Ausgangs-Id (bei Erststart samt Nachladung des
+    /// sichtbaren Fensters) und Neuaufbau der UPH-Historie. Nicht bei einem Reconnect erneut aufrufen.
+    /// </summary>
+    public async Task StartAsync(CancellationToken ct)
     {
         ApplyRetention();
 
         var lastSeenId = _store.GetLastSeenId();
         if (lastSeenId is null)
         {
-            lastSeenId = await GetCurrentMaxIdAsync(ct);
-            _store.SetLastSeenId(lastSeenId.Value);
-            _log($"Erster Start — setze am aktuellen Ende an (Id {lastSeenId}).");
+            var maxId = await GetCurrentMaxIdAsync(ct);
+            _store.SetLastSeenId(maxId);
+            _log($"Erster Start — setze am aktuellen Ende an (Id {maxId}).");
 
             // Damit das Dashboard nicht mit einem leeren Fenster startet, wird die zuletzt
             // sichtbare Zeitspanne einmalig nachgeladen. Ältere Daten holt 'kcc backfill'.
@@ -60,32 +69,39 @@ public sealed class TelegramRecorder
 
         // Beim Start einmal komplett neu aufbauen — fängt zwischenzeitliche 'backfill'-Läufe ab.
         _uph?.Rebuild();
+    }
 
-        var recorded = 0L;
-        var seen = 0L;
+    /// <summary>
+    /// Der Poll-Betrieb. Kehrt normal zurück, wenn <paramref name="ct"/> abgebrochen wird; bei
+    /// einem Verbindungsfehler fliegt die Ausnahme heraus, damit der Aufrufer neu verbinden kann.
+    /// Setzt jeweils bei der zuletzt gespeicherten Id an und holt bis zum aktuellen Ende auf.
+    /// </summary>
+    public async Task PollAsync(CancellationToken ct)
+    {
+        var lastSeenId = _store.GetLastSeenId() ?? await GetCurrentMaxIdAsync(ct);
 
         while (!ct.IsCancellationRequested)
         {
             ApplyRetention();
             _uph?.Tick();
 
-            var batch = await FetchBatchAsync(lastSeenId.Value, ct);
+            var batch = await FetchBatchAsync(lastSeenId, ct);
 
             if (batch.Count > 0)
             {
                 lastSeenId = batch[^1].Id;
-                seen += batch.Count;
+                _seen += batch.Count;
 
                 var keep = batch.Where(_filter.ShouldRecord).ToList();
                 if (keep.Count > 0)
                 {
-                    recorded += _store.Insert(keep);
+                    _recorded += _store.Insert(keep);
                     _csv?.Append(keep);
                 }
 
                 // Auch für verworfene Zeilen weiterzählen, sonst werden sie endlos erneut geholt.
-                _store.SetLastSeenId(lastSeenId.Value);
-                _log($"{batch.Count} gelesen, {keep.Count} aufgezeichnet (gesamt {recorded} von {seen}), Id bis {lastSeenId}.");
+                _store.SetLastSeenId(lastSeenId);
+                _log($"{batch.Count} gelesen, {keep.Count} aufgezeichnet (gesamt {_recorded} von {_seen}), Id bis {lastSeenId}.");
             }
 
             // Volles Batch heisst: es liegt noch mehr an — ohne Pause weiter aufholen.
@@ -102,7 +118,27 @@ public sealed class TelegramRecorder
             }
         }
 
-        _log($"Beendet. {recorded} von {seen} gelesenen Telegrammen aufgezeichnet.");
+        _log($"Beendet. {_recorded} von {_seen} gelesenen Telegrammen aufgezeichnet.");
+    }
+
+    /// <summary>Startet und pollt ohne Reconnect (für Tests und einfache Aufrufer).</summary>
+    public async Task RunAsync(CancellationToken ct)
+    {
+        await StartAsync(ct);
+        await PollAsync(ct);
+    }
+
+    /// <summary>
+    /// Wartezeit vor dem <paramref name="attempt"/>-ten Reconnect-Versuch (1-basiert):
+    /// <paramref name="initialSeconds"/> mit Verdopplung je Versuch, gedeckelt auf
+    /// <paramref name="maxSeconds"/>.
+    /// </summary>
+    public static double ReconnectDelaySeconds(int attempt, int initialSeconds, int maxSeconds)
+    {
+        var init = Math.Max(1, initialSeconds);
+        var cap = Math.Max(init, maxSeconds);
+        var delay = init * Math.Pow(2, Math.Max(0, attempt - 1));
+        return Math.Min(delay, cap);
     }
 
     /// <summary>
