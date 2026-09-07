@@ -58,8 +58,9 @@ public static class UphHistoryDashboard
         <header>
           <h1>UPH-Historie</h1>
           <div class="ranges" id="ranges">
+            <button data-h="8" data-rolling="5" class="on">8 h</button>
             <button data-h="24">24 h</button>
-            <button data-h="168" class="on">7 T</button>
+            <button data-h="168">7 T</button>
             <button data-h="336">14 T</button>
             <button data-h="672">4 W</button>
           </div>
@@ -104,7 +105,8 @@ public static class UphHistoryDashboard
           || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8080'))
           .replace(/\/+$/, '');
 
-        let hours = 168;
+        let hours = 8;
+        let rollingWin = 5;   // > 0: gleitendes Fenster (Minuten) mit „developing"-Endwert, sonst feste Eimer
         let current = null;
         let zoom = null;      // { from: 'YYYY-MM-DDTHH:MM:SS', to: '…' } — Zoombereich, sonst null
         let brush = null;     // { x0 } während des Aufziehens (viewBox-x)
@@ -216,8 +218,11 @@ public static class UphHistoryDashboard
           drawTable(data);
           const from = new Date(data.from), to = new Date(data.to);
           $('meta').classList.remove('err');
+          const grid = data.rollingMinutes > 0
+            ? `gleitend ${data.rollingMinutes} min`
+            : `Raster ${data.bucketMinutes} min`;
           $('meta').textContent =
-            `${data.totalOrders.toLocaleString('de-DE')} Aufträge · Raster ${data.bucketMinutes} min · `
+            `${data.totalOrders.toLocaleString('de-DE')} Aufträge · ${grid} · `
             + `${from.toLocaleString('de-DE')} – ${to.toLocaleString('de-DE')}`;
         }
 
@@ -300,7 +305,13 @@ public static class UphHistoryDashboard
           const q = new URLSearchParams();
           q.set('groupBy', $('dim').value);
           if ($('rp').value) q.set('rp', $('rp').value);
-          if (zoom) {
+          if (rollingWin > 0) {
+            // Gleitender Kurzzeit-Verlauf wie bei /auslastung: 1-min-Schritt, Fenster rollingWin.
+            q.set('rolling', rollingWin);
+            q.set('bucket', 1);
+            if (zoom) { q.set('from', zoom.from); q.set('to', zoom.to); }
+            else q.set('hours', hours);
+          } else if (zoom) {
             const spanH = (parseLocal(zoom.to) - parseLocal(zoom.from)) / 3600000;
             q.set('from', zoom.from);
             q.set('to', zoom.to);
@@ -324,6 +335,7 @@ public static class UphHistoryDashboard
           const btn = e.target.closest('button');
           if (!btn) return;
           hours = parseInt(btn.dataset.h, 10);
+          rollingWin = parseInt(btn.dataset.rolling, 10) || 0;
           zoom = null;
           for (const b of $('ranges').children) b.classList.toggle('on', b === btn);
           load();

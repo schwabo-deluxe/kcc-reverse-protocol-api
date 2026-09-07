@@ -66,7 +66,16 @@ public sealed record UphHistoryReport
 {
     public required DateTime From { get; init; }
     public required DateTime To { get; init; }
+
+    /// <summary>Abstand der Stützpunkte in Minuten (im gleitenden Modus der Abtastschritt).</summary>
     public required int BucketMinutes { get; init; }
+
+    /// <summary>
+    /// Breite des gleitenden Fensters in Minuten, aus dem UPH je Stützpunkt gerechnet wird
+    /// (<c>0</c> = feste Eimer aus der Rollup-Tabelle). Im gleitenden Modus endet der letzte
+    /// Stützpunkt bei <see cref="To"/> und zeigt so den aktuell laufenden Wert.
+    /// </summary>
+    public required int RollingMinutes { get; init; }
 
     /// <summary>Aufteilung der Bänder: <c>destination</c> oder <c>resourcePoint</c>.</summary>
     public required string GroupBy { get; init; }
@@ -92,7 +101,8 @@ public sealed record UphHistoryReport
         UphHistoryGroupBy groupBy = UphHistoryGroupBy.Destination,
         IReadOnlyDictionary<string, string>? destinationLabels = null,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
-        string? resourcePoint = null)
+        string? resourcePoint = null,
+        int rollingWindowMinutes = 0)
     {
         var map = new DestinationMap(destinationLabels);
         var rpLabels = (resourcePoints ?? [])
@@ -139,7 +149,6 @@ public sealed record UphHistoryReport
         }
 
         var totalOrders = keyTotals.Values.Sum();
-        var bucketHours = step / 60d;
         var windowHours = Math.Max(1e-9, (to - from).TotalHours);
 
         var keyOrder = keyTotals
@@ -148,17 +157,46 @@ public sealed record UphHistoryReport
             .Select(kv => kv.Key)
             .ToList();
 
+        // Gleitendes Fenster: je Stützpunkt die Summe der letzten 'winSteps' Feinschritte,
+        // Stützpunkt endet am rechten Rand des Fensters. rollingWindowMinutes <= 0 => feste Eimer.
+        var rolling = Math.Max(0, rollingWindowMinutes);
+        var winSteps = rolling > 0 ? Math.Max(1, (int)Math.Round(rolling / (double)step)) : 1;
+        var pointHours = (rolling > 0 ? winSteps * step : step) / 60d;
+
         var buckets = new UphHistoryBucket[count];
+        var running = new Dictionary<string, int>(StringComparer.Ordinal);
+        var runningTotal = 0;
         for (var i = 0; i < count; i++)
         {
-            var orders = slotByKey[i];
+            Dictionary<string, int> orders;
+            int total;
+            if (rolling > 0)
+            {
+                foreach (var kv in slotByKey[i])
+                    running[kv.Key] = running.GetValueOrDefault(kv.Key) + kv.Value;
+                runningTotal += slotOrders[i];
+                if (i >= winSteps)
+                {
+                    foreach (var kv in slotByKey[i - winSteps])
+                        running[kv.Key] -= kv.Value;
+                    runningTotal -= slotOrders[i - winSteps];
+                }
+                orders = running.Where(kv => kv.Value != 0).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+                total = runningTotal;
+            }
+            else
+            {
+                orders = slotByKey[i];
+                total = slotOrders[i];
+            }
+
             buckets[i] = new UphHistoryBucket
             {
-                At = from.AddMinutes(i * step),
-                Total = slotOrders[i],
-                Uph = Math.Round(slotOrders[i] / bucketHours, 1),
+                At = from.AddMinutes((rolling > 0 ? i + 1 : i) * step),
+                Total = total,
+                Uph = Math.Round(total / pointHours, 1),
                 Orders = orders,
-                Series = orders.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / bucketHours, 1), StringComparer.Ordinal),
+                Series = orders.ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value / pointHours, 1), StringComparer.Ordinal),
             };
         }
 
@@ -176,6 +214,7 @@ public sealed record UphHistoryReport
             From = from,
             To = to,
             BucketMinutes = step,
+            RollingMinutes = rolling,
             GroupBy = byResourcePoint ? "resourcePoint" : "destination",
             ResourcePoint = rp,
             ResourcePoints = points.ToList(),
@@ -184,5 +223,51 @@ public sealed record UphHistoryReport
             Totals = totals,
             TotalOrders = totalOrders,
         };
+    }
+
+    /// <summary>
+    /// Rohtelegramme in Rasterzeilen mit <em>exaktem</em> Zeitstempel (Menge 1 je <c>TSPORD</c>) —
+    /// Quelle für den gleitenden Kurzzeit-Verlauf, wenn die 15-min-Rollup-Tabelle zu grob ist.
+    /// </summary>
+    public static IReadOnlyList<UphSampleRow> FromTelegrams(
+        IReadOnlyList<Telegram> telegrams,
+        TelegramFormat format,
+        IReadOnlyDictionary<string, string>? destinationLabels = null)
+    {
+        var map = new DestinationMap(destinationLabels);
+        var mcIdx = FieldIndex(format, "MessageCode");
+        var rpIdx = FieldIndex(format, "ResourcePoint");
+
+        var rows = new List<UphSampleRow>(telegrams.Count);
+        foreach (var t in telegrams)
+        {
+            var fields = format.Slice(t.Data);
+            if (!string.Equals(Field(fields, mcIdx), TelegramUtilization.MessageCode, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var rp = Field(fields, rpIdx);
+            if (rp.Length == 0)
+                continue;
+            rows.Add(new UphSampleRow
+            {
+                Bucket = t.DateTime,
+                ResourcePoint = rp,
+                Destination = map.CanonicalFromData(t.Data),
+                Orders = 1,
+            });
+        }
+        return rows;
+    }
+
+    static string Field(IReadOnlyList<string> fields, int index) =>
+        index >= 0 && index < fields.Count ? fields[index].Trim() : "";
+
+    static int FieldIndex(TelegramFormat format, string name)
+    {
+        for (var i = 0; i < format.Fields.Count; i++)
+        {
+            if (string.Equals(format.Fields[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
     }
 }

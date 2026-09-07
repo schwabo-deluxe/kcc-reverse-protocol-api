@@ -137,7 +137,7 @@ public static class ApiServer
                 case "/api/uph-history":
                     await WriteJsonAsync(res, 200, UphHistory(config, format,
                         HistHours(ctx), HistBucket(ctx, config), HistGroupBy(ctx), ctx.Request.QueryString["rp"],
-                        HistStamp(ctx, "from"), HistStamp(ctx, "to")));
+                        HistStamp(ctx, "from"), HistStamp(ctx, "to"), HistRolling(ctx)));
                     break;
                 case "/health":
                     await WriteJsonAsync(res, 200, Health(config));
@@ -188,7 +188,8 @@ public static class ApiServer
 
     static UphHistoryReport UphHistory(
         KccConfig config, TelegramFormat format, int hours, int bucketMinutes,
-        UphHistoryGroupBy groupBy, string? resourcePoint, DateTime? from, DateTime? to)
+        UphHistoryGroupBy groupBy, string? resourcePoint, DateTime? from, DateTime? to,
+        int rollingWindowMinutes)
     {
         using var store = new TelegramStore(config.Database);
         var newest = store.MaxTelegramTime()
@@ -200,10 +201,15 @@ public static class ApiServer
         if (start >= end)
             start = end.AddHours(-1);
 
-        var rows = store.ReadUphSamples(start, end);
+        // Gleitender Kurzzeit-Verlauf: direkt aus den Rohtelegrammen (die 15-min-Rollup-Tabelle
+        // ist dafür zu grob). Sonst wie bisher aus der Rollup-Tabelle in feste Eimer.
+        var rows = rollingWindowMinutes > 0
+            ? UphHistoryReport.FromTelegrams(store.Read(start, end).ToList(), format, config.DestinationLabels)
+            : store.ReadUphSamples(start, end);
+
         return UphHistoryReport.Compute(
             rows, start, end, bucketMinutes, groupBy,
-            config.DestinationLabels, config.ResourcePoints, resourcePoint);
+            config.DestinationLabels, config.ResourcePoints, resourcePoint, rollingWindowMinutes);
     }
 
     static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)
@@ -315,7 +321,11 @@ public static class ApiServer
         Clamp(ctx.Request.QueryString["hours"], fallback: 168, min: 1, max: 24 * 28);
 
     static int HistBucket(HttpListenerContext ctx, KccConfig config) =>
-        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UphHistoryIntervalMinutes, min: 5, max: 1440);
+        Clamp(ctx.Request.QueryString["bucket"], fallback: config.UphHistoryIntervalMinutes, min: 1, max: 1440);
+
+    // > 0 ⇒ gleitendes Fenster (Minuten) aus Rohtelegrammen statt fester Eimer aus der Rollup-Tabelle.
+    static int HistRolling(HttpListenerContext ctx) =>
+        Clamp(ctx.Request.QueryString["rolling"], fallback: 0, min: 0, max: 240);
 
     static UphHistoryGroupBy HistGroupBy(HttpListenerContext ctx) =>
         string.Equals(ctx.Request.QueryString["groupBy"], "resourcePoint", StringComparison.OrdinalIgnoreCase)
