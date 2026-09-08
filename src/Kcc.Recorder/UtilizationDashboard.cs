@@ -288,10 +288,9 @@ public static class UtilizationDashboard
           const convRow = p => {
             const c = p.conveyor;
             if (!c) return '';
+            // Belegung und Ø Verweildauer stehen am Tacho darüber.
             return `<div class="rbg">
-              <span${help('cbusy')}>Belegung <b style="color:${color(c.busyPercent)}">${fmt(c.busyPercent)} %</b></span>
               <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${c.completed}/${c.orders}/${c.freeSignals}</b></span>
-              <span${help('coccupied')}>Ø belegt <b>${dur(c.avgOccupiedSeconds)}</b></span>
               <span${help('corderwait')}>Ø bis Auftrag <b>${dur(c.avgOrderWaitSeconds)}</b></span>
               <span${help('cdepart')}>Ø Abtransport <b>${dur(c.avgDepartSeconds)}</b></span>
               <span${help('cwait')}>Ø leer <b>${dur(c.avgIdleSeconds)}</b></span>
@@ -302,13 +301,12 @@ public static class UtilizationDashboard
           const rbgRow = p => {
             const r = p.rbg;
             if (!r) return '';
+            // Auslastung, Leistung und Leerlauf stehen an den Tachos darüber — hier nur, was
+            // dort nicht hinpasst.
             return `<div class="rbg">
-              <span${help('busy')}>Auslastung <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
-              <span${help('load')}>Leistung <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
               <span${help('double')}>Doppelspiele <b>${r.doubleCycles}</b></span>
               <span${help('single')}>Einzelspiele <b>${r.singleCycles}</b></span>
               <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
-              <span${help('idle')}>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
               <span${help('avgdur')}>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
             </div>`;
           };
@@ -334,9 +332,10 @@ public static class UtilizationDashboard
             const sTarget = r ? r.maxCyclesPerHour : data.targetUph;
             // Der Tacho rechnet die letzten 'rateMinutes' auf eine Stunde hoch; die Kurve
             // zeigt denselben Wert gleitend über 'bucketMinutes'. Beide Fenster stehen dabei.
+            // Die Leistungszahl steht am Tacho — hier nur noch die Mengen, die er nicht zeigt.
             const head = r
-              ? `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h ⌀${data.rateMinutes} min · ${p.count} TSPORD`
-              : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
+              ? `${p.count} TSPORD`
+              : `${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
             const c = p.conveyor;
             const dials = r
               ? `<div class="duo">
@@ -376,12 +375,13 @@ public static class UtilizationDashboard
           // nicht in UPH — sonst stünde neben dem Spiele-Tacho eine TSPORD-Zahl.
           const grpSum = g => {
             const members = g.points.map(n => byName(n)).filter(Boolean);
+            // Der Ø-Wert steht im Gruppen-Tacho rechts daneben.
             if (members.length && members.every(p => p.rbg)) {
               const cph = members.reduce((a, p) => a + p.rbg.cyclesPerHour, 0);
               const max = members.reduce((a, p) => a + p.rbg.maxCyclesPerHour, 0);
-              return `Ø ${fmt(g.percent)} % · ${fmt(cph)} / ${max} Spiele/h · ${g.count} TSPORD`;
+              return `${fmt(cph)} / ${max} Spiele/h · ${g.count} TSPORD`;
             }
-            return `Ø ${fmt(g.percent)} % · ${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ` +
+            return `${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ` +
               `${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.`;
           };
 
