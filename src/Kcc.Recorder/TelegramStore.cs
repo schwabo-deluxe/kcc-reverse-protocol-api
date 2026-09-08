@@ -56,6 +56,17 @@ public sealed class TelegramStore : IDisposable
             );
             """);
         Execute("CREATE INDEX IF NOT EXISTS ix_uph_samples_bucket ON uph_samples(Bucket);");
+        Execute("""
+            CREATE TABLE IF NOT EXISTS rbg_samples (
+                Bucket      TEXT    NOT NULL,
+                Connection  TEXT    NOT NULL,
+                Puts        INTEGER NOT NULL,
+                Fetches     INTEGER NOT NULL,
+                BusySeconds REAL    NOT NULL,
+                PRIMARY KEY (Bucket, Connection)
+            );
+            """);
+        Execute("CREATE INDEX IF NOT EXISTS ix_rbg_samples_bucket ON rbg_samples(Bucket);");
     }
 
     /// <summary>Schreibt einen Stapel in einer Transaktion. Bereits vorhandene Ids werden übersprungen.</summary>
@@ -323,6 +334,119 @@ public sealed class TelegramStore : IDisposable
             });
         }
         return list;
+    }
+
+    // ---- RBG-Langzeitaufzeichnung (Spiele je Raster × Verbindung, eigene Aufbewahrung) ---------
+
+    /// <summary>Jüngstes bereits verdichtetes RBG-Raster, oder <c>null</c> solange nichts verdichtet wurde.</summary>
+    public DateTime? MaxRbgBucket()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MAX(Bucket) FROM rbg_samples;";
+        return command.ExecuteScalar() is string s && s.Length > 0
+            ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
+    }
+
+    public long RbgSampleCount()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM rbg_samples;";
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Ersetzt alle RBG-Rasterzeilen ab <paramref name="from"/> (einschließlich) durch
+    /// <paramref name="rows"/>. Ältere Zeilen bleiben unangetastet — die Langzeitaufzeichnung
+    /// überlebt damit auch einen Neuaufbau, der weiter zurück keine Rohtelegramme mehr findet.
+    /// </summary>
+    public void ReplaceRbgSamplesFrom(DateTime from, IEnumerable<RbgSampleRow> rows)
+    {
+        using var transaction = _connection.BeginTransaction();
+
+        using (var delete = _connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM rbg_samples WHERE Bucket >= $from;";
+            delete.Parameters.AddWithValue("$from", Stamp(from));
+            delete.ExecuteNonQuery();
+        }
+
+        using (var insert = _connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO rbg_samples (Bucket, Connection, Puts, Fetches, BusySeconds)
+                VALUES ($bucket, $connection, $puts, $fetches, $busy)
+                ON CONFLICT(Bucket, Connection) DO UPDATE SET
+                    Puts = excluded.Puts, Fetches = excluded.Fetches, BusySeconds = excluded.BusySeconds;
+                """;
+            var bucket = insert.Parameters.Add("$bucket", SqliteType.Text);
+            var connection = insert.Parameters.Add("$connection", SqliteType.Text);
+            var puts = insert.Parameters.Add("$puts", SqliteType.Integer);
+            var fetches = insert.Parameters.Add("$fetches", SqliteType.Integer);
+            var busy = insert.Parameters.Add("$busy", SqliteType.Real);
+
+            foreach (var row in rows)
+            {
+                bucket.Value = Stamp(row.Bucket);
+                connection.Value = row.Connection;
+                puts.Value = row.Puts;
+                fetches.Value = row.Fetches;
+                busy.Value = row.BusySeconds;
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        transaction.Commit();
+    }
+
+    /// <summary>Löscht RBG-Rasterzeilen vor dem Stichtag. Gibt die Anzahl zurück.</summary>
+    public int DeleteRbgSamplesOlderThan(DateTime cutoffExclusive)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM rbg_samples WHERE Bucket < $cutoff;";
+        command.Parameters.AddWithValue("$cutoff", Stamp(cutoffExclusive));
+        return command.ExecuteNonQuery();
+    }
+
+    /// <summary>RBG-Rasterzeilen im Halbbereich <c>[from, to)</c>, aufsteigend.</summary>
+    public IReadOnlyList<RbgSampleRow> ReadRbgSamples(DateTime from, DateTime to)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT Bucket, Connection, Puts, Fetches, BusySeconds FROM rbg_samples
+            WHERE Bucket >= $from AND Bucket < $to
+            ORDER BY Bucket;
+            """;
+        command.Parameters.AddWithValue("$from", Stamp(from));
+        command.Parameters.AddWithValue("$to", Stamp(to));
+
+        var list = new List<RbgSampleRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(new RbgSampleRow
+            {
+                Bucket = DateTime.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind),
+                Connection = reader.GetString(1),
+                Puts = reader.GetInt32(2),
+                Fetches = reader.GetInt32(3),
+                BusySeconds = reader.GetDouble(4),
+            });
+        }
+        return list;
+    }
+
+    /// <summary>Ältestes verdichtetes RBG-Raster — der Anfang der Langzeitaufzeichnung.</summary>
+    public DateTime? MinRbgBucket()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MIN(Bucket) FROM rbg_samples;";
+        return command.ExecuteScalar() is string s && s.Length > 0
+            ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
     }
 
     void Execute(string sql)

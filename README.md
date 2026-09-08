@@ -34,7 +34,7 @@ zuletzt gesehenen Id wieder an.
 | `kcc query --take 100 [--json]` | Einmalabfrage auf stdout — zum Abgleich mit dem Web-Grid |
 | `kcc backfill --from-id N [--to-id M]` | Ältere Telegramme nachladen (baut anschließend die UPH-Historie neu auf) |
 | `kcc prune [--days N]` | Telegramme älter als N Tage löschen (Standard: `RetentionDays`) |
-| `kcc uph-rebuild` | UPH-Historie (`/verlauf`) aus den vorhandenen Telegrammen neu aufbauen — nach einem separaten `backfill` oder Änderung der `UphHistory*`-Optionen |
+| `kcc uph-rebuild` | UPH- und RBG-Historie (`/verlauf`, `/rbg`) aus den vorhandenen Telegrammen neu aufbauen — nach einem separaten `backfill` oder Änderung der `UphHistory*`-/`Rbg*`-Optionen. RBG-Rasterzeilen aus der Zeit vor dem ältesten Telegramm bleiben dabei erhalten |
 | `kcc export --out datei.csv [--from …] [--to …]` | Aufgezeichnete Telegramme als CSV |
 
 `kcc help` listet alle Optionen.
@@ -79,6 +79,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
 | `UphHistoryIntervalMinutes` | Rasterweite der UPH-Historie in Minuten (Standard `15`) — wie fein `/verlauf` auflöst. |
 | `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. `/verlauf` zeigt nur diesen Zeitraum — für weiter zurück den Wert erhöhen und `kcc uph-rebuild` laufen lassen. Der Recorder baut die Historie bei jedem Start und nach `backfill` neu auf. |
+| `RbgHistoryRetentionDays` | Aufbewahrung der RBG-Langzeitaufzeichnung (`/rbg`) in Tagen (Standard `365`). Bewusst länger als `UphHistoryRetentionDays`: der Belastungsvergleich der Geräte lebt von langen Zeiträumen, und die Rasterzeilen sind winzig (eine je Raster und Verbindung, ~500/Tag bei 5 RBG und 15-min-Raster). `0`/negativ = unbegrenzt. Aufgezeichnet wird für jede unter `ResourcePoints` konfigurierte `Connection`. |
 | `ContourCheckpoints` | Konturkontrollen für `/kontur`, je Eintrag `{ "ResourcePoint": "LB21", "MessageCode": "ENDTSP", "Label": "…" }`. Ausgewertet wird das `Status`-Feld (`Kxyz`) dieser Telegramme. Leere Liste ⇒ eingebaute Vorgabe (LB21 ENDTSP, DA91/AA41/NA41 TSPREG). |
 | `ContourFlags` | Bedeutung der Fehlerbits im Konturergebnis `Kxyz`, je Eintrag `{ "Nibble": 0, "Bit": 2, "Label": "Profil links" }` — `Nibble` 0 = `x`, 1 = `y`, 2 = `z`; `Bit` 0…3. Leere Liste ⇒ eingebaute Tabelle laut Doku „Konturenfehler (Kxyz)". `Status = "…."` (leer) = kein Konturfehler. |
 | `ContourWindowMinutes` | Zeitfenster der Konturauswertung ohne `minutes`-Parameter (Standard: `480` = 8 h) |
@@ -157,6 +158,8 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand; `rolling=<min>` schaltet auf ein gleitendes Fenster aus den Rohtelegrammen um (`bucket` wird dann der Abtastschritt); `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /kontur` | Auswertung der Konturkontrollen: welche Konturfehler an welchem Kontrollpunkt auflaufen. Zerlegt das `Status`-Feld (`Kxyz`) der Telegramme aus `ContourCheckpoints` in benannte Fehlerbits (`ContourFlags`). KPIs, Balken je Fehlerart, Kreuztabelle Kontrollpunkt × Fehlerart, sowie je Kontrollpunkt die letzten 10 Fehler mit Zeit, LE-/ID-Nummer und aufgelösten Fehlern |
 | `GET /api/kontur?minutes=480` | Dieselbe Auswertung als JSON |
+| `GET /rbg` | **Langzeitvergleich der RBG**: welches Gerät wird stärker belastet? Spreizung (der schwächste RBG fährt X % weniger als der stärkste), Anteil je Gerät an allen Spielen, Verlauf der Spiele/h bzw. des Auslastungsgrads als Mehrlinien-Diagramm (Legende schaltet Geräte ab, Fadenkreuz zeigt alle Werte eines Zeitpunkts) und eine Kennzahlentabelle. Zeiträume 24 h bis 1 Jahr. Speist sich aus der eigenen Rasterreihe (`RbgHistoryRetentionDays`) und reicht damit weiter zurück als die Rohtelegramme |
+| `GET /api/rbg-history?hours=168&bucket=60` | Derselbe Vergleich als JSON. `hours` bis 8784 (1 Jahr) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand in Minuten |
 | `GET /wand` | Wandansicht derselben Auslastungsdaten (`/api/utilization`): erkennt per `orientation: landscape` das Querformat und legt jede `Group` (RBG, Fördertechnik …) als eigene, klar getrennte, formatfüllende Spalte ohne Seiten-Scroll ab. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Doppel-/Einzelspiele/Leerlauf. Vollbild-Schaltfläche. Im Hochformat stapeln sich die Spalten |
 | `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 
@@ -205,8 +208,8 @@ abhängigen `dotnet test`/`run` auch neuere Runtimes (der Publish bleibt bei net
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
 (`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`,
-`kontur.html`, `wand.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben Dashboards,
-die die API unter `/`, `/auslastung`, `/verlauf`, `/kontur` bzw. `/wand` ausliefert —
+`kontur.html`, `rbg.html`, `wand.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben
+Dashboards, die die API unter `/`, `/auslastung`, `/verlauf`, `/kontur`, `/rbg` bzw. `/wand` ausliefert —
 `kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
 Als lose Datei geöffnet fragen sie fest `http://localhost:8082` ab; mit `?api=http://host:port`
 lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.

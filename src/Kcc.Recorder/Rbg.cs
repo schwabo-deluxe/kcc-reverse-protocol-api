@@ -100,16 +100,14 @@ public static class RbgReport
 
     readonly record struct Ev(DateTime At, string Label, Kind Kind);
 
-    public static RbgCycleStats Compute(
-        IReadOnlyList<Telegram> window,
-        TelegramFormat format,
-        string connection,
-        int maxCyclesPerHour,
-        DateTime from,
-        DateTime to,
-        RbgOptions options,
-        int bucketMinutes = 5,
-        int stepMinutes = 1)
+    /// <summary>
+    /// Liest die Fahrauftrags-Ereignisse je Verbindung aus dem Telegrammstrom: klassifiziert nach
+    /// den MessageCode-Sätzen und führt die DM/AK-Doppel zusammen. Die Ereignisse je Verbindung
+    /// sind zeitlich aufsteigend.
+    /// </summary>
+    static Dictionary<string, List<Ev>> EventsByConnection(
+        IEnumerable<Telegram> window, TelegramFormat format, RbgOptions options,
+        Func<string, bool> wanted)
     {
         var mcIdx = FieldIndex(format, "MessageCode");
         var labelIdx = FieldIndex(format, "ResourceLabel");
@@ -128,25 +126,108 @@ public static class RbgReport
             : fetchOrder.Contains(code) ? Kind.FetchOrder
             : null;
 
-        var events = new List<Ev>();
-        var lastSeen = new Dictionary<(string, string, string, string), DateTime>();
+        var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
+        var lastSeen = new Dictionary<(string, string, string, string, string), DateTime>();
 
-        foreach (var t in window
-                     .Where(t => string.Equals(t.ConnectionName, connection, StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(t => t.DateTime))
+        foreach (var t in window.OrderBy(t => t.DateTime))
         {
+            var connection = (t.ConnectionName ?? "").Trim();
+            if (connection.Length == 0 || !wanted(connection))
+                continue;
+
             var f = format.Slice(t.Data);
             var code = Field(f, mcIdx);
             if (Classify(code) is not { } kind)
                 continue;
 
             var label = Field(f, labelIdx);
-            var key = (code, label, Field(f, srcIdx), Field(f, dstIdx));
+            var key = (connection, code, label, Field(f, srcIdx), Field(f, dstIdx));
             if (lastSeen.TryGetValue(key, out var prev) && (t.DateTime - prev).TotalSeconds < DedupWindowSeconds)
                 continue;
             lastSeen[key] = t.DateTime;
-            events.Add(new Ev(t.DateTime, label, kind));
+
+            if (!byConnection.TryGetValue(connection, out var list))
+                byConnection[connection] = list = [];
+            list.Add(new Ev(t.DateTime, label, kind));
         }
+
+        return byConnection;
+    }
+
+    /// <summary>
+    /// Verdichtet den Telegrammstrom zu Rasterzeilen je Zeitraster × RBG-Verbindung — die
+    /// Grundlage der Langzeitaufzeichnung (<c>/rbg</c>). Ein Durchlauf für alle Verbindungen;
+    /// die belegte Auftragszeit wird dem Raster des Abschlusses zugeschlagen.
+    /// </summary>
+    public static List<RbgSampleRow> Aggregate(
+        IEnumerable<Telegram> window,
+        TelegramFormat format,
+        IReadOnlyCollection<string> connections,
+        DateTime from,
+        DateTime to,
+        TimeSpan step,
+        RbgOptions options)
+    {
+        var wanted = new HashSet<string>(
+            connections.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0 || step <= TimeSpan.Zero || from >= to)
+            return [];
+
+        var rows = new Dictionary<(long Slot, string Connection), RbgSampleRow>();
+
+        RbgSampleRow Row(DateTime at, string connection)
+        {
+            var slot = (long)((at - from).Ticks / step.Ticks);
+            var key = (slot, connection);
+            if (!rows.TryGetValue(key, out var row))
+                rows[key] = row = new RbgSampleRow
+                {
+                    Bucket = from + TimeSpan.FromTicks(slot * step.Ticks),
+                    Connection = connection,
+                };
+            return row;
+        }
+
+        foreach (var (connection, events) in EventsByConnection(window, format, options, wanted.Contains))
+        {
+            foreach (var e in events)
+            {
+                if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.FetchDone))
+                    continue;
+                var row = Row(e.At, connection);
+                if (e.Kind == Kind.PutDone) row.Puts++;
+                else row.Fetches++;
+            }
+
+            foreach (var kind in new[] { Kind.PutDone, Kind.FetchDone })
+            {
+                var order = kind == Kind.PutDone ? Kind.PutOrder : Kind.FetchOrder;
+                foreach (var (doneAt, seconds) in PairDurations(events, kind, order, from, to))
+                    Row(doneAt, connection).BusySeconds += seconds;
+            }
+        }
+
+        return rows.Values
+            .Where(r => r.Puts > 0 || r.Fetches > 0)
+            .OrderBy(r => r.Bucket).ThenBy(r => r.Connection, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public static RbgCycleStats Compute(
+        IReadOnlyList<Telegram> window,
+        TelegramFormat format,
+        string connection,
+        int maxCyclesPerHour,
+        DateTime from,
+        DateTime to,
+        RbgOptions options,
+        int bucketMinutes = 5,
+        int stepMinutes = 1)
+    {
+        var events = EventsByConnection(window, format, options,
+            c => string.Equals(c, connection, StringComparison.OrdinalIgnoreCase))
+            .Values.FirstOrDefault() ?? [];
 
         var doneInWindow = events.Where(e => e.At >= from && e.At < to).ToList();
         var puts = doneInWindow.Count(e => e.Kind == Kind.PutDone);
@@ -159,10 +240,12 @@ public static class RbgReport
             ? Math.Round((full + half / 2.0) / (maxCyclesPerHour * hours) * 100, 1)
             : 0;
 
-        var (avgPut, busyPut) = PairDurations(events, Kind.PutDone, Kind.PutOrder, from, to);
-        var (avgFetch, busyFetch) = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, from, to);
+        var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, from, to);
+        var fetchPairs = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, from, to);
+        var avgPut = putPairs.Count == 0 ? 0 : Math.Round(putPairs.Average(p => p.Seconds), 1);
+        var avgFetch = fetchPairs.Count == 0 ? 0 : Math.Round(fetchPairs.Average(p => p.Seconds), 1);
         var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
-        var busy = busyPut + busyFetch;
+        var busy = putPairs.Sum(p => p.Seconds) + fetchPairs.Sum(p => p.Seconds);
         var idle = Math.Max(0, windowSeconds - busy);
 
         return new RbgCycleStats
@@ -235,14 +318,15 @@ public static class RbgReport
 
     /// <summary>
     /// Paart jedes Abschluss-Ereignis im Fenster mit dem jüngsten passenden Auftrag davor
-    /// (gleiches <c>ResourceLabel</c>, sonst FIFO). Gibt Ø-Dauer und Summe der Dauern zurück.
+    /// (gleiches <c>ResourceLabel</c>, sonst FIFO). Gibt je Paar den Abschlusszeitpunkt und die
+    /// Dauer zurück, damit der Aufrufer mitteln oder auf Zeitraster verteilen kann.
     /// </summary>
-    static (double AvgSeconds, double BusySeconds) PairDurations(
+    static List<(DateTime DoneAt, double Seconds)> PairDurations(
         List<Ev> events, Kind doneKind, Kind orderKind, DateTime from, DateTime to)
     {
         var orders = events.Where(e => e.Kind == orderKind && e.At >= from.AddMinutes(-30)).ToList();
         var used = new bool[orders.Count];
-        var durations = new List<double>();
+        var durations = new List<(DateTime, double)>();
 
         foreach (var done in events.Where(e => e.Kind == doneKind && e.At >= from && e.At < to))
         {
@@ -263,12 +347,10 @@ public static class RbgReport
                 continue;
 
             used[idx] = true;
-            durations.Add((done.At - orders[idx].At).TotalSeconds);
+            durations.Add((done.At, (done.At - orders[idx].At).TotalSeconds));
         }
 
-        return durations.Count == 0
-            ? (0, 0)
-            : (Math.Round(durations.Average(), 1), durations.Sum());
+        return durations;
     }
 
     static HashSet<string> Set(IReadOnlyList<string> codes) =>

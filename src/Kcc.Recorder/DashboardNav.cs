@@ -15,6 +15,7 @@ public static class DashboardNav
         ("/auslastung", "Auslastung"),
         ("/verlauf", "Verlauf"),
         ("/kontur", "Kontur"),
+        ("/rbg", "RBG"),
         ("/wand", "Wand"),
     ];
 

@@ -1,35 +1,44 @@
 namespace Kcc.Recorder;
 
 /// <summary>
-/// Verdichtet die Rohtelegramme laufend zu <see cref="UphSampleRow"/>-Zeilen (Zeitraster ×
-/// Ressourcenpunkt × Endziel) und hält sie mit eigener Aufbewahrung. So beantwortet
-/// <c>/verlauf</c> Wochen-Zeiträume ohne Millionen Telegrammzeilen zu lesen.
+/// Verdichtet die Rohtelegramme laufend zu zwei Langzeitreihen und hält beide mit eigener
+/// Aufbewahrung — so beantworten die Ansichten Wochen- und Monatszeiträume, ohne Millionen
+/// Telegrammzeilen zu lesen, und überleben das Löschen der Rohtelegramme:
+/// <list type="bullet">
+///   <item><see cref="UphSampleRow"/> (Zeitraster × Ressourcenpunkt × Endziel) für <c>/verlauf</c></item>
+///   <item><see cref="RbgSampleRow"/> (Zeitraster × RBG-Verbindung) für <c>/rbg</c></item>
+/// </list>
 ///
 /// Im Poll-Takt aufgerufen (<see cref="Tick"/>), rechnet aber höchstens alle
 /// <c>UphHistoryIntervalMinutes</c>. Wiederholbar: es wird stets ab dem zuletzt verdichteten
 /// Raster neu gerechnet, das dabei ggf. noch unvollständige jüngste Raster inklusive.
 /// </summary>
-public sealed class UphHistorySampler
+public sealed class HistorySampler
 {
     readonly TelegramStore _store;
     readonly TelegramFormat _format;
     readonly DestinationMap _destinations;
     readonly HashSet<string> _points;
+    readonly List<string> _connections;
+    readonly RbgOptions? _rbg;
     readonly int _intervalMinutes;
     readonly int _retentionDays;
+    readonly int _rbgRetentionDays;
     readonly Action<string> _log;
 
     DateTime _nextRun = DateTime.MinValue;
     DateTime _nextRetention = DateTime.MinValue;
 
-    public UphHistorySampler(
+    public HistorySampler(
         TelegramStore store,
         TelegramFormat format,
         IReadOnlyList<ResourcePointConfig> resourcePoints,
         IReadOnlyDictionary<string, string>? destinationLabels,
         int intervalMinutes,
         int retentionDays,
-        Action<string> log)
+        Action<string> log,
+        RbgOptions? rbg = null,
+        int rbgRetentionDays = 0)
     {
         _store = store;
         _format = format;
@@ -39,10 +48,19 @@ public sealed class UphHistorySampler
             .Select(p => p.Name)
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _connections = defs
+            .Select(p => (p.Connection ?? "").Trim())
+            .Where(c => c.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _rbg = rbg;
         _intervalMinutes = Math.Max(1, intervalMinutes);
         _retentionDays = retentionDays;
+        _rbgRetentionDays = rbgRetentionDays;
         _log = log;
     }
+
+    bool SamplesRbg => _rbg is not null && _connections.Count > 0;
 
     /// <summary>Im Poll-Takt aufgerufen; verdichtet und räumt höchstens im Intervall-Takt.</summary>
     public void Tick()
@@ -54,11 +72,12 @@ public sealed class UphHistorySampler
         try
         {
             SampleNow();
+            SampleRbgNow();
             ApplyRetention();
         }
         catch (Exception ex)
         {
-            _log($"UPH-Historie: {ex.Message}");
+            _log($"Historie: {ex.Message}");
         }
     }
 
@@ -81,6 +100,31 @@ public sealed class UphHistorySampler
         _store.ReplaceUphSamplesFrom(start, rows);
 
         _log($"UPH-Historie: {rows.Count} Rasterzeilen ab {start:yyyy-MM-dd HH:mm} verdichtet " +
+             $"(bis {completeUpTo:yyyy-MM-dd HH:mm}).");
+    }
+
+    /// <summary>Wie <see cref="SampleNow"/>, aber für die RBG-Spiele je Verbindung.</summary>
+    public void SampleRbgNow()
+    {
+        if (!SamplesRbg)
+            return;
+
+        var newest = _store.MaxTelegramTime();
+        if (newest is null)
+            return;
+
+        var step = TimeSpan.FromMinutes(_intervalMinutes);
+        var completeUpTo = Floor(newest.Value, step);
+        var start = _store.MaxRbgBucket()
+            ?? Floor(newest.Value.AddDays(-Math.Max(1, _retentionDays)), step);
+
+        if (start >= completeUpTo)
+            return;
+
+        var rows = AggregateRbg(start, completeUpTo, step);
+        _store.ReplaceRbgSamplesFrom(start, rows);
+
+        _log($"RBG-Historie: {rows.Count} Rasterzeilen ab {start:yyyy-MM-dd HH:mm} verdichtet " +
              $"(bis {completeUpTo:yyyy-MM-dd HH:mm}).");
     }
 
@@ -113,24 +157,49 @@ public sealed class UphHistorySampler
 
         _log($"UPH-Historie neu aufgebaut: {rows.Count} Rasterzeilen " +
              $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+
+        if (!SamplesRbg)
+            return;
+
+        // Nur das Fenster ersetzen, für das es Rohtelegramme gibt: die RBG-Aufzeichnung reicht
+        // typischerweise weiter zurück als die Telegramme und darf dabei nicht verloren gehen.
+        var rbgRows = AggregateRbg(start, completeUpTo, step);
+        _store.ReplaceRbgSamplesFrom(start, rbgRows);
+
+        _log($"RBG-Historie neu aufgebaut: {rbgRows.Count} Rasterzeilen " +
+             $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm} " +
+             $"(ältere bleiben erhalten).");
     }
 
     void ApplyRetention()
     {
-        if (_retentionDays <= 0 || DateTime.UtcNow < _nextRetention)
+        if (DateTime.UtcNow < _nextRetention)
             return;
         _nextRetention = DateTime.UtcNow.AddHours(24);
 
-        var newest = _store.MaxUphBucket() ?? _store.MaxTelegramTime();
-        if (newest is null)
-            return;
+        var step = TimeSpan.FromMinutes(_intervalMinutes);
 
-        var cutoff = Floor(newest.Value.AddDays(-_retentionDays), TimeSpan.FromMinutes(_intervalMinutes));
-        var removed = _store.DeleteUphSamplesOlderThan(cutoff);
-        if (removed > 0)
-            _log($"UPH-Historie: {removed} Rasterzeilen vor {cutoff:yyyy-MM-dd} gelöscht " +
-                 $"(Aufbewahrung {_retentionDays} Tage).");
+        if (_retentionDays > 0 && (_store.MaxUphBucket() ?? _store.MaxTelegramTime()) is { } newestUph)
+        {
+            var cutoff = Floor(newestUph.AddDays(-_retentionDays), step);
+            var removed = _store.DeleteUphSamplesOlderThan(cutoff);
+            if (removed > 0)
+                _log($"UPH-Historie: {removed} Rasterzeilen vor {cutoff:yyyy-MM-dd} gelöscht " +
+                     $"(Aufbewahrung {_retentionDays} Tage).");
+        }
+
+        if (_rbgRetentionDays > 0 && (_store.MaxRbgBucket() ?? _store.MaxTelegramTime()) is { } newestRbg)
+        {
+            var cutoff = Floor(newestRbg.AddDays(-_rbgRetentionDays), step);
+            var removed = _store.DeleteRbgSamplesOlderThan(cutoff);
+            if (removed > 0)
+                _log($"RBG-Historie: {removed} Rasterzeilen vor {cutoff:yyyy-MM-dd} gelöscht " +
+                     $"(Aufbewahrung {_rbgRetentionDays} Tage).");
+        }
     }
+
+    List<RbgSampleRow> AggregateRbg(DateTime from, DateTime to, TimeSpan step) =>
+        RbgReport.Aggregate(_store.Read(from, to), _format, _connections, from, to, step, _rbg!);
 
     List<UphSampleRow> Aggregate(DateTime from, DateTime to, TimeSpan step)
     {

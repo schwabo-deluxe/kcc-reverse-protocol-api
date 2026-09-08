@@ -243,6 +243,14 @@ public sealed class KccConfig
     /// </summary>
     public int UphHistoryRetentionDays { get; set; } = 28;
 
+    /// <summary>
+    /// Aufbewahrung der RBG-Langzeitaufzeichnung (<c>/rbg</c>) in Tagen (Standard <c>365</c>).
+    /// Bewusst länger als <see cref="UphHistoryRetentionDays"/>: der Belastungsvergleich der RBG
+    /// untereinander lebt von langen Zeiträumen, und die Rasterzeilen sind winzig (eine je
+    /// Raster und Verbindung). <c>0</c>/negativ = unbegrenzt.
+    /// </summary>
+    public int RbgHistoryRetentionDays { get; set; } = 365;
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

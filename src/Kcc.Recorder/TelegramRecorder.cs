@@ -15,7 +15,7 @@ public sealed class TelegramRecorder
     readonly KccConfig _config;
     readonly Action<string> _log;
     readonly TelegramCsvWriter? _csv;
-    readonly UphHistorySampler? _uph;
+    readonly HistorySampler? _uph;
 
     public TelegramRecorder(
         KccQuery query,
@@ -24,7 +24,7 @@ public sealed class TelegramRecorder
         KccConfig config,
         Action<string> log,
         TelegramCsvWriter? csv = null,
-        UphHistorySampler? uph = null)
+        HistorySampler? uph = null)
     {
         _query = query;
         _store = store;

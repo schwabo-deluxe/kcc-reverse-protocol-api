@@ -112,6 +112,9 @@ public static class ApiServer
                 "/verlauf" or "/verlauf.html" => Html(UphHistoryDashboard.Html, "/verlauf"),
                 "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
                 "/wand" or "/wand.html" => Html(WallboardDashboard.Html, "/wand"),
+                "/rbg" or "/rbg.html" => Html(RbgHistoryDashboard.Html, "/rbg"),
+                "/api/rbg-history" => Ok(RbgHistory(config,
+                    RbgHours(q), RbgBucket(q, config), HistStamp(q, "from"), HistStamp(q, "to"))),
                 "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),
                 "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), SeriesStep(q, config))),
                 "/api/uph-history" => Ok(UphHistory(config, format,
@@ -173,6 +176,28 @@ public static class ApiServer
         return UphHistoryReport.Compute(
             rows, start, end, bucketMinutes, groupBy,
             config.DestinationLabels, config.ResourcePoints, resourcePoint, rollingWindowMinutes);
+    }
+
+    /// <summary>
+    /// Langzeitvergleich der RBG aus der eigenen Rasterreihe — reicht so weit zurück, wie
+    /// aufgezeichnet wurde (<c>RbgHistoryRetentionDays</c>), unabhängig von den Rohtelegrammen.
+    /// </summary>
+    static RbgHistoryReport RbgHistory(
+        KccConfig config, int hours, int bucketMinutes, DateTime? from, DateTime? to)
+    {
+        using var store = new TelegramStore(config.Database);
+        var newest = store.MaxRbgBucket() ?? store.MaxTelegramTime()
+            ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+
+        // Das jüngste Raster soll noch hineinfallen — ReadRbgSamples schneidet rechts offen ab.
+        var end = to ?? newest.AddMinutes(Math.Max(1, config.UphHistoryIntervalMinutes));
+        var start = from ?? end.AddHours(-hours);
+        if (start >= end)
+            start = end.AddHours(-1);
+
+        return RbgHistoryReport.Compute(
+            store.ReadRbgSamples(start, end), start, end, bucketMinutes,
+            config.ResourcePoints, config.RbgMaxCyclesPerHour);
     }
 
     static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)
@@ -240,6 +265,9 @@ public static class ApiServer
             telegrams = store.Count(),
             lastSeenId = store.GetLastSeenId(),
             newestTelegram = store.MaxTelegramTime(),
+            uphSamples = store.UphSampleCount(),
+            rbgSamples = store.RbgSampleCount(),
+            rbgHistoryFrom = store.MinRbgBucket(),
             secondsSinceLastWrite = store.SecondsSinceLastWrite(),
             serverTime = DateTime.Now,
         };
@@ -289,6 +317,13 @@ public static class ApiServer
     // > 0 ⇒ gleitendes Fenster (Minuten) aus Rohtelegrammen statt fester Eimer aus der Rollup-Tabelle.
     static int HistRolling(Func<string, string?> q) =>
         Clamp(q("rolling"), fallback: 0, min: 0, max: 240);
+
+    // RBG-Langzeitvergleich: Zeitraum bis ein Jahr, Anzeigeraster bis 1 Tag.
+    static int RbgHours(Func<string, string?> q) =>
+        Clamp(q("hours"), fallback: 168, min: 1, max: 24 * 366);
+
+    static int RbgBucket(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("bucket"), fallback: Math.Max(60, config.UphHistoryIntervalMinutes), min: 1, max: 1440);
 
     static UphHistoryGroupBy HistGroupBy(Func<string, string?> q) =>
         string.Equals(q("groupBy"), "resourcePoint", StringComparison.OrdinalIgnoreCase)

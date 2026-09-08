@@ -3,7 +3,7 @@ namespace Kcc.Recorder;
 /// <summary>
 /// Eine verdichtete Zeile der UPH-Historie: die Zahl der <c>TSPORD</c>-Aufträge in einem
 /// Zeitraster, aufgeschlüsselt nach Ressourcenpunkt und Endziel. Wird laufend aus den
-/// Rohtelegrammen gebildet (<see cref="UphHistorySampler"/>) und mit eigener Aufbewahrung
+/// Rohtelegrammen gebildet (<see cref="HistorySampler"/>) und mit eigener Aufbewahrung
 /// gehalten, damit <c>/verlauf</c> auch über Wochen schnell antwortet.
 /// </summary>
 public sealed record UphSampleRow

@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Kcc.Recorder.Tests;
 
-public class UphHistorySamplerTests : IDisposable
+public class HistorySamplerTests : IDisposable
 {
     readonly string _path = Path.Combine(Path.GetTempPath(), $"kcc-uph-{Guid.NewGuid():N}.db");
 
@@ -15,7 +15,7 @@ public class UphHistorySamplerTests : IDisposable
     static Telegram T(long id, DateTime at, string rp, string dest, string mc = "TSPORD") =>
         new(id, at, TelegramDirection.FromPlc, "L1", Data(rp, dest, mc), null);
 
-    UphHistorySampler Sampler(TelegramStore store, IReadOnlyDictionary<string, string>? labels = null) =>
+    HistorySampler Sampler(TelegramStore store, IReadOnlyDictionary<string, string>? labels = null) =>
         new(store, TelegramFormat.Default,
             [new ResourcePointConfig { Name = "MA72" }],
             labels, intervalMinutes: 15, retentionDays: 28, _ => { });
@@ -103,7 +103,7 @@ public class UphHistorySamplerTests : IDisposable
             T(3, newest, "MA72", "WA01"),
         ]);
 
-        new UphHistorySampler(store, TelegramFormat.Default,
+        new HistorySampler(store, TelegramFormat.Default,
             [new ResourcePointConfig { Name = "MA72" }], null,
             intervalMinutes: 60, retentionDays: 28, _ => { }).Rebuild();
 
@@ -128,6 +128,69 @@ public class UphHistorySamplerTests : IDisposable
 
         var rows = store.ReadUphSamples(day, day.AddDays(1));
         Assert.Equal(("MA72", "DLL*", 2), (rows[0].ResourcePoint, rows[0].Destination, rows[0].Orders));
+    }
+
+    // ---- RBG-Langzeitaufzeichnung ---------------------------------------------------------------
+
+    /// <summary>Fahrauftrag eines RBG; die Verbindung trägt hier die Auswertung, nicht der Punkt.</summary>
+    static Telegram R(long id, DateTime at, string mc, string conn) =>
+        new(id, at, TelegramDirection.FromPlc, conn, Data("MA72", "WA01", mc), null);
+
+    static HistorySampler RbgSampler(TelegramStore store, int rbgRetentionDays = 365) =>
+        new(store, TelegramFormat.Default,
+            [new ResourcePointConfig { Name = "MA72", Connection = "RBG01" },
+             new ResourcePointConfig { Name = "MB72", Connection = "RBG02" }],
+            null, intervalMinutes: 60, retentionDays: 28, _ => { },
+            RbgOptions.From(new KccConfig()), rbgRetentionDays);
+
+    [Fact]
+    public void Verdichtet_die_RBG_Spiele_je_Verbindung()
+    {
+        using var store = new TelegramStore(_path);
+        var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        store.Insert(
+        [
+            R(1, day.AddHours(8).AddMinutes(2), "ENDDEP", "RBG01"),
+            R(2, day.AddHours(8).AddMinutes(12), "ENDPUP", "RBG01"),
+            R(3, day.AddHours(8).AddMinutes(22), "ENDDEP", "RBG01"),
+            R(4, day.AddHours(8).AddMinutes(32), "ENDPUP", "RBG02"),
+            R(5, day.AddHours(9).AddMinutes(5), "ENDDEP", "RBG01"),   // laufendes Raster
+        ]);
+
+        RbgSampler(store).SampleRbgNow();
+
+        var rows = store.ReadRbgSamples(day, day.AddDays(1));
+        var one = rows.Single(r => r.Connection == "RBG01");
+        Assert.Equal(day.AddHours(8), one.Bucket);
+        Assert.Equal(2, one.Puts);
+        Assert.Equal(1, one.Fetches);
+        Assert.Equal(1, one.DoubleCycles);
+        Assert.Equal(1, one.SingleCycles);
+
+        var two = rows.Single(r => r.Connection == "RBG02");
+        Assert.Equal(0, two.Puts);
+        Assert.Equal(1, two.Fetches);
+    }
+
+    [Fact]
+    public void Rebuild_laesst_RBG_Zeilen_vor_den_Rohtelegrammen_stehen()
+    {
+        using var store = new TelegramStore(_path);
+        var day = new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Unspecified);
+
+        // Alte Aufzeichnung, deren Rohtelegramme längst geprunt sind.
+        var old = day.AddDays(-120);
+        store.ReplaceRbgSamplesFrom(old,
+            [new RbgSampleRow { Bucket = old, Connection = "RBG01", Puts = 7, Fetches = 7 }]);
+
+        store.Insert([R(1, day.AddHours(8).AddMinutes(2), "ENDDEP", "RBG01"),
+                      R(2, day.AddHours(9).AddMinutes(2), "ENDPUP", "RBG01")]);
+
+        RbgSampler(store).Rebuild();
+
+        var rows = store.ReadRbgSamples(old.AddDays(-1), day.AddDays(1));
+        Assert.Equal(7, rows.Single(r => r.Bucket == old).Puts);       // Langzeitreihe überlebt
+        Assert.Contains(rows, r => r.Bucket == day.AddHours(8));       // neu verdichtet
     }
 
     public void Dispose()

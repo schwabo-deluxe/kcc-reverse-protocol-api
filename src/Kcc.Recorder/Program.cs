@@ -287,9 +287,10 @@ int UphRebuild(KccConfig config)
     return 0;
 }
 
-UphHistorySampler NewUphSampler(KccConfig config, TelegramStore store) =>
+HistorySampler NewUphSampler(KccConfig config, TelegramStore store) =>
     new(store, ResolveFormat(config), config.ResourcePoints, config.DestinationLabels,
-        config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log);
+        config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log,
+        RbgOptions.From(config), config.RbgHistoryRetentionDays);
 
 int Prune(KccConfig config, CommandLine cli)
 {
@@ -313,6 +314,16 @@ int Prune(KccConfig config, CommandLine cli)
             Log($"{uphRemoved} UPH-Rasterzeilen vor {uphCutoff:yyyy-MM-dd} gelöscht.");
     }
 
+    // Die RBG-Langzeitreihe hat ihre eigene, deutlich längere Aufbewahrung — sie überlebt
+    // das Löschen der Rohtelegramme absichtlich.
+    if (config.RbgHistoryRetentionDays > 0)
+    {
+        var rbgCutoff = TelegramStore.RetentionCutoff(config.RbgHistoryRetentionDays);
+        var rbgRemoved = store.DeleteRbgSamplesOlderThan(rbgCutoff);
+        if (rbgRemoved > 0)
+            Log($"{rbgRemoved} RBG-Rasterzeilen vor {rbgCutoff:yyyy-MM-dd} gelöscht.");
+    }
+
     store.Vacuum();
 
     Log($"{removed} Telegramme vor {cutoff:yyyy-MM-dd} gelöscht ({before} → {store.Count()}).");
@@ -331,6 +342,7 @@ int DumpDashboards(CommandLine cli)
         ("auslastung.html", UtilizationDashboard.Html),
         ("verlauf.html", UphHistoryDashboard.Html),
         ("kontur.html", ContourDashboard.Html),
+        ("rbg.html", RbgHistoryDashboard.Html),
         ("wand.html", WallboardDashboard.Html),
     };
     foreach (var (name, html) in files)
@@ -419,11 +431,12 @@ static void PrintUsage() => Console.WriteLine(
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
-      uph-rebuild                      UPH-Historie (/verlauf) aus den Telegrammen neu aufbauen —
-                                       nach 'backfill' oder Änderung von UphHistory*-Optionen
+      uph-rebuild                      UPH- und RBG-Historie (/verlauf, /rbg) aus den Telegrammen
+                                       neu aufbauen — nach 'backfill' oder Konfig-Änderung.
+                                       RBG-Rasterzeilen vor dem ältesten Telegramm bleiben erhalten
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
-      dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur/wand.html herausschreiben
+      dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur/rbg/wand.html schreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)
