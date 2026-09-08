@@ -69,8 +69,14 @@ public sealed class ResourcePointConfig
     /// </summary>
     public string? Connection { get; set; }
 
-    /// <summary>Maximale Doppelspiele pro Stunde dieses RBG. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
+    /// <summary>Doppelspiele pro Stunde dieses RBG laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
     public int? MaxCyclesPerHour { get; set; }
+
+    /// <summary>Reine Einlagerungen pro Stunde laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxPutsPerHour"/>.</summary>
+    public int? MaxPutsPerHour { get; set; }
+
+    /// <summary>Reine Auslagerungen pro Stunde laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxFetchesPerHour"/>.</summary>
+    public int? MaxFetchesPerHour { get; set; }
 
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
@@ -215,8 +221,29 @@ public sealed class KccConfig
     /// <summary>Zeitfenster der Konturauswertung in Minuten ohne <c>minutes</c>-Parameter (Standard <c>480</c>).</summary>
     public int ContourWindowMinutes { get; set; } = 480;
 
-    /// <summary>Vorgabe für die maximalen Doppelspiele pro Stunde eines RBG (Standard <c>60</c>).</summary>
-    public int RbgMaxCyclesPerHour { get; set; } = 60;
+    /// <summary>
+    /// Telegrammtyp, der bei allen Zählungen gewertet wird (Standard <c>DM</c>). Die Anlage
+    /// schickt jedes Ereignis als Paar: <c>DM</c> (Data Message — die Meldung selbst, z. B.
+    /// MFC→SRM) und <c>AK</c> (Acknowledge der Gegenstelle, SRM→MFC) mit identischem Inhalt,
+    /// dazu <c>LM</c> als leere Lebensmeldung. Ohne diese Einschränkung zählt jedes Ereignis
+    /// doppelt — Fahrten, UPH, Konturprüfungen. <c>AK</c> ist gleichwertig; leer = alle zählen
+    /// (altes Verhalten).
+    /// </summary>
+    public string CountTelegramType { get; set; } = "DM";
+
+    /// <summary>
+    /// Auslegungsleistung eines RBG in Doppelspielen pro Stunde (Standard <c>30</c> — HRL
+    /// RBG 1–5). Zusammen mit <see cref="RbgMaxPutsPerHour"/> und
+    /// <see cref="RbgMaxFetchesPerHour"/> ergibt sich die Spielzeit je Betriebsart und damit
+    /// der Leistungsgrad. Je Gerät über <c>ResourcePoints[].MaxCyclesPerHour</c> überschreibbar.
+    /// </summary>
+    public int RbgMaxCyclesPerHour { get; set; } = 30;
+
+    /// <summary>Auslegungsleistung in reinen Einlagerungen pro Stunde (Standard <c>48</c>).</summary>
+    public int RbgMaxPutsPerHour { get; set; } = 48;
+
+    /// <summary>Auslegungsleistung in reinen Auslagerungen pro Stunde (Standard <c>48</c>).</summary>
+    public int RbgMaxFetchesPerHour { get; set; } = 48;
 
     /// <summary>MessageCodes einer abgeschlossenen Einlagerung (Bringen). Leer ⇒ <c>["ENDDEP"]</c>.</summary>
     public List<string> RbgPutDoneCodes { get; set; } = [];

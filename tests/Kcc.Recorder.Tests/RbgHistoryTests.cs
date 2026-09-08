@@ -21,7 +21,7 @@ public class RbgHistoryTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string mc, string label)
+    static string Data(string mc, string label, string type = "DM")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');
@@ -30,6 +30,7 @@ public class RbgHistoryTests
             var a = Off(field);
             for (var i = 0; i < v.Length && a + i < buf.Length; i++) buf[a + i] = v[i];
         }
+        Put("TelegramType", type);
         Put("MessageCode", mc);
         Put("ResourceLabel", label);
         Put("Source", "SRC");
@@ -134,9 +135,9 @@ public class RbgHistoryTests
         Assert.Equal(5, r.Buckets[0].CyclesPerHour["RBG02"]);
         Assert.Equal(50, r.Buckets[0].BusyPercent["RBG01"]);
 
-        // Leistung = Spiele/h gegen die Kapazität (Standard 60/h), Leerlauf = Rest des Rasters.
-        Assert.Equal(16.7, r.Buckets[0].LoadPercent["RBG01"]);   // 10 von 60
-        Assert.Equal(8.3, r.Buckets[0].LoadPercent["RBG02"]);    // 5 von 60
+        // Leistung = Spiele/h gegen die Auslegung (Standard 30 DS/h), Leerlauf = Rest des Rasters.
+        Assert.Equal(33.3, r.Buckets[0].LoadPercent["RBG01"]);   // 10 von 30
+        Assert.Equal(16.7, r.Buckets[0].LoadPercent["RBG02"]);   // 5 von 30
         Assert.Equal(30, r.Buckets[0].IdleMinutes["RBG01"]);     // 60 min − 1800 s
         Assert.Equal(60, r.Buckets[1].IdleMinutes["RBG01"]);     // zweite Stunde ohne Auftragszeit
         Assert.Equal(1.5, a.IdleHours);                          // 2 h − 1800 s
@@ -158,7 +159,9 @@ public class RbgHistoryTests
 
         Assert.Equal(0, t.DoubleCycles);
         Assert.Equal(20, t.SingleCycles);
-        Assert.Equal(10, t.Cycles);          // 20 Einzelspiele = 10 Doppelspiel-Äquivalente
+        // Bewertet über die Auslegung: 20 Einzelspiele à 75 s = 1500 s, das sind 12,5
+        // Doppelspiele à 120 s — nicht 10, wie die Faustformel „Einzel = halbes Doppel" ergäbe.
+        Assert.Equal(12.5, t.Cycles);
         Assert.Single(r.Buckets);
     }
 

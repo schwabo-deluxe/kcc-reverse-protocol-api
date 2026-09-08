@@ -144,7 +144,8 @@ public sealed record ContourReport
         DateTime from,
         DateTime to,
         IReadOnlyList<ContourCheckpointConfig>? checkpoints = null,
-        IReadOnlyList<ContourFlagConfig>? flags = null)
+        IReadOnlyList<ContourFlagConfig>? flags = null,
+        string? countTelegramType = null)
     {
         var defs = (checkpoints is { Count: > 0 } ? checkpoints : DefaultCheckpoints)
             .Where(c => !string.IsNullOrWhiteSpace(c.ResourcePoint) && !string.IsNullOrWhiteSpace(c.MessageCode))
@@ -181,9 +182,12 @@ public sealed record ContourReport
             a => a,
             new KeyComparer());
 
+        var typeFilter = new TelegramTypeFilter(format, countTelegramType);
         foreach (var telegram in window)
         {
             var fields = format.Slice(telegram.Data);
+            if (!typeFilter.Accepts(fields))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
             var rp = Field(fields, rpIdx);
             var mc = Field(fields, mcIdx);
             if (!byKey.TryGetValue((rp, mc), out var a))

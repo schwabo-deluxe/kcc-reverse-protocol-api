@@ -17,19 +17,26 @@ public sealed record RbgCycleStats
     /// <summary>Einzelspiele = <c>|Puts − Fetches|</c> — ungepaarte Einzelfahrten.</summary>
     public required int SingleCycles { get; init; }
 
+    /// <summary>Doppelspiele pro Stunde laut Auslegung — die Bezugsgröße des Leistungsgrads.</summary>
     public required int MaxCyclesPerHour { get; init; }
 
+    /// <summary>Reine Ein- bzw. Auslagerungen pro Stunde laut Auslegung.</summary>
+    public required int MaxPutsPerHour { get; init; }
+    public required int MaxFetchesPerHour { get; init; }
+
     /// <summary>
-    /// Erreichte Spiele pro Stunde in Doppelspiel-Äquivalent: <c>(Doppelspiele + Einzelspiele/2)
-    /// ÷ Stunden</c>. Die Bezugsgröße des Leistungsgrads — bewusst aus den Fahraufträgen des RBG
-    /// gerechnet, nicht aus den TSPORD-Telegrammen des zugehörigen Ressourcenpunkts.
+    /// Erreichte Spiele pro Stunde in Doppelspiel-Äquivalent. Gerechnet über den Zeitbedarf laut
+    /// Auslegung (<see cref="RbgCapacity.DemandSeconds"/>), nicht über die Faustformel
+    /// „Einzelspiel = halbes Doppelspiel" — bewusst aus den Fahraufträgen des RBG, nicht aus den
+    /// TSPORD-Telegrammen des zugehörigen Ressourcenpunkts.
     /// </summary>
     public required double CyclesPerHour { get; init; }
 
     /// <summary>
-    /// Leistungsgrad gegen die Kapazität: <c>(Doppelspiele + Einzelspiele/2) / (MaxCyclesPerHour ·
-    /// Stunden) · 100</c>. Entspricht den erreichten Lagerspielen relativ zu den nominalen
-    /// Doppelspielen/h (FEM 9.851: ein Doppelspiel = 2 Lagerbewegungen).
+    /// Leistungsgrad gegen die Auslegung: Zeitbedarf der gefahrenen Spiele ÷ Fenster · 100.
+    /// Ein Doppelspiel zählt mit <c>3600/DoppelspieleProStunde</c> Sekunden, eine ungepaarte
+    /// Ein- oder Auslagerung mit ihrer eigenen Spielzeit. 100 % = das Gerät hat genau seine
+    /// Auslegungsleistung erbracht; darüber liegt es über der Auslegung.
     /// </summary>
     public required double Percent { get; init; }
 
@@ -58,10 +65,69 @@ public sealed record RbgCycleStats
     public required IReadOnlyList<UtilizationBucket> Series { get; init; }
 }
 
+/// <summary>
+/// Auslegungsleistung eines RBG: wie viele Spiele es je Betriebsart in der Stunde schafft.
+/// Daraus ergibt sich die Zeit, die ein einzelnes Spiel das Gerät belegt — und damit ein
+/// belastbares Verhältnis zwischen Doppel- und Einzelspiel. Ein Einzelspiel ist gerade
+/// <em>nicht</em> ein halbes Doppelspiel: bei 30 Doppelspielen/h (120 s) und 48
+/// Einlagerungen/h (75 s) kostet es 62,5 % davon.
+/// </summary>
+public sealed record RbgCapacity
+{
+    /// <summary>Doppelspiele pro Stunde laut Auslegung (kombinierte Ein- und Auslagerung).</summary>
+    public required int DoubleCyclesPerHour { get; init; }
+
+    /// <summary>Reine Einlagerungen pro Stunde laut Auslegung.</summary>
+    public required int PutsPerHour { get; init; }
+
+    /// <summary>Reine Auslagerungen pro Stunde laut Auslegung.</summary>
+    public required int FetchesPerHour { get; init; }
+
+    public double DoubleSeconds => 3600.0 / Math.Max(1, DoubleCyclesPerHour);
+    public double PutSeconds => 3600.0 / Math.Max(1, PutsPerHour);
+    public double FetchSeconds => 3600.0 / Math.Max(1, FetchesPerHour);
+
+    /// <summary>
+    /// Zeitbedarf laut Auslegung für die gefahrenen Spiele. Ungepaarte Ein- und Auslagerungen
+    /// werden mit ihrer eigenen Spielzeit bewertet, nicht als halbes Doppelspiel.
+    /// </summary>
+    public double DemandSeconds(int puts, int fetches)
+    {
+        var doubles = Math.Min(puts, fetches);
+        return doubles * DoubleSeconds
+             + (puts - doubles) * PutSeconds
+             + (fetches - doubles) * FetchSeconds;
+    }
+
+    public static RbgCapacity From(KccConfig c) => new()
+    {
+        DoubleCyclesPerHour = c.RbgMaxCyclesPerHour,
+        PutsPerHour = c.RbgMaxPutsPerHour,
+        FetchesPerHour = c.RbgMaxFetchesPerHour,
+    };
+
+    /// <summary>Kapazität dieses Geräts: Werte am Ressourcenpunkt schlagen die Vorgabe.</summary>
+    public RbgCapacity For(ResourcePointConfig? point) => point is null ? this : new()
+    {
+        DoubleCyclesPerHour = point.MaxCyclesPerHour is > 0 ? point.MaxCyclesPerHour.Value : DoubleCyclesPerHour,
+        PutsPerHour = point.MaxPutsPerHour is > 0 ? point.MaxPutsPerHour.Value : PutsPerHour,
+        FetchesPerHour = point.MaxFetchesPerHour is > 0 ? point.MaxFetchesPerHour.Value : FetchesPerHour,
+    };
+}
+
 /// <summary>MessageCode-Sätze der RBG-Spielauswertung (aus <see cref="KccConfig"/>).</summary>
 public sealed record RbgOptions
 {
-    public required int MaxCyclesPerHour { get; init; }
+    /// <summary>Auslegungsleistung als Vorgabe; je Gerät über den Ressourcenpunkt überschreibbar.</summary>
+    public required RbgCapacity Capacity { get; init; }
+
+    /// <summary>
+    /// Telegrammtyp, der gezählt wird. Die Anlage schickt jedes Ereignis als Paar — <c>DM</c>
+    /// (Data Message, die Meldung selbst) und <c>AK</c> (Acknowledge der Gegenstelle) mit
+    /// identischem Inhalt. Ohne diese Einschränkung zählt jede Fahrt doppelt.
+    /// </summary>
+    public required string CountTelegramType { get; init; }
+
     public required IReadOnlyList<string> PutDoneCodes { get; init; }
     public required IReadOnlyList<string> FetchDoneCodes { get; init; }
     public required IReadOnlyList<string> PutOrderCodes { get; init; }
@@ -72,7 +138,8 @@ public sealed record RbgOptions
 
     public static RbgOptions From(KccConfig c) => new()
     {
-        MaxCyclesPerHour = c.RbgMaxCyclesPerHour,
+        Capacity = RbgCapacity.From(c),
+        CountTelegramType = c.CountTelegramType,
         PutDoneCodes = Or(c.RbgPutDoneCodes, RbgReport.DefaultPutDone),
         FetchDoneCodes = Or(c.RbgFetchDoneCodes, RbgReport.DefaultFetchDone),
         PutOrderCodes = Or(c.RbgPutOrderCodes, RbgReport.DefaultPutOrder),
@@ -120,6 +187,7 @@ public static class RbgReport
         var labelIdx = FieldIndex(format, "ResourceLabel");
         var srcIdx = FieldIndex(format, "Source");
         var dstIdx = FieldIndex(format, "Destination");
+        var seqIdx = FieldIndex(format, "SequenceNumber");
 
         var putDone = Set(options.PutDoneCodes);
         var fetchDone = Set(options.FetchDoneCodes);
@@ -135,6 +203,7 @@ public static class RbgReport
 
         var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
         var lastSeen = new Dictionary<(string, string, string, string, string), DateTime>();
+        var typeFilter = new TelegramTypeFilter(format, options.CountTelegramType);
 
         foreach (var t in window.OrderBy(t => t.DateTime))
         {
@@ -143,12 +212,19 @@ public static class RbgReport
                 continue;
 
             var f = format.Slice(t.Data);
+            if (!typeFilter.Accepts(f))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
+
             var code = Field(f, mcIdx);
             if (Classify(code) is not { } kind)
                 continue;
 
+            // Die SequenceNumber identifiziert das Ereignis: DM und AK teilen sie sich, zwei
+            // echte Fahrten haben verschiedene. Damit trennt der Schlüssel Wiederholungen von
+            // gleichartigen Folgeereignissen.
             var label = Field(f, labelIdx);
-            var key = (connection, code, label, Field(f, srcIdx), Field(f, dstIdx));
+            var key = (connection, Field(f, seqIdx) + "|" + code, label,
+                       Field(f, srcIdx), Field(f, dstIdx));
             if (lastSeen.TryGetValue(key, out var prev) && (t.DateTime - prev).TotalSeconds < DedupWindowSeconds)
                 continue;
             lastSeen[key] = t.DateTime;
@@ -225,7 +301,7 @@ public static class RbgReport
         IReadOnlyList<Telegram> window,
         TelegramFormat format,
         string connection,
-        int maxCyclesPerHour,
+        RbgCapacity capacity,
         DateTime from,
         DateTime to,
         RbgOptions options,
@@ -246,12 +322,14 @@ public static class RbgReport
         var full = Math.Min(puts, fetches);
         var half = Math.Abs(puts - fetches);
 
-        // Auf eine Stunde hochgerechnet — auch wenn das Messfenster kürzer ist.
-        var hours = Math.Max(1e-9, (to - mFrom).TotalHours);
-        var cyclesPerHour = (full + half / 2.0) / hours;
-        var percent = maxCyclesPerHour > 0
-            ? Math.Round(cyclesPerHour / maxCyclesPerHour * 100, 1)
-            : 0;
+        // Leistungsgrad über den Zeitbedarf laut Auslegung: ein Doppelspiel belegt das Gerät
+        // 3600/DS-pro-Stunde Sekunden, eine ungepaarte Ein-/Auslagerung ihre eigene Spielzeit.
+        // Auf eine Stunde hochgerechnet, auch wenn das Messfenster kürzer ist.
+        var metricSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
+        var demand = capacity.DemandSeconds(puts, fetches);
+        var load = demand / metricSeconds;
+        var cyclesPerHour = load * capacity.DoubleCyclesPerHour;
+        var percent = Math.Round(load * 100, 1);
 
         var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, mFrom, to);
         var fetchPairs = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, mFrom, to);
@@ -270,7 +348,9 @@ public static class RbgReport
             Fetches = fetches,
             DoubleCycles = full,
             SingleCycles = half,
-            MaxCyclesPerHour = maxCyclesPerHour,
+            MaxCyclesPerHour = capacity.DoubleCyclesPerHour,
+            MaxPutsPerHour = capacity.PutsPerHour,
+            MaxFetchesPerHour = capacity.FetchesPerHour,
             CyclesPerHour = Math.Round(cyclesPerHour, 1),
             Percent = percent,
             IdleSeconds = Math.Round(idle, 1),

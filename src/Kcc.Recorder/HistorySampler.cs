@@ -21,6 +21,7 @@ public sealed class HistorySampler
     readonly HashSet<string> _points;
     readonly List<string> _connections;
     readonly RbgOptions? _rbg;
+    readonly TelegramTypeFilter _typeFilter;
     readonly int _intervalMinutes;
     readonly int _retentionDays;
     readonly int _rbgRetentionDays;
@@ -54,6 +55,7 @@ public sealed class HistorySampler
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         _rbg = rbg;
+        _typeFilter = new TelegramTypeFilter(format, rbg?.CountTelegramType);
         _intervalMinutes = Math.Max(1, intervalMinutes);
         _retentionDays = retentionDays;
         _rbgRetentionDays = rbgRetentionDays;
@@ -214,6 +216,8 @@ public sealed class HistorySampler
                 continue;
 
             var fields = _format.Slice(telegram.Data);
+            if (!_typeFilter.Accepts(fields))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
             if (!Eq(Field(fields, messageCode), TelegramUtilization.MessageCode))
                 continue;
 

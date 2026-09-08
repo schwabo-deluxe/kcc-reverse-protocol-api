@@ -232,16 +232,20 @@ public sealed record UphHistoryReport
     public static IReadOnlyList<UphSampleRow> FromTelegrams(
         IReadOnlyList<Telegram> telegrams,
         TelegramFormat format,
-        IReadOnlyDictionary<string, string>? destinationLabels = null)
+        IReadOnlyDictionary<string, string>? destinationLabels = null,
+        string? countTelegramType = null)
     {
         var map = new DestinationMap(destinationLabels);
         var mcIdx = FieldIndex(format, "MessageCode");
         var rpIdx = FieldIndex(format, "ResourcePoint");
+        var typeFilter = new TelegramTypeFilter(format, countTelegramType);
 
         var rows = new List<UphSampleRow>(telegrams.Count);
         foreach (var t in telegrams)
         {
             var fields = format.Slice(t.Data);
+            if (!typeFilter.Accepts(fields))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
             if (!string.Equals(Field(fields, mcIdx), TelegramUtilization.MessageCode, StringComparison.OrdinalIgnoreCase))
                 continue;
             var rp = Field(fields, rpIdx);

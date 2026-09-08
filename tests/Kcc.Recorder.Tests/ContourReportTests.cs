@@ -20,7 +20,7 @@ public class ContourReportTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string resourcePoint, string messageCode, string status, string le = "")
+    static string Data(string resourcePoint, string messageCode, string status, string le = "", string type = "DM")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');

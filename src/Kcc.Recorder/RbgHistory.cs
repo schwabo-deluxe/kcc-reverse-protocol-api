@@ -24,7 +24,11 @@ public sealed class RbgSampleRow
     /// <summary>Einzelspiele = <c>|Puts − Fetches|</c>.</summary>
     public int SingleCycles => Math.Abs(Puts - Fetches);
 
-    /// <summary>Spiele in Doppelspiel-Äquivalent: <c>Doppel + Einzel/2</c>.</summary>
+    /// <summary>
+    /// Grobes Doppelspiel-Äquivalent ohne Auslegungsdaten (<c>Doppel + Einzel/2</c>). Die
+    /// Auswertung rechnet stattdessen über <see cref="RbgCapacity.DemandSeconds"/> — dort steckt
+    /// das echte Verhältnis von Einzel- zu Doppelspiel.
+    /// </summary>
     public double Cycles => DoubleCycles + SingleCycles / 2.0;
 }
 
@@ -129,14 +133,17 @@ public sealed record RbgHistoryReport
         DateTime to,
         int bucketMinutes,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
-        int defaultMaxCyclesPerHour = 60)
+        RbgCapacity? defaultCapacity = null)
     {
         var step = Math.Max(1, bucketMinutes);
         if (to <= from)
             to = from.AddMinutes(step);
 
-        // Verbindung → Anzeigename und Kapazität; mehrere Punkte auf derselben Verbindung: erster gewinnt.
-        var meta = new Dictionary<string, (string Label, int Max)>(StringComparer.OrdinalIgnoreCase);
+        var fallback = defaultCapacity
+            ?? new RbgCapacity { DoubleCyclesPerHour = 30, PutsPerHour = 48, FetchesPerHour = 48 };
+
+        // Verbindung → Anzeigename und Auslegung; mehrere Punkte auf derselben Verbindung: erster gewinnt.
+        var meta = new Dictionary<string, (string Label, RbgCapacity Cap)>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in resourcePoints ?? [])
         {
             var connection = (p.Connection ?? "").Trim();
@@ -145,7 +152,7 @@ public sealed record RbgHistoryReport
             var label = string.IsNullOrWhiteSpace(p.Label) ? p.Name : p.Label!;
             meta[connection] = (
                 string.IsNullOrWhiteSpace(label) ? connection : label.Trim(),
-                p.MaxCyclesPerHour is > 0 ? p.MaxCyclesPerHour.Value : defaultMaxCyclesPerHour);
+                fallback.For(p));
         }
 
         var used = rows
@@ -184,7 +191,13 @@ public sealed record RbgHistoryReport
             if (slot < 0 || slot >= count || !cycles.TryGetValue(r.Connection, out var line))
                 continue;
 
-            line[slot] += r.Cycles;
+            // Doppelspiel-Äquivalent über den Zeitbedarf laut Auslegung, damit /rbg und
+            // /auslastung dieselbe Leistung ausweisen. Ein Einzelspiel ist nicht pauschal ein
+            // halbes Doppelspiel — das Verhältnis kommt aus den Auslegungsdaten des Geräts.
+            var rowCap = meta.TryGetValue(r.Connection, out var rm) ? rm.Cap : fallback;
+            var equivalent = rowCap.DemandSeconds(r.Puts, r.Fetches) / rowCap.DoubleSeconds;
+
+            line[slot] += equivalent;
             busy[r.Connection][slot] += r.BusySeconds;
 
             var s = sums[r.Connection];
@@ -193,7 +206,7 @@ public sealed record RbgHistoryReport
             sums[r.Connection] = (
                 s.Puts + r.Puts, s.Fetches + r.Fetches,
                 s.Double + r.DoubleCycles, s.Single + r.SingleCycles,
-                s.Cycles + r.Cycles, s.Busy + r.BusySeconds,
+                s.Cycles + equivalent, s.Busy + r.BusySeconds,
                 s.Active, s.Latest is { } prev && prev >= r.Bucket ? prev : r.Bucket);
         }
 
@@ -202,14 +215,14 @@ public sealed record RbgHistoryReport
         {
             var slot = i;
             double PerHour(string c) => cycles[c][slot] / bucketHours;
-            int Max(string c) => meta.TryGetValue(c, out var m) ? m.Max : defaultMaxCyclesPerHour;
+            RbgCapacity Cap(string c) => meta.TryGetValue(c, out var m) ? m.Cap : fallback;
 
             buckets.Add(new RbgHistoryBucket
             {
                 At = from.AddMinutes(slot * step),
                 CyclesPerHour = connections.ToDictionary(c => c, c => Math.Round(PerHour(c), 1)),
                 LoadPercent = connections.ToDictionary(
-                    c => c, c => Max(c) > 0 ? Math.Round(PerHour(c) / Max(c) * 100, 1) : 0),
+                    c => c, c => Math.Round(PerHour(c) / Cap(c).DoubleCyclesPerHour * 100, 1)),
                 BusyPercent = connections.ToDictionary(
                     c => c, c => Math.Round(Math.Min(100, busy[c][slot] / bucketSeconds * 100), 1)),
                 IdleMinutes = connections.ToDictionary(
@@ -223,7 +236,8 @@ public sealed record RbgHistoryReport
         var totals = connections.Select(c =>
         {
             var s = sums[c];
-            var max = meta.TryGetValue(c, out var m) ? m.Max : defaultMaxCyclesPerHour;
+            var cap = meta.TryGetValue(c, out var m) ? m.Cap : fallback;
+            var max = cap.DoubleCyclesPerHour;
             var avgPerHour = s.Cycles / windowHours;
             return new RbgHistorySeries
             {

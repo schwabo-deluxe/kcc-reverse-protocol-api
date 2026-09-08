@@ -340,7 +340,7 @@ public class TelegramUtilizationTests
         Assert.NotNull(p.Rbg);
         Assert.Equal(30, p.Rbg!.DoubleCycles);
         Assert.Equal(0, p.Rbg.SingleCycles);
-        Assert.Equal(50, p.Rbg.Percent);          // (30 + 0) / (60 * 1 h) * 100
+        Assert.Equal(100, p.Rbg.Percent);         // 30 Doppelspiele à 120 s füllen die Stunde
         Assert.Equal(p.Rbg.Percent, p.Percent);   // Kachel-Kennzahl kommt aus der Spielauswertung
         Assert.NotEmpty(p.Rbg.Series);
     }
@@ -378,7 +378,7 @@ public class TelegramUtilizationTests
         Assert.NotNull(p.Rbg);
         Assert.Equal(4, p.Rbg!.DoubleCycles);          // nur die letzten 5 Minuten
         Assert.Equal(48, p.Rbg.CyclesPerHour);         // 4 Spiele in 5 min -> 48/h
-        Assert.Equal(80, p.Rbg.Percent);               // 48 von 60/h
+        Assert.Equal(160, p.Rbg.Percent);              // 48 von 30 DS/h laut Auslegung
 
         // Der Verlauf behält die volle Stunde — auch die alten Spiele stehen noch in der Kurve.
         Assert.Equal(Now, p.Rbg.Series[^1].At);

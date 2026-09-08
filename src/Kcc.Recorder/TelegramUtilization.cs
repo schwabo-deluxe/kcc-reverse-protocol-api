@@ -166,7 +166,8 @@ public sealed record TelegramUtilization
         IReadOnlyList<string>? groupOrder = null,
         int seriesStepMinutes = 1,
         RbgOptions? rbg = null,
-        ConveyorOptions? conveyor = null)
+        ConveyorOptions? conveyor = null,
+        string? countTelegramType = null)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
@@ -219,10 +220,13 @@ public sealed record TelegramUtilization
         var from = now.AddMinutes(-windowMinutes);
         var buckets = names.ToDictionary(n => n, _ => new int[fineCount], StringComparer.OrdinalIgnoreCase);
 
+        var typeFilter = new TelegramTypeFilter(format, countTelegramType);
         var orders = 0;
         foreach (var telegram in window)
         {
             var fields = format.Slice(telegram.Data);
+            if (!typeFilter.Accepts(fields))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
             if (!string.Equals(Field(fields, messageCode), MessageCode, StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -285,8 +289,7 @@ public sealed record TelegramUtilization
             // (Tacho + Linienchart); die TSPORD-Zähler dienen nur noch der Ziel-Identifikation.
             var rbgStats = rbg is not null && !string.IsNullOrWhiteSpace(d.Connection)
                 ? RbgReport.Compute(window, format, d.Connection!.Trim(),
-                    d.MaxCyclesPerHour is > 0 ? d.MaxCyclesPerHour.Value : rbg.MaxCyclesPerHour,
-                    from, now, rbg, bucketWidth, step, rateFrom)
+                    rbg.Capacity.For(d), from, now, rbg, bucketWidth, step, rateFrom)
                 : null;
 
             // Fördertechnikpunkt (keine RBG-Verbindung): Belegung aus Ankunft und Verlassen.

@@ -65,11 +65,15 @@ public sealed record ConveyorOptions
     public required IReadOnlyList<string> EndCodes { get; init; }
     public required IReadOnlyList<string> FreeCodes { get; init; }
 
+    /// <summary>Telegrammtyp, der gezählt wird — sonst zählt jedes DM/AK-Paar doppelt.</summary>
+    public required string CountTelegramType { get; init; }
+
     static IReadOnlyList<string> Or(List<string> configured, IReadOnlyList<string> fallback) =>
         configured is { Count: > 0 } ? configured : fallback;
 
     public static ConveyorOptions From(KccConfig c) => new()
     {
+        CountTelegramType = c.CountTelegramType,
         OrderCodes = Or(c.ConveyorOrderCodes, ConveyorReport.DefaultOrder),
         EndCodes = Or(c.ConveyorEndCodes, ConveyorReport.DefaultEnd),
         FreeCodes = Or(c.ConveyorFreeCodes, ConveyorReport.DefaultFree),
@@ -161,6 +165,7 @@ public static class ConveyorReport
         var mcIdx = FieldIndex(format, "MessageCode");
         var rpIdx = FieldIndex(format, "ResourcePoint");
         var labelIdx = FieldIndex(format, "ResourceLabel");
+        var seqIdx = FieldIndex(format, "SequenceNumber");
 
         var order = Set(options.OrderCodes);
         var end = Set(options.EndCodes);
@@ -174,10 +179,13 @@ public static class ConveyorReport
 
         var events = new List<Ev>();
         var lastSeen = new Dictionary<(string, string), DateTime>();
+        var typeFilter = new TelegramTypeFilter(format, options.CountTelegramType);
 
         foreach (var t in window.OrderBy(t => t.DateTime))
         {
             var f = format.Slice(t.Data);
+            if (!typeFilter.Accepts(f))    // DM/AK-Paar: nur eines der beiden zählen
+                continue;
             if (!string.Equals(Field(f, rpIdx), resourcePoint, StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -185,8 +193,10 @@ public static class ConveyorReport
             if (Classify(code) is not { } kind)
                 continue;
 
+            // Die SequenceNumber identifiziert das Ereignis: DM und AK teilen sie sich, zwei
+            // echte Vorgänge haben verschiedene.
             var label = Field(f, labelIdx);
-            var key = (code, label);
+            var key = (Field(f, seqIdx) + "|" + code, label);
             if (lastSeen.TryGetValue(key, out var prev) && (t.DateTime - prev).TotalSeconds < DedupWindowSeconds)
                 continue;
             lastSeen[key] = t.DateTime;

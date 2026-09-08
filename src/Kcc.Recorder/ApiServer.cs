@@ -150,7 +150,7 @@ public static class ApiServer
         return TelegramUtilization.Compute(
             w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
             config.DestinationLabels, config.GroupOrder, seriesStep, RbgOptions.From(config),
-            ConveyorOptions.From(config));
+            ConveyorOptions.From(config), config.CountTelegramType);
     }
 
     static UphHistoryReport UphHistory(
@@ -171,7 +171,8 @@ public static class ApiServer
         // Gleitender Kurzzeit-Verlauf: direkt aus den Rohtelegrammen (die 15-min-Rollup-Tabelle
         // ist dafür zu grob). Sonst wie bisher aus der Rollup-Tabelle in feste Eimer.
         var rows = rollingWindowMinutes > 0
-            ? UphHistoryReport.FromTelegrams(store.Read(start, end).ToList(), format, config.DestinationLabels)
+            ? UphHistoryReport.FromTelegrams(store.Read(start, end).ToList(), format,
+                config.DestinationLabels, config.CountTelegramType)
             : store.ReadUphSamples(start, end);
 
         return UphHistoryReport.Compute(
@@ -198,7 +199,7 @@ public static class ApiServer
 
         return RbgHistoryReport.Compute(
             store.ReadRbgSamples(start, end), start, end, bucketMinutes,
-            config.ResourcePoints, config.RbgMaxCyclesPerHour);
+            config.ResourcePoints, RbgCapacity.From(config));
     }
 
     static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)
@@ -206,7 +207,8 @@ public static class ApiServer
         using var store = new TelegramStore(config.Database);
         var w = ReadWindow(store, minutes);
         return ContourReport.Compute(
-            w.Rows, format, minutes, w.Start, w.End, config.ContourCheckpoints, config.ContourFlags);
+            w.Rows, format, minutes, w.Start, w.End, config.ContourCheckpoints, config.ContourFlags,
+            config.CountTelegramType);
     }
 
     static object Telegrams(KccConfig config, int minutes, int limit)

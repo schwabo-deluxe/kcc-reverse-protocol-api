@@ -21,7 +21,7 @@ public class ConveyorReportTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string mc, string rp, string label)
+    static string Data(string mc, string rp, string label, string type = "DM")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');
@@ -30,6 +30,7 @@ public class ConveyorReportTests
             var a = Off(field);
             for (var i = 0; i < v.Length && a + i < buf.Length; i++) buf[a + i] = v[i];
         }
+        Put("TelegramType", type);
         Put("MessageCode", mc);
         Put("ResourcePoint", rp);
         Put("ResourceLabel", label);

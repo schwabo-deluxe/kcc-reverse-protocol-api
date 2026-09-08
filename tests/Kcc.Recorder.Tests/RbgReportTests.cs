@@ -20,7 +20,7 @@ public class RbgReportTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string mc, string label, string source, string dest)
+    static string Data(string mc, string label, string source, string dest, string type = "DM")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');
@@ -29,6 +29,7 @@ public class RbgReportTests
             var a = Off(field);
             for (var i = 0; i < v.Length && a + i < buf.Length; i++) buf[a + i] = v[i];
         }
+        Put("TelegramType", type);
         Put("MessageCode", mc);
         Put("ResourceLabel", label);
         Put("Source", source);
@@ -37,6 +38,10 @@ public class RbgReportTests
     }
 
     static readonly RbgOptions Opts = RbgOptions.From(new KccConfig());
+
+    // Auslegung HRL RBG 1–5: 30 Doppelspiele/h (120 s), je 48 Ein-/Auslagerungen/h (75 s).
+    static readonly RbgCapacity Cap =
+        new() { DoubleCyclesPerHour = 30, PutsPerHour = 48, FetchesPerHour = 48 };
 
     sealed class Feed
     {
@@ -73,15 +78,16 @@ public class RbgReportTests
             feed.Add(s.t, s.mc, s.label);
         feed.Add(30, "ENDDEP", "X", conn: "RBG09");   // fremde Verbindung — muss ignoriert werden
 
-        var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", 60, T0, T0.AddSeconds(240), Opts);
+        var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", Cap, T0, T0.AddSeconds(240), Opts);
 
         Assert.Equal(4, r.Puts);        // ENDDEP L2,L4,L6,L8
         Assert.Equal(5, r.Fetches);     // ENDPUP L1,L3,L5,L7,L9
         Assert.Equal(4, r.DoubleCycles);
         Assert.Equal(1, r.SingleCycles);
-        Assert.Equal(67.5, r.CyclesPerHour); // (4 + 0.5) Spiele in 240 s
-        Assert.Equal(112.5, r.Percent);      // 67,5 von 60/h — Leistung kommt aus den Spielen,
-                                             // nicht aus den TSPORD des Ressourcenpunkts
+        // Zeitbedarf laut Auslegung: 4 Doppelspiele à 120 s + 1 Auslagerung à 75 s = 555 s
+        // in einem 240-s-Fenster.
+        Assert.Equal(231.2, r.Percent);        // 555 / 240
+        Assert.Equal(69.4, r.CyclesPerHour);   // 231,3 % von 30 Doppelspielen/h
         Assert.Equal(25, r.AvgPutSeconds);
         Assert.Equal(25, r.AvgFetchSeconds);
         Assert.Equal(15, r.IdleSeconds); // 240 - (4*25 + 5*25)
@@ -96,7 +102,7 @@ public class RbgReportTests
     [Fact]
     public void Ohne_Ereignisse_alles_null()
     {
-        var r = RbgReport.Compute([], Fmt, "RBG01", 60, T0, T0.AddHours(1), Opts);
+        var r = RbgReport.Compute([], Fmt, "RBG01", Cap, T0, T0.AddHours(1), Opts);
 
         Assert.Equal(0, r.Puts);
         Assert.Equal(0, r.Fetches);
@@ -106,6 +112,52 @@ public class RbgReportTests
         Assert.Null(r.LatestAt);
     }
 
+    /// <summary>
+    /// Echte Telegramme aus dem Anlagenexport vom 08.09.2026. Belegt das Verhalten am
+    /// Originalformat statt an nachgebauten Zeilen:
+    /// <list type="bullet">
+    ///   <item>Der <c>AK</c> einer RBG-Verbindung trägt denselben Inhalt wie das <c>DM</c>
+    ///         (MessageCode, LE, Quelle, Ziel) — nur Typ, Sender und Empfänger drehen sich.</item>
+    ///   <item><c>LM</c> (Lebensmeldung) hat gar keinen MessageCode.</item>
+    /// </list>
+    /// Beides darf die Fahrt nur <b>einmal</b> zählen.
+    /// </summary>
+    [Fact]
+    public void Echtes_DM_AK_Paar_zaehlt_als_eine_Fahrt()
+    {
+        const string dm = "DM73SR03MFC10100ENDDEP0150SR03LU11..843002046250........SR03LU11.." +
+                          "030291012.E01..........................................0000....END" +
+                          "..................................";
+        const string ak = "AK73MFC1SR030100ENDDEP0150SR03LU11..843002046250........SR03LU11.." +
+                          "030291012.E01..........................................0000....END" +
+                          "..................................";
+        const string lm = "LM40SR05MFC10100......0150............................................." +
+                          "..........................................END......................" +
+                          "............";
+
+        var at = T0.AddMinutes(5);
+        var rows = new List<Telegram>
+        {
+            new(1, at, TelegramDirection.FromPlc, "RBG03", dm, null),
+            new(2, at, TelegramDirection.ToPlc, "RBG03", ak, null),
+            new(3, at, TelegramDirection.FromPlc, "RBG03", lm, null),
+        };
+
+        var r = RbgReport.Compute(rows, Fmt, "RBG03", Cap, T0, T0.AddHours(1), Opts);
+
+        Assert.Equal(1, r.Puts);          // nicht 2 — der AK ist dieselbe Fahrt
+        Assert.Equal(0, r.Fetches);
+        Assert.Equal(0, r.DoubleCycles);
+        Assert.Equal(1, r.SingleCycles);
+
+        // Auch ohne Typfilter bleibt es eine Fahrt: DM und AK stimmen in MessageCode, LE,
+        // Quelle und Ziel überein, damit greift schon die Zusammenführung nach Inhalt.
+        // Der Typfilter ist die verlässlichere Absicherung, nicht die einzige.
+        var ohneFilter = RbgReport.Compute(
+            rows, Fmt, "RBG03", Cap, T0, T0.AddHours(1), Opts with { CountTelegramType = "" });
+        Assert.Equal(1, ohneFilter.Puts);
+    }
+
     [Fact]
     public void Nur_Auslagerungen_ergibt_lauter_Einzelspiele()
     {
@@ -113,7 +165,7 @@ public class RbgReportTests
         for (var i = 0; i < 6; i++)
             feed.Add(i * 30, "ENDPUP", $"L{i}");
 
-        var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", 60, T0, T0.AddSeconds(200), Opts);
+        var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", Cap, T0, T0.AddSeconds(200), Opts);
 
         Assert.Equal(0, r.Puts);
         Assert.Equal(6, r.Fetches);
