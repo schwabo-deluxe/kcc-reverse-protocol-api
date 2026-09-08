@@ -112,11 +112,14 @@ public static class UphHistoryDashboard
         let zoom = null;      // { from: 'YYYY-MM-DDTHH:MM:SS', to: '…' } — Zoombereich, sonst null
         let brush = null;     // { x0 } während des Aufziehens (viewBox-x)
 
+        // Anzeigeraster je Zeitraum. Feinstmöglich ist die Rasterweite der Aufzeichnung
+        // (UphHistoryIntervalMinutes, Standard 5 min); darüber wird zusammengefasst, damit
+        // lange Zeiträume nicht in tausenden Stützpunkten ersticken.
         function bucketFor(h) {
-          if (h <= 24) return 15;
-          if (h <= 72) return 30;
-          if (h <= 168) return 60;
-          if (h <= 336) return 120;
+          if (h <= 24) return 5;
+          if (h <= 72) return 15;
+          if (h <= 168) return 30;
+          if (h <= 336) return 60;
           return 240;
         }
 

@@ -243,8 +243,14 @@ public sealed class KccConfig
     /// </summary>
     public Dictionary<string, string> DestinationLabels { get; set; } = [];
 
-    /// <summary>Rasterweite der UPH-Historie in Minuten (Standard <c>15</c>) — wie fein <c>/verlauf</c> auflöst.</summary>
-    public int UphHistoryIntervalMinutes { get; set; } = 15;
+    /// <summary>
+    /// Rasterweite <b>beider</b> Langzeitreihen in Minuten (Standard <c>5</c>): der UPH-Historie
+    /// hinter <c>/verlauf</c> und der RBG-Aufzeichnung hinter <c>/rbg</c>. Bestimmt die feinste
+    /// Auflösung, die diese Ansichten je zeigen können — gröber verdichtete Zeilen lassen sich
+    /// nachträglich nicht mehr auftrennen. Nach einer Änderung <c>kcc uph-rebuild</c> laufen
+    /// lassen, sonst bleiben ältere Zeilen im alten Raster liegen.
+    /// </summary>
+    public int UphHistoryIntervalMinutes { get; set; } = 5;
 
     /// <summary>
     /// Aufbewahrung der UPH-Historie in Tagen (Standard <c>28</c> = 4 Wochen), getrennt von

@@ -545,8 +545,9 @@ public static class RbgHistoryDashboard
 
         $('zoomout').addEventListener('click', () => { zoom = null; load(); });
 
-        // Raster: fein genug zum Erkennen, grob genug für lange Zeiträume.
-        const bucketFor = h => h <= 6 ? 5 : h <= 24 ? 15 : h <= 72 ? 30 : h <= 168 ? 60 : h <= 672 ? 240 : 1440;
+        // Raster: fein genug zum Erkennen, grob genug für lange Zeiträume. Feinstmöglich ist
+        // die Rasterweite der Aufzeichnung (UphHistoryIntervalMinutes, Standard 5 min).
+        const bucketFor = h => h <= 24 ? 5 : h <= 72 ? 15 : h <= 168 ? 30 : h <= 672 ? 240 : 1440;
 
         async function load() {
           const q = new URLSearchParams();
