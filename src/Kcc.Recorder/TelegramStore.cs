@@ -60,19 +60,24 @@ public sealed class TelegramStore : IDisposable
             CREATE TABLE IF NOT EXISTS rbg_samples (
                 Bucket      TEXT    NOT NULL,
                 Connection  TEXT    NOT NULL,
-                Puts        INTEGER NOT NULL,
-                Gets        INTEGER NOT NULL,
+                Stores      INTEGER NOT NULL,
+                Retrievals  INTEGER NOT NULL,
                 BusySeconds REAL    NOT NULL,
                 PRIMARY KEY (Bucket, Connection)
             );
             """);
         Execute("CREATE INDEX IF NOT EXISTS ix_rbg_samples_bucket ON rbg_samples(Bucket);");
 
-        // Bestandsdatenbanken tragen die Spalte noch als 'Fetches' (Umbenennung Fetch → Get in
-        // der Auslagerungs-Terminologie). Umbenennen statt neu anlegen — die RBG-Langzeitreihe
-        // reicht weiter zurück als die Rohtelegramme und darf nicht verloren gehen.
+        // Bestandsdatenbanken tragen die Spalten noch unter früheren Namen. Umbenennen statt
+        // neu anlegen — die RBG-Langzeitreihe reicht weiter zurück als die Rohtelegramme.
+        // Achtung: die alten Zahlen wurden nach dem überholten Modell gezählt (ein Transport
+        // galt als Doppelspiel); nach dem Update gehört 'kcc uph-rebuild' gelaufen.
+        if (HasColumn("rbg_samples", "Puts"))
+            Execute("ALTER TABLE rbg_samples RENAME COLUMN Puts TO Stores;");
         if (HasColumn("rbg_samples", "Fetches"))
-            Execute("ALTER TABLE rbg_samples RENAME COLUMN Fetches TO Gets;");
+            Execute("ALTER TABLE rbg_samples RENAME COLUMN Fetches TO Retrievals;");
+        if (HasColumn("rbg_samples", "Gets"))
+            Execute("ALTER TABLE rbg_samples RENAME COLUMN Gets TO Retrievals;");
     }
 
     /// <summary>Ob die Tabelle diese Spalte hat — für Schema-Anpassungen an Bestandsdateien.</summary>
@@ -391,23 +396,23 @@ public sealed class TelegramStore : IDisposable
         {
             insert.Transaction = transaction;
             insert.CommandText = """
-                INSERT INTO rbg_samples (Bucket, Connection, Puts, Gets, BusySeconds)
-                VALUES ($bucket, $connection, $puts, $gets, $busy)
+                INSERT INTO rbg_samples (Bucket, Connection, Stores, Retrievals, BusySeconds)
+                VALUES ($bucket, $connection, $stores, $retrievals, $busy)
                 ON CONFLICT(Bucket, Connection) DO UPDATE SET
-                    Puts = excluded.Puts, Gets = excluded.Gets, BusySeconds = excluded.BusySeconds;
+                    Stores = excluded.Stores, Retrievals = excluded.Retrievals, BusySeconds = excluded.BusySeconds;
                 """;
             var bucket = insert.Parameters.Add("$bucket", SqliteType.Text);
             var connection = insert.Parameters.Add("$connection", SqliteType.Text);
-            var puts = insert.Parameters.Add("$puts", SqliteType.Integer);
-            var gets = insert.Parameters.Add("$gets", SqliteType.Integer);
+            var stores = insert.Parameters.Add("$stores", SqliteType.Integer);
+            var retrievals = insert.Parameters.Add("$retrievals", SqliteType.Integer);
             var busy = insert.Parameters.Add("$busy", SqliteType.Real);
 
             foreach (var row in rows)
             {
                 bucket.Value = Stamp(row.Bucket);
                 connection.Value = row.Connection;
-                puts.Value = row.Puts;
-                gets.Value = row.Gets;
+                stores.Value = row.Stores;
+                retrievals.Value = row.Retrievals;
                 busy.Value = row.BusySeconds;
                 insert.ExecuteNonQuery();
             }
@@ -430,7 +435,7 @@ public sealed class TelegramStore : IDisposable
     {
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            SELECT Bucket, Connection, Puts, Gets, BusySeconds FROM rbg_samples
+            SELECT Bucket, Connection, Stores, Retrievals, BusySeconds FROM rbg_samples
             WHERE Bucket >= $from AND Bucket < $to
             ORDER BY Bucket;
             """;
@@ -446,8 +451,8 @@ public sealed class TelegramStore : IDisposable
                 Bucket = DateTime.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind),
                 Connection = reader.GetString(1),
-                Puts = reader.GetInt32(2),
-                Gets = reader.GetInt32(3),
+                Stores = reader.GetInt32(2),
+                Retrievals = reader.GetInt32(3),
                 BusySeconds = reader.GetDouble(4),
             });
         }

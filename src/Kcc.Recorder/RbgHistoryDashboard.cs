@@ -376,7 +376,7 @@ public static class RbgHistoryDashboard
           $('rows').innerHTML = data.totals.map(t => `
             <tr>
               <td><span class="sw" style="background:${colorOf(t.connection)}"></span>${nameOf(t.connection)}</td>
-              <td>${t.puts}</td><td>${t.gets}</td>
+              <td>${t.stores}</td><td>${t.retrievals}</td>
               <td>${t.doubleCycles}</td><td>${t.singleCycles}</td>
               <td><b>${fmt(t.cycles)}</b></td>
               <td>${fmt(t.share)} %</td>

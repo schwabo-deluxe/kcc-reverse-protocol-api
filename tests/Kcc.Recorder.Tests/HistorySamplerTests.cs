@@ -132,9 +132,31 @@ public class HistorySamplerTests : IDisposable
 
     // ---- RBG-Langzeitaufzeichnung ---------------------------------------------------------------
 
-    /// <summary>Fahrauftrag eines RBG; die Verbindung trägt hier die Auswertung, nicht der Punkt.</summary>
-    static Telegram R(long id, DateTime at, string mc, string conn) =>
-        new(id, at, TelegramDirection.FromPlc, conn, Data("MA72", "WA01", mc), null);
+    /// <summary>
+    /// Ein RBG-Transport: aufnehmen und abgeben. Die Richtung steckt in Quelle und Ziel des
+    /// ENDDEP - ein Regalplatz (numerisch) bedeutet Einlagerung, eine Station Auslagerung.
+    /// </summary>
+    static string RbgData(string mc, string src, string dst) =>
+        "DM" + "01" + "MFC1" + "SR01" + "01" + "00" +
+        mc.PadRight(6, '.') + "0150" + "SR01LU11".PadRight(10, '.') + "LE1".PadRight(20, '.') +
+        src.PadRight(10, '.') + dst.PadRight(10, '.') + new string('.', 33);
+
+    /// <summary>Sammelt Transporte und vergibt dabei fortlaufende Ids.</summary>
+    sealed class RbgFeed
+    {
+        long _id = 1;
+        public readonly List<Telegram> Rows = [];
+
+        public void Transport(DateTime start, DateTime end, bool store, string conn)
+        {
+            var pickFrom = store ? "MA41" : "010361211";
+            var dropTo = store ? "010361211" : "MA62";
+            Rows.Add(new(_id++, start, TelegramDirection.FromPlc, conn,
+                RbgData("PUPORD", pickFrom, "SR01LU11"), null));
+            Rows.Add(new(_id++, end, TelegramDirection.FromPlc, conn,
+                RbgData("ENDDEP", "SR01LU11", dropTo), null));
+        }
+    }
 
     static HistorySampler RbgSampler(TelegramStore store, int rbgRetentionDays = 365) =>
         new(store, TelegramFormat.Default,
@@ -148,28 +170,27 @@ public class HistorySamplerTests : IDisposable
     {
         using var store = new TelegramStore(_path);
         var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        store.Insert(
-        [
-            R(1, day.AddHours(8).AddMinutes(2), "ENDDEP", "RBG01"),
-            R(2, day.AddHours(8).AddMinutes(12), "ENDPUP", "RBG01"),
-            R(3, day.AddHours(8).AddMinutes(22), "ENDDEP", "RBG01"),
-            R(4, day.AddHours(8).AddMinutes(32), "ENDPUP", "RBG02"),
-            R(5, day.AddHours(9).AddMinutes(5), "ENDDEP", "RBG01"),   // laufendes Raster
-        ]);
+        var feed = new RbgFeed();
+        feed.Transport(day.AddHours(8), day.AddHours(8).AddMinutes(2), true, "RBG01");
+        feed.Transport(day.AddHours(8).AddMinutes(10), day.AddHours(8).AddMinutes(12), false, "RBG01");
+        feed.Transport(day.AddHours(8).AddMinutes(20), day.AddHours(8).AddMinutes(22), true, "RBG01");
+        feed.Transport(day.AddHours(8).AddMinutes(30), day.AddHours(8).AddMinutes(32), false, "RBG02");
+        feed.Transport(day.AddHours(9), day.AddHours(9).AddMinutes(5), true, "RBG01");   // laufendes Raster
+        store.Insert(feed.Rows);
 
         RbgSampler(store).SampleRbgNow();
 
-        var rows = store.ReadRbgSamples(day, day.AddDays(1));
-        var one = rows.Single(r => r.Connection == "RBG01");
+        var samples = store.ReadRbgSamples(day, day.AddDays(1));
+        var one = samples.Single(r => r.Connection == "RBG01");
         Assert.Equal(day.AddHours(8), one.Bucket);
-        Assert.Equal(2, one.Puts);
-        Assert.Equal(1, one.Gets);
+        Assert.Equal(2, one.Stores);
+        Assert.Equal(1, one.Retrievals);
         Assert.Equal(1, one.DoubleCycles);
         Assert.Equal(1, one.SingleCycles);
 
-        var two = rows.Single(r => r.Connection == "RBG02");
-        Assert.Equal(0, two.Puts);
-        Assert.Equal(1, two.Gets);
+        var two = samples.Single(r => r.Connection == "RBG02");
+        Assert.Equal(0, two.Stores);
+        Assert.Equal(1, two.Retrievals);
     }
 
     [Fact]
@@ -181,15 +202,17 @@ public class HistorySamplerTests : IDisposable
         // Alte Aufzeichnung, deren Rohtelegramme längst geprunt sind.
         var old = day.AddDays(-120);
         store.ReplaceRbgSamplesFrom(old,
-            [new RbgSampleRow { Bucket = old, Connection = "RBG01", Puts = 7, Gets = 7 }]);
+            [new RbgSampleRow { Bucket = old, Connection = "RBG01", Stores = 7, Retrievals = 7 }]);
 
-        store.Insert([R(1, day.AddHours(8).AddMinutes(2), "ENDDEP", "RBG01"),
-                      R(2, day.AddHours(9).AddMinutes(2), "ENDPUP", "RBG01")]);
+        var fresh = new RbgFeed();
+        fresh.Transport(day.AddHours(8), day.AddHours(8).AddMinutes(2), true, "RBG01");
+        fresh.Transport(day.AddHours(9), day.AddHours(9).AddMinutes(2), false, "RBG01");
+        store.Insert(fresh.Rows);
 
         RbgSampler(store).Rebuild();
 
         var rows = store.ReadRbgSamples(old.AddDays(-1), day.AddDays(1));
-        Assert.Equal(7, rows.Single(r => r.Bucket == old).Puts);       // Langzeitreihe überlebt
+        Assert.Equal(7, rows.Single(r => r.Bucket == old).Stores);       // Langzeitreihe überlebt
         Assert.Contains(rows, r => r.Bucket == day.AddHours(8));       // neu verdichtet
     }
 

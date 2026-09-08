@@ -72,11 +72,11 @@ public sealed class ResourcePointConfig
     /// <summary>Doppelspiele pro Stunde dieses RBG. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
     public int? MaxCyclesPerHour { get; set; }
 
-    /// <summary>Reine Einlagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxPutsPerHour"/>.</summary>
-    public int? MaxPutsPerHour { get; set; }
+    /// <summary>Reine Einlagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxStoresPerHour"/>.</summary>
+    public int? MaxStoresPerHour { get; set; }
 
-    /// <summary>Reine Auslagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxGetsPerHour"/>.</summary>
-    public int? MaxGetsPerHour { get; set; }
+    /// <summary>Reine Auslagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxRetrievalsPerHour"/>.</summary>
+    public int? MaxRetrievalsPerHour { get; set; }
 
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
@@ -232,38 +232,46 @@ public sealed class KccConfig
     public string CountTelegramType { get; set; } = "DM";
 
     /// <summary>
-    /// Bezugsleistung eines RBG in Doppelspielen pro Stunde (Standard <c>60</c> = 60 s je
-    /// Doppelspiel). Das ist der <em>gemessene</em> Richtwert der Anlage, nicht die
-    /// Datenblattangabe: die Auslegung nennt für die HRL-RBG 1–5 zwar 30 Doppelspiele/h, die
-    /// Fahraufträge zeigen aber rund 60 s je Doppelspiel. Zusammen mit
+    /// Auslegungsleistung eines RBG in Doppelspielen pro Stunde (Standard <c>30</c> = 120 s je
+    /// Doppelspiel, HRL-RBG 1–5). Ein Doppelspiel besteht aus zwei Transporten; die gemessenen
+    /// Fahrzeiten (2 × ~58 s) bestätigen den Wert. Zusammen mit
     /// <see cref="RbgMaxPutsPerHour"/> und <see cref="RbgMaxGetsPerHour"/> ergibt sich die
     /// Spielzeit je Betriebsart und damit der Leistungsgrad. Je Gerät über
     /// <c>ResourcePoints[].MaxCyclesPerHour</c> überschreibbar.
     /// </summary>
-    public int RbgMaxCyclesPerHour { get; set; } = 60;
+    public int RbgMaxCyclesPerHour { get; set; } = 30;
 
     /// <summary>
-    /// Bezugsleistung in reinen Einlagerungen pro Stunde (Standard <c>96</c> = 37,5 s je
-    /// Einlagerung). Das Verhältnis zum Doppelspiel stammt aus dem Datenblatt (30 DS/h zu
-    /// 48 E/h ⇒ ein Einzelspiel kostet 62,5 % eines Doppelspiels) und ist Gerätekinematik —
-    /// nur das Niveau ist auf die gemessenen Zeiten skaliert.
+    /// Auslegungsleistung in reinen Einlagerungen pro Stunde (Standard <c>48</c> = 75 s je
+    /// Einzelspiel). Ein Einzelspiel kostet damit 62,5 % eines Doppelspiels, nicht 50 %.
     /// </summary>
-    public int RbgMaxPutsPerHour { get; set; } = 96;
+    public int RbgMaxStoresPerHour { get; set; } = 48;
 
-    /// <summary>Bezugsleistung in reinen Auslagerungen pro Stunde (Standard <c>96</c>).</summary>
-    public int RbgMaxGetsPerHour { get; set; } = 96;
+    /// <summary>Auslegungsleistung in reinen Auslagerungen pro Stunde (Standard <c>48</c>).</summary>
+    public int RbgMaxRetrievalsPerHour { get; set; } = 48;
 
-    /// <summary>MessageCodes einer abgeschlossenen Einlagerung (Bringen). Leer ⇒ <c>["ENDDEP"]</c>.</summary>
-    public List<string> RbgPutDoneCodes { get; set; } = [];
+    /// <summary>
+    /// Muster eines Regalplatzes in <c>Source</c>/<c>Destination</c> (Standard <c>^[0-9]+$</c>).
+    /// Daran hängt die Richtung eines Transports: endet er auf einem Regalplatz, ist es eine
+    /// Einlagerung, sonst eine Auslagerung. Regalplätze sind rein numerisch
+    /// (<c>010361211</c>), Übergabestationen tragen Buchstaben (<c>MA41</c>).
+    /// </summary>
+    public string RbgRackLocationPattern { get; set; } = "";
 
-    /// <summary>MessageCodes einer abgeschlossenen Auslagerung (Holen). Leer ⇒ <c>["ENDPUP"]</c>.</summary>
-    public List<string> RbgGetDoneCodes { get; set; } = [];
+    /// <summary>Auftrag zum Aufnehmen auf das RBG. Leer ⇒ <c>["PUPORD"]</c>.</summary>
+    public List<string> RbgPickOrderCodes { get; set; } = [];
 
-    /// <summary>MessageCodes der Auftragserteilung Einlagerung. Leer ⇒ <c>["DEPORD"]</c>.</summary>
-    public List<string> RbgStoreOrderCodes { get; set; } = [];
+    /// <summary>Aufnehmen abgeschlossen. Leer ⇒ <c>["ENDPUP"]</c>.</summary>
+    public List<string> RbgPickDoneCodes { get; set; } = [];
 
-    /// <summary>MessageCodes der Auftragserteilung Auslagerung. Leer ⇒ <c>["PUPORD"]</c>.</summary>
-    public List<string> RbgRetrieveOrderCodes { get; set; } = [];
+    /// <summary>Auftrag zum Abgeben vom RBG. Leer ⇒ <c>["DEPORD"]</c>.</summary>
+    public List<string> RbgDropOrderCodes { get; set; } = [];
+
+    /// <summary>
+    /// Abgeben abgeschlossen. Leer ⇒ <c>["ENDDEP"]</c>. Diese Meldung beendet einen Transport;
+    /// ihr Ziel entscheidet über Ein- oder Auslagerung.
+    /// </summary>
+    public List<string> RbgDropDoneCodes { get; set; } = [];
 
     /// <summary>MessageCodes eines erteilten Transportauftrags. Leer ⇒ <c>["TSPORD"]</c>.</summary>
     public List<string> ConveyorOrderCodes { get; set; } = [];

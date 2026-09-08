@@ -21,7 +21,7 @@ public class RbgHistoryTests
         throw new ArgumentException(name);
     }
 
-    static string Data(string mc, string label, string type = "DM")
+    static string Data(string mc, string label, string src, string dst, string type = "DM")
     {
         var buf = new char[Fmt.Length];
         Array.Fill(buf, '.');
@@ -33,22 +33,36 @@ public class RbgHistoryTests
         Put("TelegramType", type);
         Put("MessageCode", mc);
         Put("ResourceLabel", label);
-        Put("Source", "SRC");
-        Put("Destination", "DST");
+        Put("Source", src);
+        Put("Destination", dst);
         return new string(buf);
     }
+
+    const string Rack = "010361211";
+    const string Infeed = "MA41";
+    const string Outfeed = "MA62";
+    const string Crane = "SR01LU11";
 
     sealed class Feed
     {
         long _id = 1;
         public readonly List<Telegram> Rows = [];
 
-        /// <summary>Ereignis als DM/AK-Doppel wie von der Anlage — prüft nebenbei die Dedup.</summary>
-        public void Add(double minutes, string mc, string label, string conn)
+        public void Add(double minutes, string mc, string label, string src, string dst, string conn)
         {
             var t = T0.AddMinutes(minutes);
-            Rows.Add(new(_id++, t, TelegramDirection.FromPlc, conn, Data(mc, label), null));
-            Rows.Add(new(_id++, t.AddSeconds(0.1), TelegramDirection.FromPlc, conn, Data(mc, label), null));
+            Rows.Add(new(_id++, t, TelegramDirection.FromPlc, conn, Data(mc, label, src, dst), null));
+            Rows.Add(new(_id++, t.AddSeconds(0.1), TelegramDirection.FromPlc, conn,
+                Data(mc, label, src, dst, "AK"), null));
+        }
+
+        /// <summary>Ein Transport: aufnehmen, dann abgeben. Ziel des ENDDEP bestimmt die Richtung.</summary>
+        public void Transport(double startMin, double endMin, string label, bool store, string conn)
+        {
+            var pickFrom = store ? Infeed : Rack;
+            var dropTo = store ? Rack : Outfeed;
+            Add(startMin, "PUPORD", label, pickFrom, Crane, conn);
+            Add(endMin, "ENDDEP", label, Crane, dropTo, conn);
         }
     }
 
@@ -62,17 +76,16 @@ public class RbgHistoryTests
     public void Aggregate_verdichtet_je_Raster_und_Verbindung()
     {
         var feed = new Feed();
-        // RBG01: im ersten 15-min-Raster 2 Ein + 2 Aus, im zweiten 1 Aus.
-        feed.Add(1, "ENDDEP", "A1", "RBG01");
-        feed.Add(2, "ENDPUP", "A2", "RBG01");
-        feed.Add(3, "ENDDEP", "A3", "RBG01");
-        feed.Add(4, "ENDPUP", "A4", "RBG01");
-        feed.Add(20, "ENDPUP", "A5", "RBG01");
-        // RBG02: nur eine Einlagerung, mit Auftrag 60 s davor.
-        feed.Add(4, "DEPORD", "B1", "RBG02");
-        feed.Add(5, "ENDDEP", "B1", "RBG02");
-        // Fremde Verbindung bleibt draußen.
-        feed.Add(6, "ENDDEP", "C1", "RBG99");
+        // RBG01: im ersten 15-min-Raster 2 Ein- und 2 Auslagerungen, im zweiten 1 Auslagerung.
+        feed.Transport(0, 1, "A1", store: true, conn: "RBG01");
+        feed.Transport(1, 2, "A2", store: false, conn: "RBG01");
+        feed.Transport(2, 3, "A3", store: true, conn: "RBG01");
+        feed.Transport(3, 4, "A4", store: false, conn: "RBG01");
+        feed.Transport(19, 20, "A5", store: false, conn: "RBG01");
+        // RBG02: eine Einlagerung, Auftrag 1 min vor dem Abschluss.
+        feed.Transport(4, 5, "B1", store: true, conn: "RBG02");
+        // Fremde Verbindung bleibt draussen.
+        feed.Transport(5, 6, "C1", store: true, conn: "RBG99");
 
         var rows = RbgReport.Aggregate(
             feed.Rows, Fmt, ["RBG01", "RBG02"], T0, T0.AddMinutes(30),
@@ -81,20 +94,18 @@ public class RbgHistoryTests
         Assert.DoesNotContain(rows, r => r.Connection == "RBG99");
 
         var first = rows.Single(r => r.Connection == "RBG01" && r.Bucket == T0);
-        Assert.Equal(2, first.Puts);
-        Assert.Equal(2, first.Gets);
+        Assert.Equal(2, first.Stores);
+        Assert.Equal(2, first.Retrievals);
         Assert.Equal(2, first.DoubleCycles);
         Assert.Equal(0, first.SingleCycles);
-        Assert.Equal(2, first.Cycles);
 
         var second = rows.Single(r => r.Connection == "RBG01" && r.Bucket == T0.AddMinutes(15));
-        Assert.Equal(0, second.Puts);
-        Assert.Equal(1, second.Gets);
-        Assert.Equal(0.5, second.Cycles);   // Einzelspiel zählt halb
+        Assert.Equal(0, second.Stores);
+        Assert.Equal(1, second.Retrievals);
 
         var other = rows.Single(r => r.Connection == "RBG02");
-        Assert.Equal(1, other.Puts);
-        Assert.Equal(60, other.BusySeconds, 1);   // DEPORD → ENDDEP
+        Assert.Equal(1, other.Stores);
+        Assert.Equal(60, other.BusySeconds, 1);   // PUPORD -> ENDDEP
     }
 
     [Fact]
@@ -103,10 +114,10 @@ public class RbgHistoryTests
         // RBG01 fährt doppelt so viel wie RBG02.
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Gets = 10, BusySeconds = 1800 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 10, Gets = 10 },
-            new() { Bucket = T0, Connection = "RBG02", Puts = 5, Gets = 5, BusySeconds = 900 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG02", Puts = 5, Gets = 5 },
+            new() { Bucket = T0, Connection = "RBG01", Stores = 10, Retrievals = 10, BusySeconds = 1800 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Stores = 10, Retrievals = 10 },
+            new() { Bucket = T0, Connection = "RBG02", Stores = 5, Retrievals = 5, BusySeconds = 900 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG02", Stores = 5, Retrievals = 5 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(2), 60, Points());
@@ -135,9 +146,9 @@ public class RbgHistoryTests
         Assert.Equal(5, r.Buckets[0].CyclesPerHour["RBG02"]);
         Assert.Equal(50, r.Buckets[0].BusyPercent["RBG01"]);
 
-        // Leistung = Spiele/h gegen die Bezugsleistung (Standard 60 DS/h), Leerlauf = Rest.
-        Assert.Equal(16.7, r.Buckets[0].LoadPercent["RBG01"]);   // 10 von 60
-        Assert.Equal(8.3, r.Buckets[0].LoadPercent["RBG02"]);    // 5 von 60
+        // Leistung = Spiele/h gegen die Auslegung (30 DS/h), Leerlauf = Rest des Rasters.
+        Assert.Equal(33.3, r.Buckets[0].LoadPercent["RBG01"]);   // 10 von 30
+        Assert.Equal(16.7, r.Buckets[0].LoadPercent["RBG02"]);   // 5 von 30
         Assert.Equal(30, r.Buckets[0].IdleMinutes["RBG01"]);     // 60 min − 1800 s
         Assert.Equal(60, r.Buckets[1].IdleMinutes["RBG01"]);     // zweite Stunde ohne Auftragszeit
         Assert.Equal(1.5, a.IdleHours);                          // 2 h − 1800 s
@@ -150,8 +161,8 @@ public class RbgHistoryTests
         // auch wenn die Anzeige beide Stunden zu einem Balken zusammenfasst.
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Gets = 0 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 0, Gets = 10 },
+            new() { Bucket = T0, Connection = "RBG01", Stores = 10, Retrievals = 0 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Stores = 0, Retrievals = 10 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(2), 120, Points());
@@ -170,7 +181,7 @@ public class RbgHistoryTests
     {
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 4, Gets = 4 },
+            new() { Bucket = T0, Connection = "RBG01", Stores = 4, Retrievals = 4 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(1), 60, Points());

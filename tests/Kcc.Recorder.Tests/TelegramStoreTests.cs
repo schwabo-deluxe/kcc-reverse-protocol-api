@@ -162,12 +162,12 @@ public class TelegramStoreTests : IDisposable
     }
 
     /// <summary>
-    /// Bestandsdatenbanken tragen die RBG-Spalte noch als <c>Fetches</c>. Beim Öffnen wird sie
-    /// umbenannt statt neu angelegt — die Langzeitreihe reicht weiter zurück als die
-    /// Rohtelegramme und darf dabei nicht verloren gehen.
+    /// Bestandsdatenbanken tragen die RBG-Spalten noch als <c>Puts</c>/<c>Fetches</c>. Beim
+    /// Öffnen werden sie umbenannt statt neu angelegt — die Langzeitreihe reicht weiter zurück
+    /// als die Rohtelegramme und darf dabei nicht verloren gehen.
     /// </summary>
     [Fact]
-    public void Benennt_die_alte_Fetches_Spalte_um_und_behaelt_die_Werte()
+    public void Benennt_alte_RBG_Spalten_um_und_behaelt_die_Werte()
     {
         var t0 = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Unspecified);
 
@@ -197,8 +197,8 @@ public class TelegramStoreTests : IDisposable
 
         var row = Assert.Single(store.ReadRbgSamples(t0, t0.AddHours(1)));
         Assert.Equal("RBG01", row.Connection);
-        Assert.Equal(7, row.Puts);
-        Assert.Equal(5, row.Gets);        // aus der alten Spalte übernommen
+        Assert.Equal(7, row.Stores);
+        Assert.Equal(5, row.Retrievals);   // aus der alten Spalte übernommen
         Assert.Equal(120, row.BusySeconds);
     }
 

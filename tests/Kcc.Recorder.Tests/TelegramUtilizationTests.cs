@@ -314,19 +314,22 @@ public class TelegramUtilizationTests
     public void RBG_Kachel_nimmt_Prozent_und_Verlauf_aus_der_Spielauswertung()
     {
         // ResourceLabel(20) beginnt bei Offset 26+10 = 36; hier bauen wir ein RBG-Telegramm.
-        static string RbgData(string mc) =>
-            ("DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150").PadRight(166, '.');
-        Telegram Rb(long id, int minAgo, string mc) =>
-            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01", RbgData(mc), null);
+        static string RbgData(string mc, string src, string dst) =>
+            "DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150" + "SR01LU11".PadRight(10, '.') +
+            "LE1".PadRight(20, '.') + src.PadRight(10, '.') + dst.PadRight(10, '.') + new string('.', 33);
+        Telegram Rb(long id, int minAgo, string mc, string src, string dst) =>
+            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01",
+                RbgData(mc, src, dst), null);
 
         // 30 abgeschlossene Ein- und 30 Auslagerungen in der letzten Stunde -> 30 Doppelspiele
         // bei Kapazität 60/h -> 50 %.
         var window = new System.Collections.Generic.List<Telegram>();
         long id = 1;
+        // 30 Einlagerungen und 30 Auslagerungen = 60 Transporte = 30 Doppelspiele.
         for (var i = 0; i < 30; i++)
         {
-            window.Add(Rb(id++, 58 - i, "ENDDEP"));
-            window.Add(Rb(id++, 58 - i, "ENDPUP"));
+            window.Add(Rb(id++, 58 - i, "ENDDEP", "SR01LU11", "010361211"));   // ins Regal
+            window.Add(Rb(id++, 58 - i, "ENDDEP", "SR01LU11", "MA62"));        // an die Station
         }
 
         // rateMinutes = Fensterbreite: der Tacho zählt dann die ganze Stunde.
@@ -340,7 +343,7 @@ public class TelegramUtilizationTests
         Assert.NotNull(p.Rbg);
         Assert.Equal(30, p.Rbg!.DoubleCycles);
         Assert.Equal(0, p.Rbg.SingleCycles);
-        Assert.Equal(50, p.Rbg.Percent);          // 30 Doppelspiele à 60 s = 1800 s von 3600 s
+        Assert.Equal(100, p.Rbg.Percent);         // 30 Doppelspiele à 120 s füllen die Stunde
         Assert.Equal(p.Rbg.Percent, p.Percent);   // Kachel-Kennzahl kommt aus der Spielauswertung
         Assert.NotEmpty(p.Rbg.Series);
     }
@@ -348,24 +351,26 @@ public class TelegramUtilizationTests
     [Fact]
     public void Tacho_misst_das_kurze_Fenster_und_rechnet_auf_eine_Stunde_hoch()
     {
-        static string RbgData(string mc) =>
-            ("DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150").PadRight(166, '.');
-        Telegram Rb(long id, int minAgo, string mc) =>
-            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01", RbgData(mc), null);
+        static string RbgData(string mc, string src, string dst) =>
+            "DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150" + "SR01LU11".PadRight(10, '.') +
+            "LE1".PadRight(20, '.') + src.PadRight(10, '.') + dst.PadRight(10, '.') + new string('.', 33);
+        Telegram Rb(long id, int minAgo, string mc, string src, string dst) =>
+            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01",
+                RbgData(mc, src, dst), null);
 
         var window = new System.Collections.Generic.List<Telegram>();
         long id = 1;
         // Alt: 20 Spiele früher in der Stunde — dürfen den Tacho nicht mehr beeinflussen.
         for (var i = 0; i < 20; i++)
         {
-            window.Add(Rb(id++, 50 - i, "ENDDEP"));
-            window.Add(Rb(id++, 50 - i, "ENDPUP"));
+            window.Add(Rb(id++, 50 - i, "ENDDEP", "SR01LU11", "010361211"));
+            window.Add(Rb(id++, 50 - i, "ENDDEP", "SR01LU11", "MA62"));
         }
-        // Aktuell: 4 Doppelspiele in den letzten 5 Minuten.
+        // Aktuell: 4 Doppelspiele (8 Transporte) in den letzten 5 Minuten.
         for (var i = 1; i <= 4; i++)
         {
-            window.Add(Rb(id++, i, "ENDDEP"));
-            window.Add(Rb(id++, i, "ENDPUP"));
+            window.Add(Rb(id++, i, "ENDDEP", "SR01LU11", "010361211"));
+            window.Add(Rb(id++, i, "ENDDEP", "SR01LU11", "MA62"));
         }
 
         var u = TelegramUtilization.Compute(
@@ -377,8 +382,8 @@ public class TelegramUtilizationTests
         var p = Point(u, "MA72");
         Assert.NotNull(p.Rbg);
         Assert.Equal(4, p.Rbg!.DoubleCycles);          // nur die letzten 5 Minuten
-        Assert.Equal(48, p.Rbg.CyclesPerHour);         // 4 Spiele in 5 min -> 48/h
-        Assert.Equal(80, p.Rbg.Percent);               // 48 von 60 DS/h
+        Assert.Equal(48, p.Rbg.CyclesPerHour);         // 4 Doppelspiele in 5 min -> 48/h
+        Assert.Equal(160, p.Rbg.Percent);              // 48 von 30 DS/h laut Auslegung
 
         // Der Verlauf behält die volle Stunde — auch die alten Spiele stehen noch in der Kurve.
         Assert.Equal(Now, p.Rbg.Series[^1].At);

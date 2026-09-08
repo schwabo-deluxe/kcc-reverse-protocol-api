@@ -14,37 +14,39 @@ public static class RbgGlossary
     static readonly (string Key, string Text)[] Entries =
     [
         ("busy",
-            "Auslastung — die Zeitseite: Anteil des Zeitraums, in dem Aufträge anlagen " +
-            "(Summe der Auftragsdauern ÷ Zeitraum). Achtung: bei einem Doppelspiel laufen Ein- " +
-            "und Auslagerauftrag gleichzeitig, beide Dauern werden addiert. Der Wert ist deshalb " +
-            "eine Obergrenze und bei 100 % gedeckelt — er sagt „es lagen durchgehend Aufträge an“, " +
-            "nicht „das Gerät war zu X % in Fahrt“. Gemessen über das Tacho-Fenster aus der " +
-            "Kopfzeile."),
+            "Auslastung — die Zeitseite: Anteil des Zeitraums, in dem das Gerät Transporte " +
+            "gefahren hat (Summe der Transportdauern ÷ Zeitraum). Die Transporte eines RBG laufen " +
+            "nacheinander, der Wert ist damit ein echtes Zeitmaß. Gemessen vom Auftrag zum " +
+            "Aufnehmen bis zum abgeschlossenen Abgeben, über das Tacho-Fenster aus der Kopfzeile."),
         ("load",
             "Leistung — die Mengenseite: geschaffte Spiele gegen die Kapazität des Geräts. " +
-            "Gerechnet als (Doppelspiele + Einzelspiele/2) ÷ (Kapazität × Stunden). Das ist die " +
-            "belastbare Durchsatzzahl. Hohe Auslastung bei niedriger Leistung heißt: es fehlt " +
+            "Gerechnet über den Zeitbedarf laut Auslegung: jedes Doppelspiel kostet 3600/DS-pro-" +
+            "Stunde Sekunden, jedes Einzelspiel seine eigene Spielzeit. Das ist die belastbare " +
+            "Durchsatzzahl. Hohe Auslastung bei niedriger Leistung heißt: es fehlt " +
             "nicht an Aufträgen, die einzelne Fahrt dauert zu lang. Gemessen über das " +
             "Tacho-Fenster aus der Kopfzeile und auf eine Stunde hochgerechnet — die " +
             "Verlaufskurve daneben nutzt ein eigenes, meist größeres Glättungsfenster."),
         ("double",
             "Doppelspiel (kombiniertes Spiel, FEM 9.851): Ein- und Auslagerung in einer Fahrt — " +
-            "die wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Gezählt als " +
-            "min(Einlagerungen, Auslagerungen) im Raster."),
+            "die wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Es besteht aus " +
+            "ZWEI Transporten und wird als min(Einlagerungen, Auslagerungen) gezählt."),
         ("single",
             "Einzelspiel (FEM 9.851): reine Ein- oder Auslagerung, die Gegenrichtung bleibt leer. " +
-            "Gezählt als |Einlagerungen − Auslagerungen|. Zählt bei der Leistung nur halb, weil " +
-            "es den Fahrweg eines Doppelspiels für die halbe Menge braucht."),
+            "Gezählt als |Einlagerungen − Auslagerungen|. Es kostet laut Auslegung 75 s gegen " +
+            "120 s beim Doppelspiel, zählt bei der Leistung also mit 62,5 % — nicht mit der Hälfte."),
         ("idle",
             "Leerlauf: Zeit ohne offenen Auftrag = Zeitraum − belegte Auftragszeit. Viel Leerlauf " +
             "heißt, dem Gerät fehlt Arbeit (Versorgung oder Vorgelagertes bremst). Wenig Leerlauf " +
             "bei niedriger Leistung heißt umgekehrt: die Spielzeit selbst ist der Engpass."),
         ("inout",
-            "Abgeschlossene Fahrten im Zeitraum: Einlagerungen (ENDDEP) / Auslagerungen (ENDPUP). " +
-            "Die Anlage meldet jedes Ereignis doppelt (DM/AK) — das ist herausgerechnet."),
+            "Abgeschlossene Transporte im Zeitraum: Einlagerungen / Auslagerungen. Jeder " +
+            "Transport besteht aus Aufnehmen (PUPORD→ENDPUP) und Abgeben (DEPORD→ENDDEP); die " +
+            "Richtung steht im Ziel des ENDDEP — ein Regalplatz (rein numerisch) bedeutet " +
+            "Einlagerung, eine Station Auslagerung."),
         ("avgdur",
-            "Mittlere Zeit von der Auftragserteilung bis zum Abschluss, gepaart über die " +
-            "LE-Nummer: DEPORD→ENDDEP für Einlagerungen, PUPORD→ENDPUP für Auslagerungen."),
+            "Mittlere Dauer eines Transports, gepaart über die LE-Nummer: vom Auftrag zum " +
+            "Aufnehmen (PUPORD) bis zum abgeschlossenen Abgeben (ENDDEP). Zwei solche " +
+            "Transporte ergeben ein Doppelspiel."),
         ("cycles",
             "Spiele in Doppelspiel-Äquivalent: Doppelspiele + Einzelspiele/2. Im " +
             "Aufzeichnungsraster bestimmt und erst dann summiert — die Zahl hängt damit nicht " +
@@ -66,8 +68,7 @@ public static class RbgGlossary
             "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem der " +
             "Platz besetzt war. Belegt ist er von der Ankunft der Ladeeinheit (ENDTSP) bis zu " +
             "ihrem Verlassen (RPFREE); der Weitertransport-Auftrag (TSPORD) wird dazwischen " +
-            "erteilt. Ein echtes Zeitmaß ohne die Doppelzählung, die beim RBG-Doppelspiel " +
-            "entsteht."),
+            "erteilt."),
         ("coccupied",
             "Ø Verweildauer einer Ladeeinheit auf dem Punkt: von der Ankunft (ENDTSP) bis zum " +
             "Verlassen (RPFREE) — Warten auf den Auftrag und Abtransport zusammen."),

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Kcc.Recorder;
 
 /// <summary>Spielauswertung einer RBG-Verbindung über das Auslastungsfenster.</summary>
@@ -5,73 +7,77 @@ public sealed record RbgCycleStats
 {
     public required string Connection { get; init; }
 
-    /// <summary>Abgeschlossene Einlagerungen (Bringen) im Fenster.</summary>
-    public required int Puts { get; init; }
+    /// <summary>Abgeschlossene Einlagerungen im Fenster — Transporte, die im Regal enden.</summary>
+    public required int Stores { get; init; }
 
-    /// <summary>Abgeschlossene Auslagerungen (Holen) im Fenster.</summary>
-    public required int Gets { get; init; }
+    /// <summary>Abgeschlossene Auslagerungen im Fenster — Transporte, die aus dem Regal kommen.</summary>
+    public required int Retrievals { get; init; }
 
-    /// <summary>Doppelspiele = <c>min(Puts, Gets)</c> — gepaarte Ein- und Auslagerung.</summary>
+    /// <summary>Abgeschlossene Transporte gesamt = <see cref="Stores"/> + <see cref="Retrievals"/>.</summary>
+    public required int Transports { get; init; }
+
+    /// <summary>
+    /// Doppelspiele = <c>min(Stores, Retrievals)</c>: eine Ein- und eine Auslagerung, die sich zu
+    /// einer kombinierten Fahrt paaren lassen. Ein Doppelspiel besteht aus <b>zwei</b> Transporten.
+    /// </summary>
     public required int DoubleCycles { get; init; }
 
-    /// <summary>Einzelspiele = <c>|Puts − Gets|</c> — ungepaarte Einzelfahrten.</summary>
+    /// <summary>Einzelspiele = <c>|Stores − Retrievals|</c> — Transporte ohne Gegenstück.</summary>
     public required int SingleCycles { get; init; }
 
     /// <summary>Doppelspiele pro Stunde laut Auslegung — die Bezugsgröße des Leistungsgrads.</summary>
     public required int MaxCyclesPerHour { get; init; }
 
     /// <summary>Reine Ein- bzw. Auslagerungen pro Stunde laut Auslegung.</summary>
-    public required int MaxPutsPerHour { get; init; }
-    public required int MaxGetsPerHour { get; init; }
+    public required int MaxStoresPerHour { get; init; }
+    public required int MaxRetrievalsPerHour { get; init; }
 
     /// <summary>
     /// Erreichte Spiele pro Stunde in Doppelspiel-Äquivalent. Gerechnet über den Zeitbedarf laut
     /// Auslegung (<see cref="RbgCapacity.DemandSeconds"/>), nicht über die Faustformel
-    /// „Einzelspiel = halbes Doppelspiel" — bewusst aus den Fahraufträgen des RBG, nicht aus den
+    /// „Einzelspiel = halbes Doppelspiel" — aus den Fahraufträgen des RBG, nicht aus den
     /// TSPORD-Telegrammen des zugehörigen Ressourcenpunkts.
     /// </summary>
     public required double CyclesPerHour { get; init; }
 
     /// <summary>
     /// Leistungsgrad gegen die Auslegung: Zeitbedarf der gefahrenen Spiele ÷ Fenster · 100.
-    /// Ein Doppelspiel zählt mit <c>3600/DoppelspieleProStunde</c> Sekunden, eine ungepaarte
-    /// Ein- oder Auslagerung mit ihrer eigenen Spielzeit. 100 % = das Gerät hat genau seine
-    /// Auslegungsleistung erbracht; darüber liegt es über der Auslegung.
+    /// Ein Doppelspiel zählt mit <c>3600/DoppelspieleProStunde</c> Sekunden, ein Einzelspiel mit
+    /// seiner eigenen Spielzeit. 100 % = das Gerät hat genau seine Auslegungsleistung erbracht.
     /// </summary>
     public required double Percent { get; init; }
 
     /// <summary>
-    /// Zeitbasierter Auslastungsgrad in Prozent = belegte Auftragszeit ÷ Fenster (FEM-üblicher
-    /// Auslastungsgrad; auf 100 begrenzt bei überlappenden Aufträgen).
+    /// Zeitbasierter Auslastungsgrad in Prozent = Summe der Transportdauern ÷ Fenster. Die
+    /// Transporte eines RBG laufen nacheinander, der Wert ist damit ein echtes Zeitmaß.
     /// </summary>
     public required double BusyPercent { get; init; }
 
-    /// <summary>Leerlaufzeit in Sekunden im Fenster = Fenster − belegte Auftragszeit.</summary>
+    /// <summary>Leerlaufzeit in Sekunden im Fenster = Fenster − Summe der Transportdauern.</summary>
     public required double IdleSeconds { get; init; }
 
-    /// <summary>Ø Sekunden von der Auftragserteilung bis zum Abschluss — Einlagerung.</summary>
-    public required double AvgPutSeconds { get; init; }
+    /// <summary>Ø Dauer eines Einlagertransports (Auftrag bis Abgabe im Regal).</summary>
+    public required double AvgStoreSeconds { get; init; }
 
-    /// <summary>Ø Sekunden von der Auftragserteilung bis zum Abschluss — Auslagerung.</summary>
-    public required double AvgGetSeconds { get; init; }
+    /// <summary>Ø Dauer eines Auslagertransports (Auftrag bis Abgabe an der Station).</summary>
+    public required double AvgRetrieveSeconds { get; init; }
 
     public required DateTime? LatestAt { get; init; }
 
     /// <summary>
-    /// Gleitender Verlauf über das Fenster: <see cref="UtilizationBucket.Uph"/> = Spiele/h
-    /// (Doppelspiel-Äquivalent, also <c>Doppel + Einzel/2</c> je Stunde), <see cref="UtilizationBucket.Count"/>
-    /// = abgeschlossene Fahrten im Fenster. Der letzte Punkt endet bei <c>to</c>.
+    /// Gleitender Verlauf über das Fenster: <see cref="UtilizationBucket.Uph"/> = Spiele/h in
+    /// Doppelspiel-Äquivalent, <see cref="UtilizationBucket.Count"/> = abgeschlossene Transporte
+    /// im gleitenden Fenster. Der letzte Punkt endet bei <c>to</c>.
     /// </summary>
     public required IReadOnlyList<UtilizationBucket> Series { get; init; }
 }
 
 /// <summary>
 /// Auslegungsleistung eines RBG: wie viele Spiele es je Betriebsart in der Stunde schafft.
-/// Daraus ergibt sich die Zeit, die ein einzelnes Spiel das Gerät belegt — und damit ein
-/// belastbares Verhältnis zwischen Doppel- und Einzelspiel. Ein Einzelspiel ist gerade
-/// <em>nicht</em> ein halbes Doppelspiel: laut Datenblatt der HRL-RBG (30 Doppelspiele/h = 120 s,
-/// 48 Einlagerungen/h = 75 s) kostet es 62,5 % davon. Dieses Verhältnis ist Gerätekinematik;
-/// das Niveau kommt aus der Konfiguration.
+/// Daraus ergibt sich die Zeit, die ein Spiel das Gerät belegt — und damit ein belastbares
+/// Verhältnis zwischen Doppel- und Einzelspiel. Ein Einzelspiel ist gerade <em>nicht</em> ein
+/// halbes Doppelspiel: laut Datenblatt der HRL-RBG (30 Doppelspiele/h = 120 s, 48
+/// Einlagerungen/h = 75 s) kostet es 62,5 % davon.
 /// </summary>
 public sealed record RbgCapacity
 {
@@ -79,40 +85,40 @@ public sealed record RbgCapacity
     public required int DoubleCyclesPerHour { get; init; }
 
     /// <summary>Reine Einlagerungen pro Stunde laut Auslegung.</summary>
-    public required int PutsPerHour { get; init; }
+    public required int StoresPerHour { get; init; }
 
     /// <summary>Reine Auslagerungen pro Stunde laut Auslegung.</summary>
-    public required int GetsPerHour { get; init; }
+    public required int RetrievalsPerHour { get; init; }
 
     public double DoubleSeconds => 3600.0 / Math.Max(1, DoubleCyclesPerHour);
-    public double PutSeconds => 3600.0 / Math.Max(1, PutsPerHour);
-    public double GetSeconds => 3600.0 / Math.Max(1, GetsPerHour);
+    public double StoreSeconds => 3600.0 / Math.Max(1, StoresPerHour);
+    public double RetrieveSeconds => 3600.0 / Math.Max(1, RetrievalsPerHour);
 
     /// <summary>
     /// Zeitbedarf laut Auslegung für die gefahrenen Spiele. Ungepaarte Ein- und Auslagerungen
     /// werden mit ihrer eigenen Spielzeit bewertet, nicht als halbes Doppelspiel.
     /// </summary>
-    public double DemandSeconds(int puts, int gets)
+    public double DemandSeconds(int stores, int retrievals)
     {
-        var doubles = Math.Min(puts, gets);
+        var doubles = Math.Min(stores, retrievals);
         return doubles * DoubleSeconds
-             + (puts - doubles) * PutSeconds
-             + (gets - doubles) * GetSeconds;
+             + (stores - doubles) * StoreSeconds
+             + (retrievals - doubles) * RetrieveSeconds;
     }
 
     public static RbgCapacity From(KccConfig c) => new()
     {
         DoubleCyclesPerHour = c.RbgMaxCyclesPerHour,
-        PutsPerHour = c.RbgMaxPutsPerHour,
-        GetsPerHour = c.RbgMaxGetsPerHour,
+        StoresPerHour = c.RbgMaxStoresPerHour,
+        RetrievalsPerHour = c.RbgMaxRetrievalsPerHour,
     };
 
-    /// <summary>Kapazität dieses Geräts: Werte am Ressourcenpunkt schlagen die Vorgabe.</summary>
+    /// <summary>Auslegung dieses Geräts: Werte am Ressourcenpunkt schlagen die Vorgabe.</summary>
     public RbgCapacity For(ResourcePointConfig? point) => point is null ? this : new()
     {
         DoubleCyclesPerHour = point.MaxCyclesPerHour is > 0 ? point.MaxCyclesPerHour.Value : DoubleCyclesPerHour,
-        PutsPerHour = point.MaxPutsPerHour is > 0 ? point.MaxPutsPerHour.Value : PutsPerHour,
-        GetsPerHour = point.MaxGetsPerHour is > 0 ? point.MaxGetsPerHour.Value : GetsPerHour,
+        StoresPerHour = point.MaxStoresPerHour is > 0 ? point.MaxStoresPerHour.Value : StoresPerHour,
+        RetrievalsPerHour = point.MaxRetrievalsPerHour is > 0 ? point.MaxRetrievalsPerHour.Value : RetrievalsPerHour,
     };
 }
 
@@ -125,14 +131,28 @@ public sealed record RbgOptions
     /// <summary>
     /// Telegrammtyp, der gezählt wird. Die Anlage schickt jedes Ereignis als Paar — <c>DM</c>
     /// (Data Message, die Meldung selbst) und <c>AK</c> (Acknowledge der Gegenstelle) mit
-    /// identischem Inhalt. Ohne diese Einschränkung zählt jede Fahrt doppelt.
+    /// identischem Inhalt.
     /// </summary>
     public required string CountTelegramType { get; init; }
 
-    public required IReadOnlyList<string> PutDoneCodes { get; init; }
-    public required IReadOnlyList<string> GetDoneCodes { get; init; }
-    public required IReadOnlyList<string> StoreOrderCodes { get; init; }
-    public required IReadOnlyList<string> RetrieveOrderCodes { get; init; }
+    /// <summary>Auftrag zum Aufnehmen auf das RBG (<c>PUPORD</c>).</summary>
+    public required IReadOnlyList<string> PickOrderCodes { get; init; }
+
+    /// <summary>Aufnehmen abgeschlossen (<c>ENDPUP</c>).</summary>
+    public required IReadOnlyList<string> PickDoneCodes { get; init; }
+
+    /// <summary>Auftrag zum Abgeben vom RBG (<c>DEPORD</c>).</summary>
+    public required IReadOnlyList<string> DropOrderCodes { get; init; }
+
+    /// <summary>Abgeben abgeschlossen (<c>ENDDEP</c>) — beendet den Transport.</summary>
+    public required IReadOnlyList<string> DropDoneCodes { get; init; }
+
+    /// <summary>
+    /// Muster eines Regalplatzes in <c>Source</c>/<c>Destination</c>. Regalplätze sind rein
+    /// numerisch (z. B. <c>010361211</c>), Übergabestationen tragen Buchstaben (<c>MA41</c>,
+    /// <c>SR01LU11</c>). Daran hängt die Richtung des Transports.
+    /// </summary>
+    public required string RackLocationPattern { get; init; }
 
     static IReadOnlyList<string> Or(List<string> configured, IReadOnlyList<string> fallback) =>
         configured is { Count: > 0 } ? configured : fallback;
@@ -141,39 +161,59 @@ public sealed record RbgOptions
     {
         Capacity = RbgCapacity.From(c),
         CountTelegramType = c.CountTelegramType,
-        PutDoneCodes = Or(c.RbgPutDoneCodes, RbgReport.DefaultPutDone),
-        GetDoneCodes = Or(c.RbgGetDoneCodes, RbgReport.DefaultGetDone),
-        StoreOrderCodes = Or(c.RbgStoreOrderCodes, RbgReport.DefaultStoreOrder),
-        RetrieveOrderCodes = Or(c.RbgRetrieveOrderCodes, RbgReport.DefaultRetrieveOrder),
+        PickOrderCodes = Or(c.RbgPickOrderCodes, RbgReport.DefaultPickOrder),
+        PickDoneCodes = Or(c.RbgPickDoneCodes, RbgReport.DefaultPickDone),
+        DropOrderCodes = Or(c.RbgDropOrderCodes, RbgReport.DefaultDropOrder),
+        DropDoneCodes = Or(c.RbgDropDoneCodes, RbgReport.DefaultDropDone),
+        RackLocationPattern = string.IsNullOrWhiteSpace(c.RbgRackLocationPattern)
+            ? RbgReport.DefaultRackLocationPattern
+            : c.RbgRackLocationPattern,
     };
 }
 
 /// <summary>
-/// Wertet die Fahraufträge einer RBG-Verbindung aus. Begriffe nach FEM 9.851 / Wikipedia
-/// „Regalbediengerät": ein <b>Einzelspiel</b> ist eine reine Ein- oder Auslagerung, ein
-/// <b>Doppelspiel</b> (kombiniertes Spiel) eine Ein- <em>und</em> Auslagerung in einer Fahrt.
+/// Wertet die Fahraufträge einer RBG-Verbindung aus.
 ///
-/// Gezählt werden die abgeschlossenen Fahrten (<c>ENDDEP</c>/<c>ENDPUP</c>); daraus
-/// Doppelspiele = <c>min(Ein, Aus)</c>, Einzelspiele = <c>|Ein − Aus|</c> und die Auslastung
-/// gegen die Kapazität. Über die Auftragspaare (<c>DEPORD</c>→<c>ENDDEP</c>,
-/// <c>PUPORD</c>→<c>ENDPUP</c>) werden Ø Ausführungsdauer und Leerlaufzeit gemessen. Reine
-/// Funktion über einem Zeitfenster.
+/// <b>Ablauf eines Transports</b> (aus den Anlagentelegrammen belegt): das RBG nimmt eine
+/// Ladeeinheit auf (<c>PUPORD</c> → <c>ENDPUP</c>) und gibt sie wieder ab
+/// (<c>DEPORD</c> → <c>ENDDEP</c>). Beides passiert bei <em>jedem</em> Transport — die Codes sagen
+/// also „aufnehmen" und „abgeben", nicht „einlagern" und „auslagern". Die Richtung steckt in
+/// Quelle und Ziel:
+/// <list type="bullet">
+///   <item><b>Einlagerung</b>: von einer Station ins Regal — das <c>ENDDEP</c> hat einen
+///         Regalplatz als Ziel (rein numerisch, z. B. <c>010361211</c>)</item>
+///   <item><b>Auslagerung</b>: aus dem Regal an eine Station — das <c>ENDDEP</c> hat eine
+///         Station als Ziel (<c>MA62</c>)</item>
+/// </list>
 ///
-/// Die Anlage sendet jedes Ereignis doppelt (TelegramType <c>DM</c>/<c>AK</c>, ~0,1&#160;s Abstand,
-/// gleiche Felder) — das wird hier zusammengeführt.
+/// Begriffe nach FEM 9.851: ein <b>Einzelspiel</b> ist eine reine Ein- oder Auslagerung, ein
+/// <b>Doppelspiel</b> beides in einer Fahrt. Ein Doppelspiel besteht damit aus <b>zwei</b>
+/// Transporten — daraus Doppelspiele = <c>min(Ein, Aus)</c>, Einzelspiele = <c>|Ein − Aus|</c>.
+///
+/// Die Anlage sendet jedes Ereignis doppelt (<c>DM</c>/<c>AK</c>) — das wird zusammengeführt.
+/// Reine Funktion über einem Zeitfenster.
 /// </summary>
 public static class RbgReport
 {
-    public static readonly IReadOnlyList<string> DefaultPutDone = ["ENDDEP"];
-    public static readonly IReadOnlyList<string> DefaultGetDone = ["ENDPUP"];
-    public static readonly IReadOnlyList<string> DefaultStoreOrder = ["DEPORD"];
-    public static readonly IReadOnlyList<string> DefaultRetrieveOrder = ["PUPORD"];
+    public static readonly IReadOnlyList<string> DefaultPickOrder = ["PUPORD"];
+    public static readonly IReadOnlyList<string> DefaultPickDone = ["ENDPUP"];
+    public static readonly IReadOnlyList<string> DefaultDropOrder = ["DEPORD"];
+    public static readonly IReadOnlyList<string> DefaultDropDone = ["ENDDEP"];
+
+    /// <summary>Regalplätze sind rein numerisch; Stationen tragen Buchstaben.</summary>
+    public const string DefaultRackLocationPattern = "^[0-9]+$";
 
     const double DedupWindowSeconds = 10;
 
-    enum Kind { PutDone, GetDone, StoreOrder, RetrieveOrder }
+    enum Kind { PickOrder, PickDone, DropOrder, DropDone }
 
-    readonly record struct Ev(DateTime At, string Label, Kind Kind);
+    readonly record struct Ev(DateTime At, string Label, Kind Kind, string Source, string Destination);
+
+    /// <summary>Ein abgeschlossener Transport: Beginn, Ende und Richtung.</summary>
+    readonly record struct Move(DateTime Start, DateTime End, bool IsStore)
+    {
+        public double Seconds => (End - Start).TotalSeconds;
+    }
 
     /// <summary>
     /// Liest die Fahrauftrags-Ereignisse je Verbindung aus dem Telegrammstrom: klassifiziert nach
@@ -190,16 +230,16 @@ public static class RbgReport
         var dstIdx = FieldIndex(format, "Destination");
         var seqIdx = FieldIndex(format, "SequenceNumber");
 
-        var putDone = Set(options.PutDoneCodes);
-        var getDone = Set(options.GetDoneCodes);
-        var storeOrder = Set(options.StoreOrderCodes);
-        var retrieveOrder = Set(options.RetrieveOrderCodes);
+        var pickOrder = Set(options.PickOrderCodes);
+        var pickDone = Set(options.PickDoneCodes);
+        var dropOrder = Set(options.DropOrderCodes);
+        var dropDone = Set(options.DropDoneCodes);
 
         Kind? Classify(string code) =>
-            putDone.Contains(code) ? Kind.PutDone
-            : getDone.Contains(code) ? Kind.GetDone
-            : storeOrder.Contains(code) ? Kind.StoreOrder
-            : retrieveOrder.Contains(code) ? Kind.RetrieveOrder
+            dropDone.Contains(code) ? Kind.DropDone
+            : pickDone.Contains(code) ? Kind.PickDone
+            : dropOrder.Contains(code) ? Kind.DropOrder
+            : pickOrder.Contains(code) ? Kind.PickOrder
             : null;
 
         var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
@@ -221,81 +261,56 @@ public static class RbgReport
                 continue;
 
             // Die SequenceNumber identifiziert das Ereignis: DM und AK teilen sie sich, zwei
-            // echte Fahrten haben verschiedene. Damit trennt der Schlüssel Wiederholungen von
-            // gleichartigen Folgeereignissen.
+            // echte Fahrten haben verschiedene.
             var label = Field(f, labelIdx);
-            var key = (connection, Field(f, seqIdx) + "|" + code, label,
-                       Field(f, srcIdx), Field(f, dstIdx));
+            var source = Field(f, srcIdx);
+            var destination = Field(f, dstIdx);
+            var key = (connection, Field(f, seqIdx) + "|" + code, label, source, destination);
             if (lastSeen.TryGetValue(key, out var prev) && (t.DateTime - prev).TotalSeconds < DedupWindowSeconds)
                 continue;
             lastSeen[key] = t.DateTime;
 
             if (!byConnection.TryGetValue(connection, out var list))
                 byConnection[connection] = list = [];
-            list.Add(new Ev(t.DateTime, label, kind));
+            list.Add(new Ev(t.DateTime, label, kind, source, destination));
         }
 
         return byConnection;
     }
 
     /// <summary>
-    /// Verdichtet den Telegrammstrom zu Rasterzeilen je Zeitraster × RBG-Verbindung — die
-    /// Grundlage der Langzeitaufzeichnung (<c>/rbg</c>). Ein Durchlauf für alle Verbindungen;
-    /// die belegte Auftragszeit wird dem Raster des Abschlusses zugeschlagen.
+    /// Bildet aus den Ereignissen die abgeschlossenen Transporte. Jedes <c>ENDDEP</c> beendet
+    /// genau einen Transport; sein Ziel sagt die Richtung. Der Beginn ist der jüngste
+    /// <c>PUPORD</c> derselben Ladeeinheit davor — sonst der <c>DEPORD</c>, sonst das Ende selbst.
     /// </summary>
-    public static List<RbgSampleRow> Aggregate(
-        IEnumerable<Telegram> window,
-        TelegramFormat format,
-        IReadOnlyCollection<string> connections,
-        DateTime from,
-        DateTime to,
-        TimeSpan step,
-        RbgOptions options)
+    static List<Move> Moves(List<Ev> events, Regex rack)
     {
-        var wanted = new HashSet<string>(
-            connections.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()),
-            StringComparer.OrdinalIgnoreCase);
-        if (wanted.Count == 0 || step <= TimeSpan.Zero || from >= to)
-            return [];
+        var moves = new List<Move>();
+        var pickOrders = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        var dropOrders = new Dictionary<string, DateTime>(StringComparer.Ordinal);
 
-        var rows = new Dictionary<(long Slot, string Connection), RbgSampleRow>();
-
-        RbgSampleRow Row(DateTime at, string connection)
+        foreach (var e in events)
         {
-            var slot = (long)((at - from).Ticks / step.Ticks);
-            var key = (slot, connection);
-            if (!rows.TryGetValue(key, out var row))
-                rows[key] = row = new RbgSampleRow
-                {
-                    Bucket = from + TimeSpan.FromTicks(slot * step.Ticks),
-                    Connection = connection,
-                };
-            return row;
-        }
-
-        foreach (var (connection, events) in EventsByConnection(window, format, options, wanted.Contains))
-        {
-            foreach (var e in events)
+            switch (e.Kind)
             {
-                if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.GetDone))
-                    continue;
-                var row = Row(e.At, connection);
-                if (e.Kind == Kind.PutDone) row.Puts++;
-                else row.Gets++;
-            }
-
-            foreach (var kind in new[] { Kind.PutDone, Kind.GetDone })
-            {
-                var order = kind == Kind.PutDone ? Kind.StoreOrder : Kind.RetrieveOrder;
-                foreach (var (doneAt, seconds) in PairDurations(events, kind, order, from, to))
-                    Row(doneAt, connection).BusySeconds += seconds;
+                case Kind.PickOrder:
+                    pickOrders[e.Label] = e.At;
+                    break;
+                case Kind.DropOrder:
+                    dropOrders[e.Label] = e.At;
+                    break;
+                case Kind.DropDone:
+                    var start = pickOrders.TryGetValue(e.Label, out var p) ? p
+                        : dropOrders.TryGetValue(e.Label, out var d) ? d
+                        : e.At;
+                    pickOrders.Remove(e.Label);
+                    dropOrders.Remove(e.Label);
+                    moves.Add(new Move(start, e.At, rack.IsMatch(e.Destination)));
+                    break;
             }
         }
 
-        return rows.Values
-            .Where(r => r.Puts > 0 || r.Gets > 0)
-            .OrderBy(r => r.Bucket).ThenBy(r => r.Connection, StringComparer.Ordinal)
-            .ToList();
+        return moves;
     }
 
     public static RbgCycleStats Compute(
@@ -314,139 +329,158 @@ public static class RbgReport
             c => string.Equals(c, connection, StringComparison.OrdinalIgnoreCase))
             .Values.FirstOrDefault() ?? [];
 
+        var rack = new Regex(options.RackLocationPattern, RegexOptions.CultureInvariant);
+        var moves = Moves(events, rack);
+
         // Die Kennzahlen (Tacho) zählen nur das Trailing-Fenster; der Verlauf behält die volle
         // Historie von 'from' bis 'to'.
         var mFrom = metricsFrom is { } m && m > from && m < to ? m : from;
-        var doneInWindow = events.Where(e => e.At >= mFrom && e.At < to).ToList();
-        var puts = doneInWindow.Count(e => e.Kind == Kind.PutDone);
-        var gets = doneInWindow.Count(e => e.Kind == Kind.GetDone);
-        var full = Math.Min(puts, gets);
-        var half = Math.Abs(puts - gets);
+        var inWindow = moves.Where(v => v.End >= mFrom && v.End < to).ToList();
 
-        // Leistungsgrad über den Zeitbedarf laut Auslegung: ein Doppelspiel belegt das Gerät
-        // 3600/DS-pro-Stunde Sekunden, eine ungepaarte Ein-/Auslagerung ihre eigene Spielzeit.
-        // Auf eine Stunde hochgerechnet, auch wenn das Messfenster kürzer ist.
+        var stores = inWindow.Count(v => v.IsStore);
+        var retrievals = inWindow.Count - stores;
+        var doubles = Math.Min(stores, retrievals);
+        var singles = Math.Abs(stores - retrievals);
+
+        // Leistungsgrad über den Zeitbedarf laut Auslegung, auf eine Stunde hochgerechnet.
         var metricSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
-        var demand = capacity.DemandSeconds(puts, gets);
-        var load = demand / metricSeconds;
-        var cyclesPerHour = load * capacity.DoubleCyclesPerHour;
-        var percent = Math.Round(load * 100, 1);
+        var load = capacity.DemandSeconds(stores, retrievals) / metricSeconds;
 
-        var putPairs = PairDurations(events, Kind.PutDone, Kind.StoreOrder, mFrom, to);
-        var getPairs = PairDurations(events, Kind.GetDone, Kind.RetrieveOrder, mFrom, to);
-        var avgPut = putPairs.Count == 0 ? 0 : Math.Round(putPairs.Average(p => p.Seconds), 1);
-        var avgGet = getPairs.Count == 0 ? 0 : Math.Round(getPairs.Average(p => p.Seconds), 1);
-        var windowSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
-        var busy = putPairs.Sum(p => p.Seconds) + getPairs.Sum(p => p.Seconds);
-        var idle = Math.Max(0, windowSeconds - busy);
+        // Transporte laufen nacheinander — die Summe ihrer Dauern ist die belegte Zeit.
+        var busy = inWindow.Sum(v => Math.Max(0, (v.End - Max(v.Start, mFrom)).TotalSeconds));
 
         return new RbgCycleStats
         {
-            BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
-            Series = RollingSeries(events, from, to, bucketMinutes, stepMinutes),
             Connection = connection,
-            Puts = puts,
-            Gets = gets,
-            DoubleCycles = full,
-            SingleCycles = half,
+            Stores = stores,
+            Retrievals = retrievals,
+            Transports = inWindow.Count,
+            DoubleCycles = doubles,
+            SingleCycles = singles,
             MaxCyclesPerHour = capacity.DoubleCyclesPerHour,
-            MaxPutsPerHour = capacity.PutsPerHour,
-            MaxGetsPerHour = capacity.GetsPerHour,
-            CyclesPerHour = Math.Round(cyclesPerHour, 1),
-            Percent = percent,
-            IdleSeconds = Math.Round(idle, 1),
-            AvgPutSeconds = avgPut,
-            AvgGetSeconds = avgGet,
-            LatestAt = doneInWindow.Count > 0 ? doneInWindow.Max(e => e.At) : null,
+            MaxStoresPerHour = capacity.StoresPerHour,
+            MaxRetrievalsPerHour = capacity.RetrievalsPerHour,
+            CyclesPerHour = Math.Round(load * capacity.DoubleCyclesPerHour, 1),
+            Percent = Math.Round(load * 100, 1),
+            BusyPercent = Math.Round(Math.Min(100, busy / metricSeconds * 100), 1),
+            IdleSeconds = Math.Round(Math.Max(0, metricSeconds - busy), 1),
+            AvgStoreSeconds = Avg(inWindow.Where(v => v.IsStore).Select(v => v.Seconds)),
+            AvgRetrieveSeconds = Avg(inWindow.Where(v => !v.IsStore).Select(v => v.Seconds)),
+            LatestAt = inWindow.Count > 0 ? inWindow.Max(v => v.End) : null,
+            Series = RollingSeries(moves, capacity, from, to, bucketMinutes, stepMinutes),
         };
     }
 
     /// <summary>
-    /// Gleitender Verlauf der Spiele/h: feine Abtastung der Abschluss-Ereignisse (Schritt), je
-    /// Stützpunkt die Summe der letzten <paramref name="bucketMinutes"/> Minuten, umgerechnet auf
+    /// Verdichtet den Telegrammstrom zu Rasterzeilen je Zeitraster × RBG-Verbindung — die
+    /// Grundlage der Langzeitaufzeichnung (<c>/rbg</c>). Ein Durchlauf für alle Verbindungen;
+    /// die Transportdauer wird dem Raster des Abschlusses zugeschlagen.
+    /// </summary>
+    public static List<RbgSampleRow> Aggregate(
+        IEnumerable<Telegram> window,
+        TelegramFormat format,
+        IReadOnlyCollection<string> connections,
+        DateTime from,
+        DateTime to,
+        TimeSpan step,
+        RbgOptions options)
+    {
+        var wanted = new HashSet<string>(
+            connections.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0 || step <= TimeSpan.Zero || from >= to)
+            return [];
+
+        var rack = new Regex(options.RackLocationPattern, RegexOptions.CultureInvariant);
+        var rows = new Dictionary<(long Slot, string Connection), RbgSampleRow>();
+
+        foreach (var (connection, events) in EventsByConnection(window, format, options, wanted.Contains))
+        {
+            foreach (var move in Moves(events, rack))
+            {
+                if (move.End < from || move.End >= to)
+                    continue;
+
+                var slot = (long)((move.End - from).Ticks / step.Ticks);
+                var key = (slot, connection);
+                if (!rows.TryGetValue(key, out var row))
+                    rows[key] = row = new RbgSampleRow
+                    {
+                        Bucket = from + TimeSpan.FromTicks(slot * step.Ticks),
+                        Connection = connection,
+                    };
+
+                if (move.IsStore) row.Stores++;
+                else row.Retrievals++;
+                row.BusySeconds += Math.Max(0, (move.End - Max(move.Start, from)).TotalSeconds);
+            }
+        }
+
+        return rows.Values
+            .Where(r => r.Stores > 0 || r.Retrievals > 0)
+            .OrderBy(r => r.Bucket).ThenBy(r => r.Connection, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Gleitender Verlauf der Spiele/h: feine Abtastung der abgeschlossenen Transporte (Schritt),
+    /// je Stützpunkt die letzten <paramref name="bucketMinutes"/> Minuten, umgerechnet auf
     /// Doppelspiel-Äquivalent pro Stunde. Letzter Stützpunkt endet bei <paramref name="to"/>.
     /// </summary>
     static List<UtilizationBucket> RollingSeries(
-        List<Ev> events, DateTime from, DateTime to, int bucketMinutes, int stepMinutes)
+        List<Move> moves, RbgCapacity capacity, DateTime from, DateTime to,
+        int bucketMinutes, int stepMinutes)
     {
         var step = Math.Max(1, stepMinutes);
         var win = Math.Max(step, bucketMinutes);
         var fineCount = Math.Max(1, (int)Math.Ceiling((to - from).TotalMinutes / step));
         var winSteps = Math.Max(1, (int)Math.Round(win / (double)step));
 
-        var finePut = new int[fineCount];
-        var fineGet = new int[fineCount];
-        foreach (var e in events)
+        var fineStores = new int[fineCount];
+        var fineRetrievals = new int[fineCount];
+        foreach (var v in moves)
         {
-            if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.GetDone))
+            if (v.End < from || v.End >= to)
                 continue;
-            var slot = (int)((e.At - from).TotalMinutes / step);
+            var slot = (int)((v.End - from).TotalMinutes / step);
             if (slot < 0 || slot >= fineCount)
                 continue;
-            if (e.Kind == Kind.PutDone) finePut[slot]++;
-            else fineGet[slot]++;
+            if (v.IsStore) fineStores[slot]++;
+            else fineRetrievals[slot]++;
         }
 
-        var winHours = winSteps * step / 60.0;
+        var winSeconds = winSteps * step * 60.0;
         var series = new List<UtilizationBucket>(fineCount);
-        int accPut = 0, accGet = 0;
+        int accStores = 0, accRetrievals = 0;
+
         for (var i = 0; i < fineCount; i++)
         {
-            accPut += finePut[i];
-            accGet += fineGet[i];
+            accStores += fineStores[i];
+            accRetrievals += fineRetrievals[i];
             if (i >= winSteps)
             {
-                accPut -= finePut[i - winSteps];
-                accGet -= fineGet[i - winSteps];
+                accStores -= fineStores[i - winSteps];
+                accRetrievals -= fineRetrievals[i - winSteps];
             }
-            var full = Math.Min(accPut, accGet);
-            var half = Math.Abs(accPut - accGet);
+            var load = capacity.DemandSeconds(accStores, accRetrievals) / winSeconds;
             series.Add(new UtilizationBucket
             {
                 At = from.AddMinutes((i + 1) * step),
-                Count = accPut + accGet,
-                Uph = Math.Round((full + half / 2.0) / winHours, 1),
+                Count = accStores + accRetrievals,
+                Uph = Math.Round(load * capacity.DoubleCyclesPerHour, 1),
             });
         }
+
         return series;
     }
 
-    /// <summary>
-    /// Paart jedes Abschluss-Ereignis im Fenster mit dem jüngsten passenden Auftrag davor
-    /// (gleiches <c>ResourceLabel</c>, sonst FIFO). Gibt je Paar den Abschlusszeitpunkt und die
-    /// Dauer zurück, damit der Aufrufer mitteln oder auf Zeitraster verteilen kann.
-    /// </summary>
-    static List<(DateTime DoneAt, double Seconds)> PairDurations(
-        List<Ev> events, Kind doneKind, Kind orderKind, DateTime from, DateTime to)
+    static double Avg(IEnumerable<double> values)
     {
-        var orders = events.Where(e => e.Kind == orderKind && e.At >= from.AddMinutes(-30)).ToList();
-        var used = new bool[orders.Count];
-        var durations = new List<(DateTime, double)>();
-
-        foreach (var done in events.Where(e => e.Kind == doneKind && e.At >= from && e.At < to))
-        {
-            var idx = -1;
-            for (var i = orders.Count - 1; i >= 0; i--)
-            {
-                if (used[i] || orders[i].At > done.At)
-                    continue;
-                if (!string.IsNullOrEmpty(done.Label) && orders[i].Label != done.Label)
-                    continue;
-                idx = i;
-                break;
-            }
-            if (idx < 0)
-                for (var i = 0; i < orders.Count; i++)
-                    if (!used[i] && orders[i].At <= done.At) { idx = i; break; }
-            if (idx < 0)
-                continue;
-
-            used[idx] = true;
-            durations.Add((done.At, (done.At - orders[idx].At).TotalSeconds));
-        }
-
-        return durations;
+        var list = values as IList<double> ?? values.ToList();
+        return list.Count == 0 ? 0 : Math.Round(list.Average(), 1);
     }
+
+    static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
 
     static HashSet<string> Set(IReadOnlyList<string> codes) =>
         new(codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()), StringComparer.OrdinalIgnoreCase);

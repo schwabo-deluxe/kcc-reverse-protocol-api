@@ -157,7 +157,7 @@ public static class WallboardDashboard
               <span${help('load')}>Leist <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b></span>
               <span${help('double')}>DS <b>${r.doubleCycles}</b></span>
               <span${help('single')}>ES <b>${r.singleCycles}</b></span>
-              <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.gets}</b></span>
+              <span${help('inout')}>Ein/Aus <b>${r.stores}/${r.retrievals}</b></span>
               <span${help('idle')}>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
             </div>` : '';
           return `<div class="tile">
