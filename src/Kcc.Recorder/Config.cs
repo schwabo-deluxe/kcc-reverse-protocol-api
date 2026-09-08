@@ -183,6 +183,10 @@ public sealed class KccConfig
     /// </summary>
     public int UtilizationRateMinutes { get; set; } = 5;
 
+    // Hinweis: dieses Fenster gilt für alle Tachos — UPH, RBG-Spiele/h und die
+    // Fördertechnik-Belegung werden daraus auf eine Stunde hochgerechnet. Die Verlaufskurven
+    // nutzen davon unabhängig UtilizationBucketMinutes.
+
     /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.
     /// Leer ⇒ eingebaute Liste (<see cref="TelegramUtilization.DefaultResourcePoints"/>).

@@ -329,9 +329,11 @@ public class TelegramUtilizationTests
             window.Add(Rb(id++, 58 - i, "ENDPUP"));
         }
 
+        // rateMinutes = Fensterbreite: der Tacho zählt dann die ganze Stunde.
         var u = TelegramUtilization.Compute(
             window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
             resourcePoints: [RP("MA72", "RBG", "RBG 1", targetUph: 999, connection: "RBG01")],
+            rateMinutes: 60,
             rbg: RbgOptions.From(new KccConfig()));
 
         var p = Point(u, "MA72");
@@ -341,6 +343,46 @@ public class TelegramUtilizationTests
         Assert.Equal(50, p.Rbg.Percent);          // (30 + 0) / (60 * 1 h) * 100
         Assert.Equal(p.Rbg.Percent, p.Percent);   // Kachel-Kennzahl kommt aus der Spielauswertung
         Assert.NotEmpty(p.Rbg.Series);
+    }
+
+    [Fact]
+    public void Tacho_misst_das_kurze_Fenster_und_rechnet_auf_eine_Stunde_hoch()
+    {
+        static string RbgData(string mc) =>
+            ("DM01SR01MFC10100" + mc.PadRight(6, '.') + "0150").PadRight(166, '.');
+        Telegram Rb(long id, int minAgo, string mc) =>
+            new(id, Now.AddMinutes(-minAgo), TelegramDirection.FromPlc, "RBG01", RbgData(mc), null);
+
+        var window = new System.Collections.Generic.List<Telegram>();
+        long id = 1;
+        // Alt: 20 Spiele früher in der Stunde — dürfen den Tacho nicht mehr beeinflussen.
+        for (var i = 0; i < 20; i++)
+        {
+            window.Add(Rb(id++, 50 - i, "ENDDEP"));
+            window.Add(Rb(id++, 50 - i, "ENDPUP"));
+        }
+        // Aktuell: 4 Doppelspiele in den letzten 5 Minuten.
+        for (var i = 1; i <= 4; i++)
+        {
+            window.Add(Rb(id++, i, "ENDDEP"));
+            window.Add(Rb(id++, i, "ENDPUP"));
+        }
+
+        var u = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            resourcePoints: [RP("MA72", "RBG", "RBG 1", connection: "RBG01")],
+            rateMinutes: 5,
+            rbg: RbgOptions.From(new KccConfig()));
+
+        var p = Point(u, "MA72");
+        Assert.NotNull(p.Rbg);
+        Assert.Equal(4, p.Rbg!.DoubleCycles);          // nur die letzten 5 Minuten
+        Assert.Equal(48, p.Rbg.CyclesPerHour);         // 4 Spiele in 5 min -> 48/h
+        Assert.Equal(80, p.Rbg.Percent);               // 48 von 60/h
+
+        // Der Verlauf behält die volle Stunde — auch die alten Spiele stehen noch in der Kurve.
+        Assert.Equal(Now, p.Rbg.Series[^1].At);
+        Assert.Contains(p.Rbg.Series, b => b.At <= Now.AddMinutes(-20) && b.Uph > 0);
     }
 
     [Fact]

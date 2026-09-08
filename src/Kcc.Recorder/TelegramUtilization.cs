@@ -171,6 +171,9 @@ public sealed record TelegramUtilization
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
         var rate = Math.Max(1, rateMinutes);
+        // Trailing-Fenster aller Kennzahlen: UPH, RBG-Spiele und Fördertechnik-Belegung werden
+        // daraus auf eine Stunde hochgerechnet, damit alle Tachos gleich schnell reagieren.
+        // Der Verlauf bleibt davon unberührt und zeigt weiter das ganze Fenster.
         var rateFrom = now.AddMinutes(-rate);
 
         // Nur Einträge mit Namen; je Name der erste gewinnt.
@@ -283,12 +286,12 @@ public sealed record TelegramUtilization
             var rbgStats = rbg is not null && !string.IsNullOrWhiteSpace(d.Connection)
                 ? RbgReport.Compute(window, format, d.Connection!.Trim(),
                     d.MaxCyclesPerHour is > 0 ? d.MaxCyclesPerHour.Value : rbg.MaxCyclesPerHour,
-                    from, now, rbg, bucketWidth, step)
+                    from, now, rbg, bucketWidth, step, rateFrom)
                 : null;
 
-            // Fördertechnikpunkt (keine RBG-Verbindung): Belegung aus Auftrag und Transportende.
+            // Fördertechnikpunkt (keine RBG-Verbindung): Belegung aus Ankunft und Verlassen.
             var conveyorStats = conveyor is not null && rbgStats is null
-                ? ConveyorReport.Compute(window, format, name, from, now, conveyor, bucketWidth, step)
+                ? ConveyorReport.Compute(window, format, name, from, now, conveyor, bucketWidth, step, rateFrom)
                 : null;
 
             return new ResourcePointUtilization

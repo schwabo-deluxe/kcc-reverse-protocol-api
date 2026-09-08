@@ -230,29 +230,34 @@ public static class RbgReport
         DateTime to,
         RbgOptions options,
         int bucketMinutes = 5,
-        int stepMinutes = 1)
+        int stepMinutes = 1,
+        DateTime? metricsFrom = null)
     {
         var events = EventsByConnection(window, format, options,
             c => string.Equals(c, connection, StringComparison.OrdinalIgnoreCase))
             .Values.FirstOrDefault() ?? [];
 
-        var doneInWindow = events.Where(e => e.At >= from && e.At < to).ToList();
+        // Die Kennzahlen (Tacho) zählen nur das Trailing-Fenster; der Verlauf behält die volle
+        // Historie von 'from' bis 'to'.
+        var mFrom = metricsFrom is { } m && m > from && m < to ? m : from;
+        var doneInWindow = events.Where(e => e.At >= mFrom && e.At < to).ToList();
         var puts = doneInWindow.Count(e => e.Kind == Kind.PutDone);
         var fetches = doneInWindow.Count(e => e.Kind == Kind.FetchDone);
         var full = Math.Min(puts, fetches);
         var half = Math.Abs(puts - fetches);
 
-        var hours = Math.Max(1e-9, (to - from).TotalHours);
+        // Auf eine Stunde hochgerechnet — auch wenn das Messfenster kürzer ist.
+        var hours = Math.Max(1e-9, (to - mFrom).TotalHours);
         var cyclesPerHour = (full + half / 2.0) / hours;
         var percent = maxCyclesPerHour > 0
             ? Math.Round(cyclesPerHour / maxCyclesPerHour * 100, 1)
             : 0;
 
-        var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, from, to);
-        var fetchPairs = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, from, to);
+        var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, mFrom, to);
+        var fetchPairs = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, mFrom, to);
         var avgPut = putPairs.Count == 0 ? 0 : Math.Round(putPairs.Average(p => p.Seconds), 1);
         var avgFetch = fetchPairs.Count == 0 ? 0 : Math.Round(fetchPairs.Average(p => p.Seconds), 1);
-        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
+        var windowSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
         var busy = putPairs.Sum(p => p.Seconds) + fetchPairs.Sum(p => p.Seconds);
         var idle = Math.Max(0, windowSeconds - busy);
 

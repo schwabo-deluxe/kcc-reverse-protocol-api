@@ -117,15 +117,22 @@ public static class ConveyorReport
         DateTime to,
         ConveyorOptions options,
         int bucketMinutes = 5,
-        int stepMinutes = 1)
+        int stepMinutes = 1,
+        DateTime? metricsFrom = null)
     {
         var events = Events(window, format, resourcePoint, options);
-        var inWindow = events.Where(e => e.At >= from && e.At < to).ToList();
 
-        var (spans, orderWaits, departs, idles) = Walk(events, from, to);
+        // Die Kennzahlen (Tacho) zählen nur das Trailing-Fenster; der Verlauf behält die volle
+        // Historie von 'from' bis 'to'. Zwei Läufe über dieselbe kleine Ereignisliste.
+        var mFrom = metricsFrom is { } m && m > from && m < to ? m : from;
+        var inWindow = events.Where(e => e.At >= mFrom && e.At < to).ToList();
 
-        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
-        var busy = spans.Sum(s => (s.End - s.Start).TotalSeconds);
+        var (metricSpans, orderWaits, departs, idles) = Walk(events, mFrom, to);
+        var (seriesSpans, _, _, _) = mFrom == from ? (metricSpans, orderWaits, departs, idles)
+            : Walk(events, from, to);
+
+        var windowSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
+        var busy = metricSpans.Sum(s => (s.End - s.Start).TotalSeconds);
 
         return new ConveyorStats
         {
@@ -136,12 +143,13 @@ public static class ConveyorReport
             BusySeconds = Math.Round(busy, 1),
             BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
             IdleSeconds = Math.Round(Math.Max(0, windowSeconds - busy), 1),
-            AvgOccupiedSeconds = Avg(spans.Select(s => (s.End - s.Start).TotalSeconds)),
+            AvgOccupiedSeconds = Avg(metricSpans.Select(s => (s.End - s.Start).TotalSeconds)),
             AvgOrderWaitSeconds = Avg(orderWaits),
             AvgDepartSeconds = Avg(departs),
             AvgIdleSeconds = Avg(idles),
             LatestAt = inWindow.Count > 0 ? inWindow.Max(e => e.At) : null,
-            Series = RollingSeries(spans, inWindow, from, to, bucketMinutes, stepMinutes),
+            Series = RollingSeries(seriesSpans, events.Where(e => e.At >= from && e.At < to).ToList(),
+                from, to, bucketMinutes, stepMinutes),
         };
     }
 

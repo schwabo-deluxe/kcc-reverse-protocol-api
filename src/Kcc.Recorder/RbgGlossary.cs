@@ -18,12 +18,15 @@ public static class RbgGlossary
             "(Summe der Auftragsdauern ÷ Zeitraum). Achtung: bei einem Doppelspiel laufen Ein- " +
             "und Auslagerauftrag gleichzeitig, beide Dauern werden addiert. Der Wert ist deshalb " +
             "eine Obergrenze und bei 100 % gedeckelt — er sagt „es lagen durchgehend Aufträge an“, " +
-            "nicht „das Gerät war zu X % in Fahrt“."),
+            "nicht „das Gerät war zu X % in Fahrt“. Gemessen über das Tacho-Fenster aus der " +
+            "Kopfzeile."),
         ("load",
             "Leistung — die Mengenseite: geschaffte Spiele gegen die Kapazität des Geräts. " +
             "Gerechnet als (Doppelspiele + Einzelspiele/2) ÷ (Kapazität × Stunden). Das ist die " +
             "belastbare Durchsatzzahl. Hohe Auslastung bei niedriger Leistung heißt: es fehlt " +
-            "nicht an Aufträgen, die einzelne Fahrt dauert zu lang."),
+            "nicht an Aufträgen, die einzelne Fahrt dauert zu lang. Gemessen über das " +
+            "Tacho-Fenster aus der Kopfzeile und auf eine Stunde hochgerechnet — die " +
+            "Verlaufskurve daneben nutzt ein eigenes, meist größeres Glättungsfenster."),
         ("double",
             "Doppelspiel (kombiniertes Spiel, FEM 9.851): Ein- und Auslagerung in einer Fahrt — " +
             "die wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Gezählt als " +

@@ -86,7 +86,8 @@ public static class UtilizationDashboard
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (TargetUph in appsettings.json)"></label>
           <label>Glättung (min) <input type="number" id="bucket" value="10" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
-          <label>UPH aus (min) <input type="number" id="rate" value="5" min="1" max="240"></label>
+          <label>Tacho aus (min) <input type="number" id="rate" value="5" min="1" max="240"
+            title="Trailing-Fenster aller Tachos: UPH, RBG-Spiele/h und Belegung werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort, aber sprunghaft; groß = träger, aber ruhiger. Die Verlaufskurve bleibt davon unberührt."></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>
@@ -331,16 +332,16 @@ public static class UtilizationDashboard
               ? Math.max(r.maxCyclesPerHour * 1.3, 1, ...r.series.map(b => b.uph))
               : peak;
             const sTarget = r ? r.maxCyclesPerHour : data.targetUph;
-            // Ø: Mittel über das ganze Fenster — die Kurve zeigt dagegen den gleitenden
-            // Kurzzeitwert, der deutlich darüber liegen kann.
+            // Der Tacho rechnet die letzten 'rateMinutes' auf eine Stunde hoch; die Kurve
+            // zeigt denselben Wert gleitend über 'bucketMinutes'. Beide Fenster stehen dabei.
             const head = r
-              ? `Ø ${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
+              ? `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h ⌀${data.rateMinutes} min · ${p.count} TSPORD`
               : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
             const c = p.conveyor;
             const dials = r
               ? `<div class="duo">
                    ${dial(r.busyPercent, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
-                   ${dial(r.percent, 'Leistung', `Ø ${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
+                   ${dial(r.percent, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
                  </div>`
               : c
               ? `<div class="duo">
@@ -414,7 +415,7 @@ public static class UtilizationDashboard
 
           $('meta').classList.remove('err');
           $('meta').textContent =
-            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Verlauf gleitend ${data.bucketMinutes} min · UPH aus ${data.rateMinutes} min` +
+            `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Verlauf gleitend ${data.bucketMinutes} min · Tachos aus ${data.rateMinutes} min` +
             ` · Stand ${new Date().toLocaleTimeString('de-DE')}`;
         }
 
