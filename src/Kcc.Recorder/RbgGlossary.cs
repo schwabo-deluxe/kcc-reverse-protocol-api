@@ -60,23 +60,35 @@ public static class RbgGlossary
             "Höchster Stützpunkt der Verlaufskurve in Spiele/h — die Spitzenlast, die das Gerät " +
             "in einem Raster tatsächlich gefahren hat."),
         ("cbusy",
-            "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem ein " +
-            "Transport lief. Gemessen von der Auftragserteilung (TSPORD) bis zum Transportende " +
-            "(ENDTSP). Die Transporte eines Punkts laufen nacheinander, der Wert ist deshalb " +
-            "ein echtes Zeitmaß — anders als beim RBG wird hier nichts doppelt gezählt."),
+            "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem der " +
+            "Platz besetzt war. Belegt ist er von der Auftragserteilung (TSPORD) bis zur " +
+            "Frei-Meldung (RPFREE); das Transportende (ENDTSP) liegt innerhalb dieser Spanne — " +
+            "der Fahrauftrag ist dann fertig, der Platz aber noch nicht geräumt. Ein echtes " +
+            "Zeitmaß ohne die Doppelzählung, die beim RBG-Doppelspiel entsteht."),
+        ("coccupied",
+            "Ø Dauer einer Belegung: von TSPORD bis RPFREE, also wie lange eine Ladeeinheit den " +
+            "Platz im Schnitt besetzt hielt — Fahren und Räumen zusammen."),
         ("ctransport",
-            "Ø Dauer eines Transports an diesem Punkt: von TSPORD bis ENDTSP, gepaart über die " +
-            "LE-Nummer. Steigt dieser Wert bei gleichbleibender Menge, wird der Punkt langsamer."),
+            "Ø Dauer des Fahrauftrags: von TSPORD bis ENDTSP. Steigt dieser Wert bei " +
+            "gleichbleibender Menge, wird der Punkt selbst langsamer."),
+        ("cclear",
+            "Ø Zeit vom Transportende (ENDTSP) bis zur Frei-Meldung (RPFREE): der Auftrag ist " +
+            "abgeschlossen, der Platz aber noch besetzt. Lange Zeiten deuten auf Rückstau " +
+            "dahinter — die Ladeeinheit kommt nicht weg."),
         ("cwait",
-            "Ø Wartezeit von ENDTSP bis zum nächsten TSPORD — wie lange der Punkt ohne Auftrag " +
-            "dastand. Lange Wartezeiten heißen: nicht dieser Punkt ist der Engpass, sondern die " +
-            "Zuführung davor."),
+            "Ø Leerzeit von RPFREE bis zum nächsten TSPORD — wie lange der Platz effektiv leer " +
+            "dastand, ohne Fahrauftrag. Lange Leerzeiten heißen: nicht dieser Punkt ist der " +
+            "Engpass, sondern die Zuführung davor."),
+        ("cidle",
+            "Gesamte effektiv leere Zeit im Zeitraum = Zeitraum − belegte Zeit, also die Summe " +
+            "aller Spannen zwischen RPFREE und dem nächsten TSPORD."),
         ("cfree",
-            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft er sich als frei " +
-            "gemeldet hat."),
+            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft der Platz wieder " +
+            "geräumt war."),
         ("ccount",
-            "Transportaufträge (TSPORD) / beendete Transporte (ENDTSP) im Zeitraum. Klaffen die " +
-            "Zahlen auseinander, laufen Transporte über den Fensterrand hinaus oder stehen noch aus."),
+            "Transportaufträge (TSPORD) / beendete Fahraufträge (ENDTSP) / Frei-Meldungen " +
+            "(RPFREE) im Zeitraum. Klaffen die Zahlen auseinander, reicht eine Belegung über den " +
+            "Fensterrand hinaus oder steht noch aus."),
         ("active",
             "Stunden mit mindestens einer Fahrt. Zeigt, ob ein niedriger Durchschnitt von " +
             "gleichmäßig wenig Arbeit kommt oder von längerem Stillstand."),

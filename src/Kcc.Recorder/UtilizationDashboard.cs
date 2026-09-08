@@ -286,11 +286,12 @@ public static class UtilizationDashboard
             if (!c) return '';
             return `<div class="rbg">
               <span${help('cbusy')}>Belegung <b style="color:${color(c.busyPercent)}">${fmt(c.busyPercent)} %</b></span>
-              <span${help('ccount')}>Aufträge/Ende <b>${c.orders}/${c.completed}</b></span>
-              <span${help('ctransport')}>Ø Transport <b>${dur(c.avgTransportSeconds)}</b></span>
-              <span${help('cwait')}>Ø Wartezeit <b>${dur(c.avgWaitSeconds)}</b></span>
-              <span${help('idle')}>Frei <b>${dur(c.idleSeconds)}</b></span>
-              ${c.freeSignals ? `<span${help('cfree')}>RPFREE <b>${c.freeSignals}</b></span>` : ''}
+              <span${help('ccount')}>Auftrag/Ende/Frei <b>${c.orders}/${c.completed}/${c.freeSignals}</b></span>
+              <span${help('coccupied')}>Ø belegt <b>${dur(c.avgOccupiedSeconds)}</b></span>
+              <span${help('ctransport')}>Ø Fahrauftrag <b>${dur(c.avgTransportSeconds)}</b></span>
+              <span${help('cclear')}>Ø Räumen <b>${dur(c.avgClearSeconds)}</b></span>
+              <span${help('cwait')}>Ø Leer <b>${dur(c.avgIdleSeconds)}</b></span>
+              <span${help('cidle')}>Leer gesamt <b>${dur(c.idleSeconds)}</b></span>
             </div>`;
           };
 
@@ -338,7 +339,7 @@ public static class UtilizationDashboard
                  </div>`
               : c
               ? `<div class="duo">
-                   ${dial(c.busyPercent, 'Belegung', `Ø Transport ${dur(c.avgTransportSeconds)}`, 'cbusy', `${p.resourcePoint}:busy`)}
+                   ${dial(c.busyPercent, 'Belegung', `Ø belegt ${dur(c.avgOccupiedSeconds)}`, 'cbusy', `${p.resourcePoint}:busy`)}
                    ${dial(p.percent, 'Leistung', `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH`, 'load', `${p.resourcePoint}:uph`)}
                  </div>`
               : dial(p.percent, '% vom Richtwert', '', null, `${p.resourcePoint}:uph`);

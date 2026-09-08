@@ -51,30 +51,34 @@ public class ConveyorReportTests
     }
 
     [Fact]
-    public void Misst_Belegung_Transportdauer_und_Wartezeit()
+    public void Belegt_ist_von_TSPORD_bis_RPFREE_ENDTSP_liegt_dazwischen()
     {
         var feed = new Feed();
-        // Fenster 200 s. Drei Transporte à 30 s, dazwischen 20 s Warten.
+        // Zwei Vorgänge: Auftrag, Fahrt zu Ende nach 20 s, Platz frei nach weiteren 10 s.
         feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(30, "ENDTSP", "LB41", "LE1");
-        feed.Add(31, "RPFREE", "LB41", "LE1");
-        feed.Add(50, "TSPORD", "LB41", "LE2");
+        feed.Add(20, "ENDTSP", "LB41", "LE1");
+        feed.Add(30, "RPFREE", "LB41", "LE1");
+        feed.Add(60, "TSPORD", "LB41", "LE2");
         feed.Add(80, "ENDTSP", "LB41", "LE2");
-        feed.Add(100, "TSPORD", "LB41", "LE3");
-        feed.Add(130, "ENDTSP", "LB41", "LE3");
-        feed.Add(60, "ENDTSP", "EA21", "LE9");   // anderer Punkt — muss draußen bleiben
+        feed.Add(90, "RPFREE", "LB41", "LE2");
+        feed.Add(45, "ENDTSP", "EA21", "LE9");   // anderer Punkt — bleibt draußen
 
-        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(200), Opts);
+        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
 
-        Assert.Equal(3, r.Orders);
-        Assert.Equal(3, r.Completed);
-        Assert.Equal(1, r.FreeSignals);
-        Assert.Equal(90, r.BusySeconds);            // 3 × 30 s
-        Assert.Equal(45, r.BusyPercent);            // 90 von 200 s
-        Assert.Equal(110, r.IdleSeconds);
-        Assert.Equal(30, r.AvgTransportSeconds);
-        Assert.Equal(20, r.AvgWaitSeconds);         // 50−30 und 100−80
-        Assert.Equal(T0.AddSeconds(130), r.LatestAt);
+        Assert.Equal(2, r.Orders);
+        Assert.Equal(2, r.Completed);
+        Assert.Equal(2, r.FreeSignals);
+
+        // 2 × 30 s belegt (0–30 und 60–90), nicht 2 × 20 s: ENDTSP gibt den Platz nicht frei.
+        Assert.Equal(60, r.BusySeconds);
+        Assert.Equal(50, r.BusyPercent);
+        Assert.Equal(60, r.IdleSeconds);
+
+        Assert.Equal(30, r.AvgOccupiedSeconds);    // TSPORD -> RPFREE
+        Assert.Equal(20, r.AvgTransportSeconds);   // TSPORD -> ENDTSP
+        Assert.Equal(10, r.AvgClearSeconds);       // ENDTSP -> RPFREE
+        Assert.Equal(30, r.AvgIdleSeconds);        // RPFREE(30) -> TSPORD(60)
+        Assert.Equal(T0.AddSeconds(90), r.LatestAt);
     }
 
     [Fact]
@@ -85,42 +89,71 @@ public class ConveyorReportTests
         Assert.Equal(0, r.Orders);
         Assert.Equal(0, r.BusyPercent);
         Assert.Equal(3600, r.IdleSeconds);
-        Assert.Equal(0, r.AvgTransportSeconds);
+        Assert.Equal(0, r.AvgOccupiedSeconds);
         Assert.Null(r.LatestAt);
     }
 
     [Fact]
-    public void Lueckenlose_Transporte_ergeben_keine_Wartezeit()
+    public void Noch_belegt_am_Fensterende_zaehlt_bis_zum_Rand()
     {
         var feed = new Feed();
-        // Der nächste Auftrag beginnt, sobald der vorige endet.
-        for (var i = 0; i < 4; i++)
-        {
-            feed.Add(i * 50, "TSPORD", "LB41", $"LE{i}");
-            feed.Add(i * 50 + 50, "ENDTSP", "LB41", $"LE{i}");
-        }
+        feed.Add(0, "TSPORD", "LB41", "LE1");
+        feed.Add(20, "ENDTSP", "LB41", "LE1");
+        // Kein RPFREE: die Ladeeinheit steht noch auf dem Platz.
 
-        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(200), Opts);
+        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(100), Opts);
 
-        Assert.Equal(0, r.AvgWaitSeconds);
-        // Das Fenster ist rechts offen: das ENDTSP genau bei 200 s zählt erst im nächsten
-        // Fenster, es bleiben drei abgeschlossene Transporte à 50 s.
-        Assert.Equal(3, r.Completed);
-        Assert.Equal(75, r.BusyPercent);
+        Assert.Equal(100, r.BusySeconds);
+        Assert.Equal(100, r.BusyPercent);
+        Assert.Equal(0, r.IdleSeconds);
     }
 
     [Fact]
-    public void Transport_von_vor_dem_Fenster_zaehlt_nur_anteilig()
+    public void Belegung_von_vor_dem_Fenster_zaehlt_ab_Fensteranfang()
     {
         var feed = new Feed();
         feed.Add(-100, "TSPORD", "LB41", "LE1");   // Auftrag lief schon vor dem Fenster
-        feed.Add(199, "ENDTSP", "LB41", "LE1");
+        feed.Add(40, "RPFREE", "LB41", "LE1");
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(200), Opts);
 
-        Assert.Equal(199, r.BusySeconds);   // nicht 299 — auf den Fensteranfang beschnitten
-        Assert.Equal(99.5, r.BusyPercent);
-        Assert.Equal(1, r.IdleSeconds);
+        Assert.Equal(40, r.BusySeconds);   // nicht 140 — auf den Fensteranfang beschnitten
+        Assert.Equal(20, r.BusyPercent);
+        Assert.Equal(160, r.IdleSeconds);
+    }
+
+    [Fact]
+    public void Zweiter_Auftrag_ohne_Freimeldung_verlaengert_dieselbe_Belegung()
+    {
+        var feed = new Feed();
+        feed.Add(0, "TSPORD", "LB41", "LE1");
+        feed.Add(30, "TSPORD", "LB41", "LE2");     // Umlagerung ohne zwischenzeitliches RPFREE
+        feed.Add(60, "RPFREE", "LB41", "LE2");
+
+        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
+
+        Assert.Single(new[] { r.AvgOccupiedSeconds });
+        Assert.Equal(60, r.BusySeconds);           // eine durchgehende Belegung 0–60
+        Assert.Equal(60, r.AvgOccupiedSeconds);
+    }
+
+    [Fact]
+    public void Punkt_ohne_Freimeldungen_bleibt_belegt_und_zeigt_das_an()
+    {
+        var feed = new Feed();
+        // Meldet ein Punkt kein RPFREE, gilt er durchgehend als belegt — nur RPFREE gibt frei.
+        // Der Zählerstand Frei=0 macht das in der Kachel sichtbar, statt es zu kaschieren.
+        feed.Add(0, "TSPORD", "LB41", "LE1");
+        feed.Add(20, "ENDTSP", "LB41", "LE1");
+        feed.Add(60, "TSPORD", "LB41", "LE2");
+        feed.Add(80, "ENDTSP", "LB41", "LE2");
+
+        var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
+
+        Assert.Equal(0, r.FreeSignals);
+        Assert.Equal(2, r.Orders);
+        Assert.Equal(100, r.BusyPercent);
+        Assert.Equal(0, r.AvgIdleSeconds);
     }
 
     [Fact]
@@ -129,6 +162,7 @@ public class ConveyorReportTests
         var feed = new Feed();
         feed.Add(0, "TSPORD", "LB41", "LE1");
         feed.Add(60, "ENDTSP", "LB41", "LE1");
+        feed.Add(90, "RPFREE", "LB41", "LE1");
 
         var r = ConveyorReport.Compute(
             feed.Rows, Fmt, "LB41", T0, T0.AddMinutes(10), Opts, bucketMinutes: 5, stepMinutes: 1);

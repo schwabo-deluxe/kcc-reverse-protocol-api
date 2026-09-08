@@ -15,32 +15,40 @@ public sealed record ConveyorStats
     public required int FreeSignals { get; init; }
 
     /// <summary>
-    /// Belegungsgrad in Prozent = Summe der Transportdauern ÷ Fenster. Die Transporte eines
-    /// Punkts laufen nacheinander, deshalb ist dies — anders als beim RBG — ein echtes
-    /// Zeitmaß; auf 100 begrenzt.
+    /// Belegungsgrad in Prozent = belegte Zeit ÷ Fenster. Belegt ist der Punkt von
+    /// <c>TSPORD</c> bis <c>RPFREE</c>; <c>ENDTSP</c> liegt innerhalb dieser Spanne.
     /// </summary>
     public required double BusyPercent { get; init; }
 
     /// <summary>Belegte Zeit in Sekunden im Fenster.</summary>
     public required double BusySeconds { get; init; }
 
-    /// <summary>Freie Zeit in Sekunden im Fenster = Fenster − belegte Zeit.</summary>
+    /// <summary>Effektiv leere Zeit in Sekunden = Fenster − belegte Zeit.</summary>
     public required double IdleSeconds { get; init; }
 
-    /// <summary>Ø Sekunden von <c>TSPORD</c> bis <c>ENDTSP</c> — Dauer eines Transports.</summary>
+    /// <summary>Ø Dauer einer Belegung: <c>TSPORD</c> → <c>RPFREE</c>.</summary>
+    public required double AvgOccupiedSeconds { get; init; }
+
+    /// <summary>Ø Dauer des Fahrauftrags: <c>TSPORD</c> → <c>ENDTSP</c>.</summary>
     public required double AvgTransportSeconds { get; init; }
 
     /// <summary>
-    /// Ø Sekunden von <c>ENDTSP</c> bis zum nächsten <c>TSPORD</c> — wie lange der Punkt auf
-    /// den nächsten Auftrag wartete. Lange Wartezeit heißt: der Punkt ist nicht der Engpass.
+    /// Ø Zeit vom Transportende bis zur Frei-Meldung: <c>ENDTSP</c> → <c>RPFREE</c>. Der Auftrag
+    /// ist fertig, der Platz aber noch belegt — lange Zeiten deuten auf Rückstau dahinter.
     /// </summary>
-    public required double AvgWaitSeconds { get; init; }
+    public required double AvgClearSeconds { get; init; }
+
+    /// <summary>
+    /// Ø Leerzeit zwischen zwei Belegungen: <c>RPFREE</c> → nächstes <c>TSPORD</c>. Lange
+    /// Leerzeiten heißen, dass die Zuführung davor bremst, nicht dieser Punkt.
+    /// </summary>
+    public required double AvgIdleSeconds { get; init; }
 
     public required DateTime? LatestAt { get; init; }
 
     /// <summary>
     /// Gleitender Verlauf des Belegungsgrads: <see cref="UtilizationBucket.Uph"/> = Prozent,
-    /// <see cref="UtilizationBucket.Count"/> = beendete Transporte im Fenster.
+    /// <see cref="UtilizationBucket.Count"/> = Transportaufträge im Fenster.
     /// </summary>
     public required IReadOnlyList<UtilizationBucket> Series { get; init; }
 }
@@ -66,14 +74,17 @@ public sealed record ConveyorOptions
 /// <summary>
 /// Wertet aus, wie stark ein Fördertechnik-Ressourcenpunkt belegt ist. Der Ablauf an einem Punkt:
 /// <list type="bullet">
-///   <item><c>TSPORD</c> — Transportauftrag erteilt, der Punkt beginnt zu arbeiten</item>
-///   <item><c>ENDTSP</c> — Transport beendet, der Punkt wartet auf den nächsten Auftrag</item>
-///   <item><c>RPFREE</c> — der Ressourcenpunkt meldet sich frei</item>
+///   <item><c>TSPORD</c> — Transportauftrag erteilt, der Platz ist ab jetzt belegt</item>
+///   <item><c>ENDTSP</c> — Fahrauftrag beendet; der Platz ist noch <em>nicht</em> frei</item>
+///   <item><c>RPFREE</c> — der Platz ist effektiv frei</item>
 /// </list>
 ///
-/// Daraus: belegte Zeit = Summe der Dauern <c>TSPORD</c>→<c>ENDTSP</c>, freie Zeit = Rest des
-/// Fensters, dazu die mittlere Wartezeit <c>ENDTSP</c>→nächster <c>TSPORD</c>. Reine Funktion
-/// über einem Zeitfenster; gepaart wird über die LE-Nummer (<c>ResourceLabel</c>), sonst FIFO.
+/// Belegt ist der Punkt also von <c>TSPORD</c> bis <c>RPFREE</c>, leer von <c>RPFREE</c> bis zum
+/// nächsten <c>TSPORD</c>. Statt Ereignisse zu paaren läuft ein Zustandsautomat über den
+/// Zeitstrahl — Belegung ist eine Eigenschaft des <em>Platzes</em>, nicht einer LE, und das hält
+/// die Rechnung auch bei fehlenden oder doppelten Meldungen stabil.
+///
+/// Reine Funktion über einem Zeitfenster.
 /// </summary>
 public static class ConveyorReport
 {
@@ -96,6 +107,37 @@ public static class ConveyorReport
         ConveyorOptions options,
         int bucketMinutes = 5,
         int stepMinutes = 1)
+    {
+        var events = Events(window, format, resourcePoint, options);
+        var inWindow = events.Where(e => e.At >= from && e.At < to).ToList();
+
+        var (spans, transports, clears, idles) = Walk(events, from, to);
+
+        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
+        var busy = spans.Sum(s => (s.End - s.Start).TotalSeconds);
+
+        return new ConveyorStats
+        {
+            ResourcePoint = resourcePoint,
+            Orders = inWindow.Count(e => e.Kind == Kind.Order),
+            Completed = inWindow.Count(e => e.Kind == Kind.End),
+            FreeSignals = inWindow.Count(e => e.Kind == Kind.Free),
+            BusySeconds = Math.Round(busy, 1),
+            BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
+            IdleSeconds = Math.Round(Math.Max(0, windowSeconds - busy), 1),
+            AvgOccupiedSeconds = Avg(spans.Select(s => (s.End - s.Start).TotalSeconds)),
+            AvgTransportSeconds = Avg(transports),
+            AvgClearSeconds = Avg(clears),
+            AvgIdleSeconds = Avg(idles),
+            LatestAt = inWindow.Count > 0 ? inWindow.Max(e => e.At) : null,
+            Series = RollingSeries(spans, inWindow, from, to, bucketMinutes, stepMinutes),
+        };
+    }
+
+    /// <summary>Liest die Ereignisse des Punkts und führt die DM/AK-Doppel zusammen.</summary>
+    static List<Ev> Events(
+        IReadOnlyList<Telegram> window, TelegramFormat format, string resourcePoint,
+        ConveyorOptions options)
     {
         var mcIdx = FieldIndex(format, "MessageCode");
         var rpIdx = FieldIndex(format, "ResourcePoint");
@@ -124,7 +166,6 @@ public static class ConveyorReport
             if (Classify(code) is not { } kind)
                 continue;
 
-            // Die Anlage schickt jedes Ereignis als DM/AK-Doppel — zusammenführen.
             var label = Field(f, labelIdx);
             var key = (code, label);
             if (lastSeen.TryGetValue(key, out var prev) && (t.DateTime - prev).TotalSeconds < DedupWindowSeconds)
@@ -133,94 +174,87 @@ public static class ConveyorReport
             events.Add(new Ev(t.DateTime, label, kind));
         }
 
-        var inWindow = events.Where(e => e.At >= from && e.At < to).ToList();
-        var transports = Pair(events, from, to);
-
-        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
-        var busy = transports.Sum(p => p.Seconds);
-        var waits = Waits(events, from, to);
-
-        return new ConveyorStats
-        {
-            ResourcePoint = resourcePoint,
-            Orders = inWindow.Count(e => e.Kind == Kind.Order),
-            Completed = inWindow.Count(e => e.Kind == Kind.End),
-            FreeSignals = inWindow.Count(e => e.Kind == Kind.Free),
-            BusySeconds = Math.Round(busy, 1),
-            BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
-            IdleSeconds = Math.Round(Math.Max(0, windowSeconds - busy), 1),
-            AvgTransportSeconds = transports.Count == 0 ? 0 : Math.Round(transports.Average(p => p.Seconds), 1),
-            AvgWaitSeconds = waits.Count == 0 ? 0 : Math.Round(waits.Average(), 1),
-            LatestAt = inWindow.Count > 0 ? inWindow.Max(e => e.At) : null,
-            Series = RollingSeries(transports, events, from, to, bucketMinutes, stepMinutes),
-        };
+        return events;
     }
 
     /// <summary>
-    /// Paart jedes <c>ENDTSP</c> im Fenster mit dem jüngsten passenden <c>TSPORD</c> davor
-    /// (gleiche LE-Nummer, sonst FIFO) und gibt Ende und Dauer je Transport zurück.
+    /// Läuft über den Zeitstrahl und schneidet Belegungsintervalle heraus. Nebenbei fallen die
+    /// Teilzeiten an: Fahrauftrag (Order→End), Räumen (End→Free) und Leerzeit (Free→Order).
     /// </summary>
-    static List<(DateTime EndAt, double Seconds)> Pair(List<Ev> events, DateTime from, DateTime to)
+    static (List<(DateTime Start, DateTime End)> Spans, List<double> Transports,
+            List<double> Clears, List<double> Idles)
+        Walk(List<Ev> events, DateTime from, DateTime to)
     {
-        // Aufträge etwas vor dem Fenster zulassen: ein Transport darf hineinragen.
-        var orders = events.Where(e => e.Kind == Kind.Order && e.At >= from.AddMinutes(-30)).ToList();
-        var used = new bool[orders.Count];
-        var result = new List<(DateTime, double)>();
+        var spans = new List<(DateTime, DateTime)>();
+        List<double> transports = [], clears = [], idles = [];
 
-        foreach (var done in events.Where(e => e.Kind == Kind.End && e.At >= from && e.At < to))
+        DateTime? occupiedSince = null, lastEnd = null, freeSince = null;
+
+        void Release(DateTime at)
         {
-            var idx = -1;
-            for (var i = orders.Count - 1; i >= 0; i--)
-            {
-                if (used[i] || orders[i].At > done.At)
-                    continue;
-                if (!string.IsNullOrEmpty(done.Label) && orders[i].Label != done.Label)
-                    continue;
-                idx = i;
-                break;
-            }
-            if (idx < 0)
-                for (var i = 0; i < orders.Count; i++)
-                    if (!used[i] && orders[i].At <= done.At) { idx = i; break; }
-            if (idx < 0)
-                continue;
-
-            used[idx] = true;
-            // Nur den Anteil zählen, der ins Fenster fällt.
-            var start = orders[idx].At < from ? from : orders[idx].At;
-            result.Add((done.At, (done.At - start).TotalSeconds));
+            occupiedSince ??= from;              // war schon vor dem Fenster belegt
+            AddSpan(spans, occupiedSince.Value, at, from, to);
+            occupiedSince = null;
+            lastEnd = null;
+            freeSince = at;
         }
 
-        return result;
+        foreach (var e in events)
+        {
+            if (e.At >= to)
+                break;
+
+            switch (e.Kind)
+            {
+                case Kind.Order:
+                    if (freeSince is { } free && e.At > free)
+                        idles.Add((e.At - free).TotalSeconds);
+                    freeSince = null;
+                    // Ein zweiter Auftrag ohne zwischenzeitliches RPFREE verlängert dieselbe
+                    // Belegung, statt eine neue zu beginnen.
+                    occupiedSince ??= e.At;
+                    lastEnd = null;
+                    break;
+
+                case Kind.End:
+                    // Transportende ohne bekannten Beginn: der Punkt war schon vor dem Fenster belegt.
+                    occupiedSince ??= from;
+                    if (e.At >= from)
+                        transports.Add((e.At - Max(occupiedSince.Value, from)).TotalSeconds);
+                    lastEnd = e.At;
+                    break;
+
+                case Kind.Free:
+                    if (lastEnd is { } end && e.At >= end)
+                        clears.Add((e.At - end).TotalSeconds);
+                    Release(e.At);
+                    break;
+            }
+        }
+
+        // Am Fensterende noch belegt: bis zum rechten Rand zählen.
+        if (occupiedSince is { } open)
+            AddSpan(spans, open, to, from, to);
+
+        return (spans, transports, clears, idles);
     }
 
-    /// <summary>Wartezeiten <c>ENDTSP</c> → nächster <c>TSPORD</c> innerhalb des Fensters.</summary>
-    static List<double> Waits(List<Ev> events, DateTime from, DateTime to)
+    static void AddSpan(
+        List<(DateTime, DateTime)> spans, DateTime start, DateTime end, DateTime from, DateTime to)
     {
-        var waits = new List<double>();
-        DateTime? lastEnd = null;
-
-        foreach (var e in events.Where(e => e.At >= from && e.At < to && e.Kind is Kind.Order or Kind.End))
-        {
-            if (e.Kind == Kind.End)
-                lastEnd = e.At;
-            else if (lastEnd is { } end)
-            {
-                waits.Add((e.At - end).TotalSeconds);
-                lastEnd = null;
-            }
-        }
-
-        return waits;
+        var s = Max(start, from);
+        var e = Min(end, to);
+        if (e > s)
+            spans.Add((s, e));
     }
 
     /// <summary>
     /// Gleitender Verlauf des Belegungsgrads: je Stützpunkt der Anteil der letzten
-    /// <paramref name="bucketMinutes"/> Minuten, der belegt war. Letzter Punkt endet bei
-    /// <paramref name="to"/>.
+    /// <paramref name="bucketMinutes"/> Minuten, in denen der Punkt belegt war. Ein
+    /// Belegungsintervall wird dabei anteilig auf alle berührten Raster verteilt.
     /// </summary>
     static List<UtilizationBucket> RollingSeries(
-        List<(DateTime EndAt, double Seconds)> transports, List<Ev> events,
+        List<(DateTime Start, DateTime End)> spans, List<Ev> inWindow,
         DateTime from, DateTime to, int bucketMinutes, int stepMinutes)
     {
         var step = Math.Max(1, stepMinutes);
@@ -229,41 +263,62 @@ public static class ConveyorReport
         var winSteps = Math.Max(1, (int)Math.Round(win / (double)step));
 
         var fineBusy = new double[fineCount];
-        var fineDone = new int[fineCount];
+        var fineOrders = new int[fineCount];
 
-        foreach (var (endAt, seconds) in transports)
+        foreach (var (start, end) in spans)
         {
-            var slot = (int)((endAt - from).TotalMinutes / step);
-            if (slot < 0 || slot >= fineCount)
-                continue;
-            fineBusy[slot] += seconds;
-            fineDone[slot]++;
+            var first = (int)((start - from).TotalMinutes / step);
+            var last = (int)((end - from).TotalMinutes / step);
+            for (var i = Math.Max(0, first); i <= Math.Min(fineCount - 1, last); i++)
+            {
+                var binStart = from.AddMinutes(i * step);
+                var binEnd = binStart.AddMinutes(step);
+                var overlap = (Min(end, binEnd) - Max(start, binStart)).TotalSeconds;
+                if (overlap > 0)
+                    fineBusy[i] += overlap;
+            }
+        }
+
+        foreach (var e in inWindow.Where(e => e.Kind == Kind.Order))
+        {
+            var slot = (int)((e.At - from).TotalMinutes / step);
+            if (slot >= 0 && slot < fineCount)
+                fineOrders[slot]++;
         }
 
         var winSeconds = winSteps * step * 60.0;
         var series = new List<UtilizationBucket>(fineCount);
         double accBusy = 0;
-        var accDone = 0;
+        var accOrders = 0;
 
         for (var i = 0; i < fineCount; i++)
         {
             accBusy += fineBusy[i];
-            accDone += fineDone[i];
+            accOrders += fineOrders[i];
             if (i >= winSteps)
             {
                 accBusy -= fineBusy[i - winSteps];
-                accDone -= fineDone[i - winSteps];
+                accOrders -= fineOrders[i - winSteps];
             }
             series.Add(new UtilizationBucket
             {
                 At = from.AddMinutes((i + 1) * step),
-                Count = accDone,
+                Count = accOrders,
                 Uph = Math.Round(Math.Min(100, accBusy / winSeconds * 100), 1),
             });
         }
 
         return series;
     }
+
+    static double Avg(IEnumerable<double> values)
+    {
+        var list = values as IList<double> ?? values.ToList();
+        return list.Count == 0 ? 0 : Math.Round(list.Average(), 1);
+    }
+
+    static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
+    static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 
     static HashSet<string> Set(IReadOnlyList<string> codes) =>
         new(codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()), StringComparer.OrdinalIgnoreCase);
