@@ -60,6 +60,7 @@ public static class WallboardDashboard
           .rbg { margin-top: 6px; padding-top: 6px; border-top: 1px solid #232830; font-size: 11px;
                  color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 2px 10px; font-variant-numeric: tabular-nums; }
           .rbg b { color: #e6e6e6; font-weight: 600; }
+          [title] { cursor: help; }
 
           /* Hochformat: Spalten untereinander, Seite scrollt. */
           @media (orientation: portrait) {
@@ -72,6 +73,7 @@ public static class WallboardDashboard
         </head>
         <body>
         <!--nav-->
+        <!--rbghelp-->
         <div id="app">
           <header>
             <h1>Wandansicht</h1>
@@ -87,6 +89,10 @@ public static class WallboardDashboard
         const API_BASE = (new URLSearchParams(location.search).get('api')
           || (/^https?:$/.test(location.protocol) ? location.origin : 'http://localhost:8082'))
           .replace(/\/+$/, '');
+
+        // Erklärtexte der RBG-Kennzahlen (serverseitig eingesetzt, siehe RbgGlossary).
+        const H = window.RBG_HELP || {};
+        const help = k => H[k] ? ` title="${String(H[k]).replace(/"/g, '&quot;')}"` : '';
 
         function color(pct) {
           if (pct >= 95) return '#ff6b6b';
@@ -143,16 +149,16 @@ public static class WallboardDashboard
             : peak;
           const sTarget = p.rbg ? p.rbg.maxCyclesPerHour : data.targetUph;
           const sub = p.rbg
-            ? `${fmt(p.rbg.puts + p.rbg.fetches)} Spiele · ${p.count} ges.`
+            ? `${fmt(p.rbg.cyclesPerHour)} / ${p.rbg.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
             : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.count} ges.`;
           const r = p.rbg;
           const rbgRow = r ? `<div class="rbg">
-              <span>Ausl <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
-              <span>Leist <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b></span>
-              <span>DS <b>${r.doubleCycles}</b></span>
-              <span>ES <b>${r.singleCycles}</b></span>
-              <span>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
-              <span>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
+              <span${help('busy')}>Ausl <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
+              <span${help('load')}>Leist <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b></span>
+              <span${help('double')}>DS <b>${r.doubleCycles}</b></span>
+              <span${help('single')}>ES <b>${r.singleCycles}</b></span>
+              <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
+              <span${help('idle')}>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
             </div>` : '';
           return `<div class="tile">
             <div class="t-head">

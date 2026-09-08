@@ -133,6 +133,13 @@ public class RbgHistoryTests
         Assert.Equal(10, r.Buckets[0].CyclesPerHour["RBG01"]);
         Assert.Equal(5, r.Buckets[0].CyclesPerHour["RBG02"]);
         Assert.Equal(50, r.Buckets[0].BusyPercent["RBG01"]);
+
+        // Leistung = Spiele/h gegen die Kapazität (Standard 60/h), Leerlauf = Rest des Rasters.
+        Assert.Equal(16.7, r.Buckets[0].LoadPercent["RBG01"]);   // 10 von 60
+        Assert.Equal(8.3, r.Buckets[0].LoadPercent["RBG02"]);    // 5 von 60
+        Assert.Equal(30, r.Buckets[0].IdleMinutes["RBG01"]);     // 60 min − 1800 s
+        Assert.Equal(60, r.Buckets[1].IdleMinutes["RBG01"]);     // zweite Stunde ohne Auftragszeit
+        Assert.Equal(1.5, a.IdleHours);                          // 2 h − 1800 s
     }
 
     [Fact]

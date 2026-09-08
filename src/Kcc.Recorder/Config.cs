@@ -169,7 +169,7 @@ public sealed class KccConfig
     /// (Glättung), wenn kein <c>bucket</c> mitgegeben wird. Der Verlauf gleitet, statt in feste
     /// Eimer zu springen; der letzte Punkt zeigt den aktuell laufenden Wert.
     /// </summary>
-    public int UtilizationBucketMinutes { get; set; } = 5;
+    public int UtilizationBucketMinutes { get; set; } = 10;
 
     /// <summary>Abtastschritt der Verlaufskurven in Minuten — ein Stützpunkt je Schritt (Standard <c>1</c>).</summary>
     public int UtilizationSeriesStepMinutes { get; set; } = 1;
@@ -181,7 +181,7 @@ public sealed class KccConfig
     /// Trailing-Fenster in Minuten, aus dem UPH und Prozent der Auslastung hochgerechnet werden
     /// (Standard: <c>15</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
     /// </summary>
-    public int UtilizationRateMinutes { get; set; } = 15;
+    public int UtilizationRateMinutes { get; set; } = 5;
 
     /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.

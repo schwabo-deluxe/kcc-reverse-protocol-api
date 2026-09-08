@@ -93,7 +93,7 @@ public static class ApiServer
         (200, JsonContentType, JsonSerializer.Serialize(body, Json));
 
     static (int Status, string ContentType, string Body) Html(string page, string activePath) =>
-        (200, HtmlContentType, DashboardNav.Inject(page, activePath));
+        (200, HtmlContentType, DashboardNav.Inject(RbgGlossary.Inject(page), activePath));
 
     /// <summary>Bearbeitet eine Anfrage transportunabhängig; gibt Status, Content-Type und Rumpf zurück.</summary>
     static (int Status, string ContentType, string Body) Handle(

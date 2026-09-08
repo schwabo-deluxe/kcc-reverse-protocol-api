@@ -79,7 +79,9 @@ public class RbgReportTests
         Assert.Equal(5, r.Fetches);     // ENDPUP L1,L3,L5,L7,L9
         Assert.Equal(4, r.DoubleCycles);
         Assert.Equal(1, r.SingleCycles);
-        Assert.Equal(112.5, r.Percent); // (4 + 0.5) / (60 * 240/3600) * 100
+        Assert.Equal(67.5, r.CyclesPerHour); // (4 + 0.5) Spiele in 240 s
+        Assert.Equal(112.5, r.Percent);      // 67,5 von 60/h — Leistung kommt aus den Spielen,
+                                             // nicht aus den TSPORD des Ressourcenpunkts
         Assert.Equal(25, r.AvgPutSeconds);
         Assert.Equal(25, r.AvgFetchSeconds);
         Assert.Equal(15, r.IdleSeconds); // 240 - (4*25 + 5*25)

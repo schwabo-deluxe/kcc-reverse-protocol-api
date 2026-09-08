@@ -24,7 +24,7 @@ public static class UtilizationDashboard
           .meta { margin-left: auto; color: #9aa4b2; font-size: 12px; }
           .meta.err { color: #ff6b6b; }
           main { padding: 20px; max-width: 1100px; margin: 0 auto; }
-          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+          .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; }
           .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
           .tile .label .code { color: #7a8494; font-weight: 400; }
@@ -32,9 +32,16 @@ public static class UtilizationDashboard
           .tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
           /* Tacho links, Verlauf rechts, auf gleicher Höhe. */
           .tile-body { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+          .rbg [title], [title] { cursor: help; }
           .rbg { margin-top: 8px; padding-top: 8px; border-top: 1px solid #232830; font-size: 12px; color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 3px 12px; }
           .rbg b { color: #e6e6e6; font-weight: 600; }
           .gauge-col { flex: 0 0 auto; text-align: center; }
+          /* RBG-Kacheln: zwei Tachos nebeneinander — Zeitseite und Mengenseite. */
+          .duo { display: flex; gap: 10px; flex: 0 0 auto; }
+          .duo .gauge { width: 104px; height: 54px; }
+          .duo .pct { font-size: 15px; }
+          .gcap { font-size: 10px; color: #7a8494; text-transform: uppercase; letter-spacing: .05em; margin-top: 3px; }
+          .gsub { font-size: 10px; color: #5f6875; font-variant-numeric: tabular-nums; }
           .spark-col { flex: 1 1 0; min-width: 0; }
           .gauge { display: block; width: 128px; height: 66px; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
@@ -70,12 +77,13 @@ public static class UtilizationDashboard
         </head>
         <body>
         <!--nav-->
+        <!--rbghelp-->
         <header>
           <h1>Auslastung (TSPORD)</h1>
           <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
           <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (TargetUph in appsettings.json)"></label>
-          <label>Glättung (min) <input type="number" id="bucket" value="5" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
-          <label>UPH aus (min) <input type="number" id="rate" value="15" min="1" max="240"></label>
+          <label>Glättung (min) <input type="number" id="bucket" value="10" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
+          <label>UPH aus (min) <input type="number" id="rate" value="5" min="1" max="240"></label>
           <div class="meta" id="meta">lädt …</div>
         </header>
         <main>
@@ -93,6 +101,10 @@ public static class UtilizationDashboard
         const $ = id => document.getElementById(id);
         const fmt = n => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 
+        // Erklärtexte der RBG-Kennzahlen (serverseitig eingesetzt, siehe RbgGlossary).
+        const H = window.RBG_HELP || {};
+        const help = k => H[k] ? ` title="${String(H[k]).replace(/"/g, '&quot;')}"` : '';
+
         // Wird die Seite über die API selbst ausgeliefert (http/https), zählt die eigene Herkunft.
         // Als lose Datei (file://) sonst nichts erreichbar — dann fest auf den lokalen Standard.
         // Mit "?api=http://host:port" überschreibbar.
@@ -108,29 +120,98 @@ public static class UtilizationDashboard
 
         // Halbkreis-Tacho (nur Bogen + Zeiger, Zahl steht daneben): farbiger Wertbogen,
         // Markierung bei 100 % vom Richtwert.
-        function gauge(value, max, stroke, cls) {
-          const cx = 100, cy = 92, r = 80;
-          const f = Math.max(0, Math.min(value / max, 1));
-          const pt = (frac, rad) => {
-            const t = Math.PI * (1 - frac);
-            return [cx + rad * Math.cos(t), cy - rad * Math.sin(t)];
-          };
-          const arc = (frac, cssClass, w, extra) => {
-            if (frac <= 0) return '';
-            const [x1, y1] = pt(0, r), [x2, y2] = pt(frac, r);
-            return `<path class="${cssClass}" d="M${x1.toFixed(1)} ${y1.toFixed(1)} ` +
-              `A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" ` +
-              `stroke-width="${w}" stroke-linecap="round" ${extra || ''}/>`;
-          };
-          const [mx, my] = pt(f, r);
-          const [t1x, t1y] = pt(Math.min(1, 100 / max), r + 8);
-          const [t2x, t2y] = pt(Math.min(1, 100 / max), r - 8);
-          return `<svg class="gauge ${cls || ''}" viewBox="0 0 200 104">
-            ${arc(1, 'track', 13)}
-            ${arc(f, 'val', 6, `stroke="${stroke}"`)}
+        //
+        // Der Zielwert steht als data-Attribut am SVG; gezeichnet wird erst von paintGauge, das
+        // beim Aktualisieren vom zuletzt gezeigten Wert zum neuen überblendet (tweenGauges).
+        // Sonst würde der Zeiger bei jedem Abruf springen.
+        const GPT = (frac, rad) => {
+          const t = Math.PI * (1 - frac);
+          return [100 + rad * Math.cos(t), 92 - rad * Math.sin(t)];
+        };
+        const gArc = (frac, r) => {
+          const [x1, y1] = GPT(0, r), [x2, y2] = GPT(Math.max(0.0001, frac), r);
+          return `M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+        };
+
+        // Zuletzt gezeigter Wert je Tacho — Ausgangspunkt der nächsten Überblendung.
+        const gPrev = new Map();
+
+        function gauge(value, max, stroke, cls, key) {
+          const [t1x, t1y] = GPT(Math.min(1, 100 / max), 88);
+          const [t2x, t2y] = GPT(Math.min(1, 100 / max), 72);
+          return `<svg class="gauge ${cls || ''}" viewBox="0 0 200 104"
+                       data-g-key="${key || ''}" data-g-value="${value}" data-g-max="${max}">
+            <path class="track" d="${gArc(1, 80)}" fill="none" stroke-width="13" stroke-linecap="round"/>
+            <path class="val" d="" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round"/>
             <line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>
-            <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="7" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
+            <circle class="needle" r="7" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
           </svg>`;
+        }
+
+        function paintGauge(svg, value, max) {
+          const f = Math.max(0, Math.min(value / max, 1));
+          const tone = color(value);
+          const val = svg.querySelector('.val'), needle = svg.querySelector('.needle');
+          const [mx, my] = GPT(f, 80);
+          val.setAttribute('d', f > 0 ? gArc(f, 80) : '');
+          val.setAttribute('stroke', tone);
+          needle.setAttribute('cx', mx.toFixed(1));
+          needle.setAttribute('cy', my.toFixed(1));
+          needle.setAttribute('fill', tone);
+        }
+
+        // Blendet alle Tachos (und ihre Prozentzahl) vom letzten auf den neuen Wert über.
+        function tweenGauges(ms) {
+          const items = [...document.querySelectorAll('svg.gauge[data-g-value]')].map(el => {
+            const key = el.dataset.gKey;
+            const to = parseFloat(el.dataset.gValue) || 0;
+            return {
+              el, key, to,
+              max: parseFloat(el.dataset.gMax) || 100,
+              from: key && gPrev.has(key) ? gPrev.get(key) : to,
+              txt: key ? document.querySelector(`[data-g-txt="${key}"]`) : null,
+            };
+          });
+          if (!items.length) return;
+
+          const paint = k => {
+            const e = 1 - Math.pow(1 - k, 3);            // sanft auslaufen
+            for (const it of items) {
+              const v = it.from + (it.to - it.from) * e;
+              paintGauge(it.el, v, it.max);
+              if (it.txt) {
+                it.txt.textContent = fmt(v) + ' %';
+                it.txt.style.color = color(v);
+              }
+            }
+          };
+
+          // Endwert merken — er ist der Startpunkt der nächsten Überblendung. Muss auch dann
+          // passieren, wenn nicht animiert wird, sonst fehlt beim nächsten Mal der Ausgangswert.
+          const remember = () => { for (const it of items) if (it.key) gPrev.set(it.key, it.to); };
+
+          // Beim ersten Aufbau (oder ohne Bewegung) direkt zeichnen statt zu animieren.
+          if (!items.some(it => Math.abs(it.to - it.from) > 0.05)) { paint(1); remember(); return; }
+
+          // Sofort den Ausgangszustand zeichnen: das frische SVG hat noch keinen Bogen.
+          paint(0);
+
+          // Im Hintergrund-Tab liefert requestAnimationFrame keine Frames. Ohne diesen
+          // Rückfall bliebe der Tacho dann auf dem alten Wert stehen.
+          let done = false;
+          const finish = () => { if (!done) { done = true; paint(1); remember(); } };
+          const fallback = setTimeout(finish, ms + 250);
+
+          const t0 = performance.now();
+          const step = now => {
+            if (done) return;
+            const k = Math.min(1, (now - t0) / ms);
+            paint(k);
+            if (k < 1) { requestAnimationFrame(step); return; }
+            clearTimeout(fallback);
+            finish();
+          };
+          requestAnimationFrame(step);
         }
 
         // Verlauf als Sparkline. Bei RBG-Kacheln zählt der Spiele/h-Verlauf, sonst die UPH-Reihe.
@@ -203,33 +284,52 @@ public static class UtilizationDashboard
             const r = p.rbg;
             if (!r) return '';
             return `<div class="rbg">
-              <span>Auslastung <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
-              <span>Leistung <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
-              <span>Doppelspiele <b>${r.doubleCycles}</b></span>
-              <span>Einzelspiele <b>${r.singleCycles}</b></span>
-              <span>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
-              <span>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
-              <span>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
+              <span${help('busy')}>Auslastung <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
+              <span${help('load')}>Leistung <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b> von ${r.maxCyclesPerHour}/h</span>
+              <span${help('double')}>Doppelspiele <b>${r.doubleCycles}</b></span>
+              <span${help('single')}>Einzelspiele <b>${r.singleCycles}</b></span>
+              <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
+              <span${help('idle')}>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
+              <span${help('avgdur')}>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
             </div>`;
           };
 
-          // Tacho links, Verlauf rechts auf gleicher Höhe.
+          // Ein Tacho mit Beschriftung darunter. 'key' bindet ihn über die Aktualisierung
+          // hinweg an denselben Punkt, damit der Zeiger überblenden kann statt zu springen.
+          const dial = (value, label, sub, titleKey, key) => `
+            <div class="gauge-col"${help(titleKey)}>
+              ${gauge(value, 150, color(value), '', key)}
+              <div class="pct" data-g-txt="${key}" style="color:${color(value)}">${fmt(value)} %</div>
+              <div class="gcap">${label}</div>
+              ${sub ? `<div class="gsub">${sub}</div>` : ''}
+            </div>`;
+
+          // Tacho(s) links, Verlauf rechts auf gleicher Höhe. RBG-Kacheln zeigen beide Seiten:
+          // Auslastung (Zeit mit Auftrag) und Leistung (Spiele/h gegen die Kapazität) — letztere
+          // ausdrücklich aus Doppel-/Einzelspielen, nicht aus den TSPORD des Ressourcenpunkts.
           const tile = p => {
-            const sMax = p.rbg
-              ? Math.max(p.rbg.maxCyclesPerHour * 1.3, 1, ...p.rbg.series.map(b => b.uph))
+            const r = p.rbg;
+            const sMax = r
+              ? Math.max(r.maxCyclesPerHour * 1.3, 1, ...r.series.map(b => b.uph))
               : peak;
-            const sTarget = p.rbg ? p.rbg.maxCyclesPerHour : data.targetUph;
+            const sTarget = r ? r.maxCyclesPerHour : data.targetUph;
+            const head = r
+              ? `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
+              : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
+            const dials = r
+              ? `<div class="duo">
+                   ${dial(r.busyPercent, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
+                   ${dial(r.percent, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
+                 </div>`
+              : dial(p.percent, '% vom Richtwert', '', null, `${p.resourcePoint}:uph`);
             return `
             <div class="tile">
               <div class="tile-head">
                 <span class="label">${heading(p)}</span>
-                <span class="sub">${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.</span>
+                <span class="sub">${head}</span>
               </div>
               <div class="tile-body">
-                <div class="gauge-col">
-                  ${gauge(p.percent, 150, color(p.percent))}
-                  <div class="pct" style="color:${color(p.percent)}">${fmt(p.percent)} %</div>
-                </div>
+                ${dials}
                 <div class="spark-col">
                   ${spark(p, sMax, sTarget)}
                   <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
@@ -240,14 +340,25 @@ public static class UtilizationDashboard
             </div>`;
           };
 
-          // Kacheln nach Gruppe gebündelt.
+          // Kacheln nach Gruppe gebündelt. Reine RBG-Gruppen werden in Spielen summiert,
+          // nicht in UPH — sonst stünde neben dem Spiele-Tacho eine TSPORD-Zahl.
+          const grpSum = g => {
+            const members = g.points.map(n => byName(n)).filter(Boolean);
+            if (members.length && members.every(p => p.rbg)) {
+              const cph = members.reduce((a, p) => a + p.rbg.cyclesPerHour, 0);
+              const max = members.reduce((a, p) => a + p.rbg.maxCyclesPerHour, 0);
+              return `Ø ${fmt(g.percent)} % · ${fmt(cph)} / ${max} Spiele/h · ${g.count} TSPORD`;
+            }
+            return `Ø ${fmt(g.percent)} % · ${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ` +
+              `${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.`;
+          };
+
           $('tiles').innerHTML = data.groups.map(g => `
             <section class="grp">
               <div class="grp-h">
                 <span class="grp-name">${g.name}</span>
-                <span class="grp-sum" style="color:${color(g.percent)}">
-                  Ø ${fmt(g.percent)} % · ${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.</span>
-                ${gauge(g.percent, 150, color(g.percent), 'sm')}
+                <span class="grp-sum" style="color:${color(g.percent)}">${grpSum(g)}</span>
+                ${gauge(g.percent, 150, color(g.percent), 'sm', `grp:${g.name}`)}
               </div>
               <div class="tiles">${g.points.map(n => tile(byName(n))).join('')}</div>
             </section>`).join('');
@@ -267,6 +378,8 @@ public static class UtilizationDashboard
                 <td class="${p.errors ? 'err' : ''}">${p.errors}</td>
                 <td>${p.latestAt ? new Date(p.latestAt).toLocaleTimeString('de-DE') : '–'}</td>
               </tr>`).join('')}`).join('');
+
+          tweenGauges(900);
 
           $('meta').classList.remove('err');
           $('meta').textContent =
@@ -339,7 +452,9 @@ public static class UtilizationDashboard
 
         for (const id of ['minutes', 'target', 'bucket', 'rate']) $(id).addEventListener('change', load);
         load();
-        setInterval(load, 60000);
+        // Häufiger abrufen: kleinere Schritte je Aktualisierung, die Überblendung macht daraus
+        // eine fortlaufende Bewegung statt eines Sprungs pro Minute.
+        setInterval(load, 20000);
         </script>
         </body>
         </html>

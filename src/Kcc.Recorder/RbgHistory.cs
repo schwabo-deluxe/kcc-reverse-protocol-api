@@ -36,8 +36,21 @@ public sealed record RbgHistoryBucket
     /// <summary>Spiele/h (Doppelspiel-Äquivalent) je Verbindung.</summary>
     public required IReadOnlyDictionary<string, double> CyclesPerHour { get; init; }
 
-    /// <summary>Zeitbasierter Auslastungsgrad in Prozent je Verbindung.</summary>
+    /// <summary>
+    /// Leistungsgrad in Prozent je Verbindung: erreichte Spiele/h gegen die Kapazität des Geräts.
+    /// Die Mengenseite — was wurde geschafft, gemessen am Möglichen.
+    /// </summary>
+    public required IReadOnlyDictionary<string, double> LoadPercent { get; init; }
+
+    /// <summary>
+    /// Zeitbasierter Auslastungsgrad in Prozent je Verbindung — die Zeitseite: wie lange lagen
+    /// überhaupt Aufträge an. Bei Doppelspielen laufen Ein- und Auslagerauftrag gleichzeitig,
+    /// deren Dauern werden addiert; der Wert ist deshalb eine Obergrenze (auf 100 begrenzt).
+    /// </summary>
     public required IReadOnlyDictionary<string, double> BusyPercent { get; init; }
+
+    /// <summary>Leerlaufminuten im Raster je Verbindung = Rasterdauer − belegte Auftragszeit.</summary>
+    public required IReadOnlyDictionary<string, double> IdleMinutes { get; init; }
 }
 
 /// <summary>Summen einer RBG-Verbindung über den ganzen Zeitraum — die Vergleichszeile.</summary>
@@ -69,6 +82,9 @@ public sealed record RbgHistorySeries
 
     /// <summary>Stunden mit mindestens einer Fahrt — macht Stillstände sichtbar.</summary>
     public required double ActiveHours { get; init; }
+
+    /// <summary>Leerlaufstunden im Zeitraum = Zeitraum − belegte Auftragszeit.</summary>
+    public required double IdleHours { get; init; }
 
     /// <summary>Anteil an den Spielen aller Verbindungen in Prozent.</summary>
     public required double Share { get; init; }
@@ -185,13 +201,19 @@ public sealed record RbgHistoryReport
         for (var i = 0; i < count; i++)
         {
             var slot = i;
+            double PerHour(string c) => cycles[c][slot] / bucketHours;
+            int Max(string c) => meta.TryGetValue(c, out var m) ? m.Max : defaultMaxCyclesPerHour;
+
             buckets.Add(new RbgHistoryBucket
             {
                 At = from.AddMinutes(slot * step),
-                CyclesPerHour = connections.ToDictionary(
-                    c => c, c => Math.Round(cycles[c][slot] / bucketHours, 1)),
+                CyclesPerHour = connections.ToDictionary(c => c, c => Math.Round(PerHour(c), 1)),
+                LoadPercent = connections.ToDictionary(
+                    c => c, c => Max(c) > 0 ? Math.Round(PerHour(c) / Max(c) * 100, 1) : 0),
                 BusyPercent = connections.ToDictionary(
                     c => c, c => Math.Round(Math.Min(100, busy[c][slot] / bucketSeconds * 100), 1)),
+                IdleMinutes = connections.ToDictionary(
+                    c => c, c => Math.Round(Math.Max(0, bucketSeconds - busy[c][slot]) / 60, 1)),
             });
         }
 
@@ -218,6 +240,7 @@ public sealed record RbgHistoryReport
                 AvgLoadPercent = max > 0 ? Math.Round(avgPerHour / max * 100, 1) : 0,
                 AvgBusyPercent = Math.Round(Math.Min(100, s.Busy / Math.Max(1e-9, (to - from).TotalSeconds) * 100), 1),
                 ActiveHours = Math.Round(s.Active.Count * bucketHours, 2),
+                IdleHours = Math.Round(Math.Max(0, (to - from).TotalSeconds - s.Busy) / 3600, 2),
                 Share = totalCycles > 0 ? Math.Round(s.Cycles / totalCycles * 100, 1) : 0,
                 LatestAt = s.Latest,
             };

@@ -20,6 +20,13 @@ public sealed record RbgCycleStats
     public required int MaxCyclesPerHour { get; init; }
 
     /// <summary>
+    /// Erreichte Spiele pro Stunde in Doppelspiel-Äquivalent: <c>(Doppelspiele + Einzelspiele/2)
+    /// ÷ Stunden</c>. Die Bezugsgröße des Leistungsgrads — bewusst aus den Fahraufträgen des RBG
+    /// gerechnet, nicht aus den TSPORD-Telegrammen des zugehörigen Ressourcenpunkts.
+    /// </summary>
+    public required double CyclesPerHour { get; init; }
+
+    /// <summary>
     /// Leistungsgrad gegen die Kapazität: <c>(Doppelspiele + Einzelspiele/2) / (MaxCyclesPerHour ·
     /// Stunden) · 100</c>. Entspricht den erreichten Lagerspielen relativ zu den nominalen
     /// Doppelspielen/h (FEM 9.851: ein Doppelspiel = 2 Lagerbewegungen).
@@ -236,8 +243,9 @@ public static class RbgReport
         var half = Math.Abs(puts - fetches);
 
         var hours = Math.Max(1e-9, (to - from).TotalHours);
+        var cyclesPerHour = (full + half / 2.0) / hours;
         var percent = maxCyclesPerHour > 0
-            ? Math.Round((full + half / 2.0) / (maxCyclesPerHour * hours) * 100, 1)
+            ? Math.Round(cyclesPerHour / maxCyclesPerHour * 100, 1)
             : 0;
 
         var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, from, to);
@@ -258,6 +266,7 @@ public static class RbgReport
             DoubleCycles = full,
             SingleCycles = half,
             MaxCyclesPerHour = maxCyclesPerHour,
+            CyclesPerHour = Math.Round(cyclesPerHour, 1),
             Percent = percent,
             IdleSeconds = Math.Round(idle, 1),
             AvgPutSeconds = avgPut,

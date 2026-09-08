@@ -346,7 +346,8 @@ int DumpDashboards(CommandLine cli)
         ("wand.html", WallboardDashboard.Html),
     };
     foreach (var (name, html) in files)
-        File.WriteAllText(Path.Combine(dir, name), DashboardNav.Strip(html), new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(dir, name),
+            DashboardNav.Strip(RbgGlossary.Inject(html)), new UTF8Encoding(false));
 
     Log($"{string.Join(", ", files.Select(f => f.Item1))} nach {Path.GetFullPath(dir)} geschrieben.");
     return 0;
