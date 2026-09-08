@@ -131,8 +131,8 @@ public sealed record RbgOptions
 
     public required IReadOnlyList<string> PutDoneCodes { get; init; }
     public required IReadOnlyList<string> GetDoneCodes { get; init; }
-    public required IReadOnlyList<string> PutOrderCodes { get; init; }
-    public required IReadOnlyList<string> GetOrderCodes { get; init; }
+    public required IReadOnlyList<string> StoreOrderCodes { get; init; }
+    public required IReadOnlyList<string> RetrieveOrderCodes { get; init; }
 
     static IReadOnlyList<string> Or(List<string> configured, IReadOnlyList<string> fallback) =>
         configured is { Count: > 0 } ? configured : fallback;
@@ -143,8 +143,8 @@ public sealed record RbgOptions
         CountTelegramType = c.CountTelegramType,
         PutDoneCodes = Or(c.RbgPutDoneCodes, RbgReport.DefaultPutDone),
         GetDoneCodes = Or(c.RbgGetDoneCodes, RbgReport.DefaultGetDone),
-        PutOrderCodes = Or(c.RbgPutOrderCodes, RbgReport.DefaultPutOrder),
-        GetOrderCodes = Or(c.RbgGetOrderCodes, RbgReport.DefaultGetOrder),
+        StoreOrderCodes = Or(c.RbgStoreOrderCodes, RbgReport.DefaultStoreOrder),
+        RetrieveOrderCodes = Or(c.RbgRetrieveOrderCodes, RbgReport.DefaultRetrieveOrder),
     };
 }
 
@@ -166,12 +166,12 @@ public static class RbgReport
 {
     public static readonly IReadOnlyList<string> DefaultPutDone = ["ENDDEP"];
     public static readonly IReadOnlyList<string> DefaultGetDone = ["ENDPUP"];
-    public static readonly IReadOnlyList<string> DefaultPutOrder = ["DEPORD"];
-    public static readonly IReadOnlyList<string> DefaultGetOrder = ["PUPORD"];
+    public static readonly IReadOnlyList<string> DefaultStoreOrder = ["DEPORD"];
+    public static readonly IReadOnlyList<string> DefaultRetrieveOrder = ["PUPORD"];
 
     const double DedupWindowSeconds = 10;
 
-    enum Kind { PutDone, GetDone, PutOrder, GetOrder }
+    enum Kind { PutDone, GetDone, StoreOrder, RetrieveOrder }
 
     readonly record struct Ev(DateTime At, string Label, Kind Kind);
 
@@ -192,14 +192,14 @@ public static class RbgReport
 
         var putDone = Set(options.PutDoneCodes);
         var getDone = Set(options.GetDoneCodes);
-        var putOrder = Set(options.PutOrderCodes);
-        var getOrder = Set(options.GetOrderCodes);
+        var storeOrder = Set(options.StoreOrderCodes);
+        var retrieveOrder = Set(options.RetrieveOrderCodes);
 
         Kind? Classify(string code) =>
             putDone.Contains(code) ? Kind.PutDone
             : getDone.Contains(code) ? Kind.GetDone
-            : putOrder.Contains(code) ? Kind.PutOrder
-            : getOrder.Contains(code) ? Kind.GetOrder
+            : storeOrder.Contains(code) ? Kind.StoreOrder
+            : retrieveOrder.Contains(code) ? Kind.RetrieveOrder
             : null;
 
         var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
@@ -286,7 +286,7 @@ public static class RbgReport
 
             foreach (var kind in new[] { Kind.PutDone, Kind.GetDone })
             {
-                var order = kind == Kind.PutDone ? Kind.PutOrder : Kind.GetOrder;
+                var order = kind == Kind.PutDone ? Kind.StoreOrder : Kind.RetrieveOrder;
                 foreach (var (doneAt, seconds) in PairDurations(events, kind, order, from, to))
                     Row(doneAt, connection).BusySeconds += seconds;
             }
@@ -332,8 +332,8 @@ public static class RbgReport
         var cyclesPerHour = load * capacity.DoubleCyclesPerHour;
         var percent = Math.Round(load * 100, 1);
 
-        var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, mFrom, to);
-        var getPairs = PairDurations(events, Kind.GetDone, Kind.GetOrder, mFrom, to);
+        var putPairs = PairDurations(events, Kind.PutDone, Kind.StoreOrder, mFrom, to);
+        var getPairs = PairDurations(events, Kind.GetDone, Kind.RetrieveOrder, mFrom, to);
         var avgPut = putPairs.Count == 0 ? 0 : Math.Round(putPairs.Average(p => p.Seconds), 1);
         var avgGet = getPairs.Count == 0 ? 0 : Math.Round(getPairs.Average(p => p.Seconds), 1);
         var windowSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);

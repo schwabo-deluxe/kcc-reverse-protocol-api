@@ -260,10 +260,10 @@ public sealed class KccConfig
     public List<string> RbgGetDoneCodes { get; set; } = [];
 
     /// <summary>MessageCodes der Auftragserteilung Einlagerung. Leer ⇒ <c>["DEPORD"]</c>.</summary>
-    public List<string> RbgPutOrderCodes { get; set; } = [];
+    public List<string> RbgStoreOrderCodes { get; set; } = [];
 
     /// <summary>MessageCodes der Auftragserteilung Auslagerung. Leer ⇒ <c>["PUPORD"]</c>.</summary>
-    public List<string> RbgGetOrderCodes { get; set; } = [];
+    public List<string> RbgRetrieveOrderCodes { get; set; } = [];
 
     /// <summary>MessageCodes eines erteilten Transportauftrags. Leer ⇒ <c>["TSPORD"]</c>.</summary>
     public List<string> ConveyorOrderCodes { get; set; } = [];
