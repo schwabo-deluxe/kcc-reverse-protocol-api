@@ -400,7 +400,7 @@ public static class UtilizationDashboard
                 <td>${p.latestAt ? new Date(p.latestAt).toLocaleTimeString('de-DE') : '–'}</td>
               </tr>`).join('')}`).join('');
 
-          tweenGauges(900);
+          tweenGauges(3000);
 
           $('meta').classList.remove('err');
           $('meta').textContent =
