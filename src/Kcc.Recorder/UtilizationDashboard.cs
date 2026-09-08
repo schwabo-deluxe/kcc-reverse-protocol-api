@@ -40,8 +40,8 @@ public static class UtilizationDashboard
           .duo { display: flex; gap: 10px; flex: 0 0 auto; }
           .duo .gauge { width: 104px; height: 54px; }
           .duo .pct { font-size: 15px; }
-          .gcap { font-size: 10px; color: #7a8494; text-transform: uppercase; letter-spacing: .05em; margin-top: 3px; }
-          .gsub { font-size: 10px; color: #5f6875; font-variant-numeric: tabular-nums; }
+          .gcap { font-size: 12px; color: #e6e6e6; text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
+          .gsub { font-size: 12px; color: #e6e6e6; font-variant-numeric: tabular-nums; white-space: nowrap; }
           .spark-col { flex: 1 1 0; min-width: 0; }
           .gauge { display: block; width: 128px; height: 66px; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
@@ -69,6 +69,7 @@ public static class UtilizationDashboard
           td.sub-row { padding-left: 24px; color: #cdd6e0; }
           #tip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s; background: #10141a; border: 1px solid #2a2f37; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
           #tip b { font-weight: 600; }
+          #tip .win { color: #7a8494; }
           table { width: 100%; border-collapse: collapse; margin-top: 22px; background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; overflow: hidden; }
           th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #2a2f37; font-variant-numeric: tabular-nums; }
           th:first-child, td:first-child { text-align: left; }
@@ -330,14 +331,16 @@ public static class UtilizationDashboard
               ? Math.max(r.maxCyclesPerHour * 1.3, 1, ...r.series.map(b => b.uph))
               : peak;
             const sTarget = r ? r.maxCyclesPerHour : data.targetUph;
+            // Ø: Mittel über das ganze Fenster — die Kurve zeigt dagegen den gleitenden
+            // Kurzzeitwert, der deutlich darüber liegen kann.
             const head = r
-              ? `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
+              ? `Ø ${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
               : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
             const c = p.conveyor;
             const dials = r
               ? `<div class="duo">
                    ${dial(r.busyPercent, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
-                   ${dial(r.percent, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
+                   ${dial(r.percent, 'Leistung', `Ø ${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
                  </div>`
               : c
               ? `<div class="duo">
@@ -357,7 +360,7 @@ public static class UtilizationDashboard
                   ${spark(p, sMax, sTarget)}
                   <div class="axis">
                     <span>vor ${data.windowMinutes} min</span>
-                    <span class="unit">${r ? `Spiele/h · ${r.connection}` : 'UPH'}</span>
+                    <span class="unit">${r ? 'Spiele/h' : 'UPH'} ⌀${data.bucketMinutes} min</span>
                     <span>jetzt</span>
                   </div>
                 </div>
@@ -451,11 +454,14 @@ public static class UtilizationDashboard
           const who = hit.rbg
             ? `<b>${hit.point.rbg.connection}</b> · ${hit.point.resourcePoint}`
             : `<b>${hit.point.resourcePoint}</b>`;
+          // Der Kurvenwert ist der gleitende Kurzzeitwert über 'bucketMinutes' — nicht der
+          // Fenstermittelwert, den Tacho und Kopfzeile zeigen. Das Fenster gehört dazugesagt.
           tip.innerHTML =
             `${who} · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
             (hit.rbg
               ? `<br>${fmt(hit.bucket.uph)} Spiele/h · ${hit.bucket.count} Fahrten`
-              : `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`);
+              : `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`) +
+            `<br><span class="win">gleitend ${current.bucketMinutes} min</span>`;
           tip.style.opacity = 1;
           tip.style.left = Math.min(window.innerWidth - 180, e.clientX + 12) + 'px';
           tip.style.top = (e.clientY + 14) + 'px';
