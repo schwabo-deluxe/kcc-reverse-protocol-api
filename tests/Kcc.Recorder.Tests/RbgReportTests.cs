@@ -42,7 +42,7 @@ public class RbgReportTests
     // Bezugsleistung wie konfiguriert: 60 Doppelspiele/h (60 s), je 96 Ein-/Auslagerungen/h
     // (37,5 s). Das Verhältnis 62,5 % stammt aus dem Datenblatt, das Niveau aus der Messung.
     static readonly RbgCapacity Cap =
-        new() { DoubleCyclesPerHour = 60, PutsPerHour = 96, FetchesPerHour = 96 };
+        new() { DoubleCyclesPerHour = 60, PutsPerHour = 96, GetsPerHour = 96 };
 
     sealed class Feed
     {
@@ -82,14 +82,14 @@ public class RbgReportTests
         var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", Cap, T0, T0.AddSeconds(240), Opts);
 
         Assert.Equal(4, r.Puts);        // ENDDEP L2,L4,L6,L8
-        Assert.Equal(5, r.Fetches);     // ENDPUP L1,L3,L5,L7,L9
+        Assert.Equal(5, r.Gets);     // ENDPUP L1,L3,L5,L7,L9
         Assert.Equal(4, r.DoubleCycles);
         Assert.Equal(1, r.SingleCycles);
         // Zeitbedarf: 4 Doppelspiele à 60 s + 1 Auslagerung à 37,5 s = 277,5 s im 240-s-Fenster.
         Assert.Equal(115.6, r.Percent);        // 277,5 / 240
         Assert.Equal(69.4, r.CyclesPerHour);   // 115,6 % von 60 Doppelspielen/h
         Assert.Equal(25, r.AvgPutSeconds);
-        Assert.Equal(25, r.AvgFetchSeconds);
+        Assert.Equal(25, r.AvgGetSeconds);
         Assert.Equal(15, r.IdleSeconds); // 240 - (4*25 + 5*25)
         Assert.Equal(93.8, r.BusyPercent); // 225 / 240 * 100
 
@@ -105,7 +105,7 @@ public class RbgReportTests
         var r = RbgReport.Compute([], Fmt, "RBG01", Cap, T0, T0.AddHours(1), Opts);
 
         Assert.Equal(0, r.Puts);
-        Assert.Equal(0, r.Fetches);
+        Assert.Equal(0, r.Gets);
         Assert.Equal(0, r.Percent);
         Assert.Equal(0, r.BusyPercent);
         Assert.Equal(3600, r.IdleSeconds);
@@ -146,7 +146,7 @@ public class RbgReportTests
         var r = RbgReport.Compute(rows, Fmt, "RBG03", Cap, T0, T0.AddHours(1), Opts);
 
         Assert.Equal(1, r.Puts);          // nicht 2 — der AK ist dieselbe Fahrt
-        Assert.Equal(0, r.Fetches);
+        Assert.Equal(0, r.Gets);
         Assert.Equal(0, r.DoubleCycles);
         Assert.Equal(1, r.SingleCycles);
 
@@ -168,7 +168,7 @@ public class RbgReportTests
         var r = RbgReport.Compute(feed.Rows, Fmt, "RBG01", Cap, T0, T0.AddSeconds(200), Opts);
 
         Assert.Equal(0, r.Puts);
-        Assert.Equal(6, r.Fetches);
+        Assert.Equal(6, r.Gets);
         Assert.Equal(0, r.DoubleCycles);
         Assert.Equal(6, r.SingleCycles);
     }

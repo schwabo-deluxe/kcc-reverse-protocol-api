@@ -306,8 +306,8 @@ public static class UtilizationDashboard
             return `<div class="rbg">
               <span${help('double')}>Doppelspiele <b>${r.doubleCycles}</b></span>
               <span${help('single')}>Einzelspiele <b>${r.singleCycles}</b></span>
-              <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.fetches}</b></span>
-              <span${help('avgdur')}>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgFetchSeconds)}</b></span>
+              <span${help('inout')}>Ein/Aus <b>${r.puts}/${r.gets}</b></span>
+              <span${help('avgdur')}>Ø Dauer ein <b>${dur(r.avgPutSeconds)}</b> / aus <b>${dur(r.avgGetSeconds)}</b></span>
             </div>`;
           };
 

@@ -163,13 +163,13 @@ public class HistorySamplerTests : IDisposable
         var one = rows.Single(r => r.Connection == "RBG01");
         Assert.Equal(day.AddHours(8), one.Bucket);
         Assert.Equal(2, one.Puts);
-        Assert.Equal(1, one.Fetches);
+        Assert.Equal(1, one.Gets);
         Assert.Equal(1, one.DoubleCycles);
         Assert.Equal(1, one.SingleCycles);
 
         var two = rows.Single(r => r.Connection == "RBG02");
         Assert.Equal(0, two.Puts);
-        Assert.Equal(1, two.Fetches);
+        Assert.Equal(1, two.Gets);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class HistorySamplerTests : IDisposable
         // Alte Aufzeichnung, deren Rohtelegramme längst geprunt sind.
         var old = day.AddDays(-120);
         store.ReplaceRbgSamplesFrom(old,
-            [new RbgSampleRow { Bucket = old, Connection = "RBG01", Puts = 7, Fetches = 7 }]);
+            [new RbgSampleRow { Bucket = old, Connection = "RBG01", Puts = 7, Gets = 7 }]);
 
         store.Insert([R(1, day.AddHours(8).AddMinutes(2), "ENDDEP", "RBG01"),
                       R(2, day.AddHours(9).AddMinutes(2), "ENDPUP", "RBG01")]);

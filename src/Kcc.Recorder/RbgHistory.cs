@@ -13,16 +13,16 @@ public sealed class RbgSampleRow
     public int Puts { get; set; }
 
     /// <summary>Abgeschlossene Auslagerungen (Holen) im Raster.</summary>
-    public int Fetches { get; set; }
+    public int Gets { get; set; }
 
     /// <summary>Belegte Auftragszeit im Raster (Summe der Auftragsdauern, dem Abschluss zugeschlagen).</summary>
     public double BusySeconds { get; set; }
 
-    /// <summary>Doppelspiele = <c>min(Puts, Fetches)</c>.</summary>
-    public int DoubleCycles => Math.Min(Puts, Fetches);
+    /// <summary>Doppelspiele = <c>min(Puts, Gets)</c>.</summary>
+    public int DoubleCycles => Math.Min(Puts, Gets);
 
-    /// <summary>Einzelspiele = <c>|Puts − Fetches|</c>.</summary>
-    public int SingleCycles => Math.Abs(Puts - Fetches);
+    /// <summary>Einzelspiele = <c>|Puts − Gets|</c>.</summary>
+    public int SingleCycles => Math.Abs(Puts - Gets);
 
     /// <summary>
     /// Grobes Doppelspiel-Äquivalent ohne Auslegungsdaten (<c>Doppel + Einzel/2</c>). Die
@@ -65,7 +65,7 @@ public sealed record RbgHistorySeries
     public required int MaxCyclesPerHour { get; init; }
 
     public required int Puts { get; init; }
-    public required int Fetches { get; init; }
+    public required int Gets { get; init; }
     public required int DoubleCycles { get; init; }
     public required int SingleCycles { get; init; }
 
@@ -140,7 +140,7 @@ public sealed record RbgHistoryReport
             to = from.AddMinutes(step);
 
         var fallback = defaultCapacity
-            ?? new RbgCapacity { DoubleCyclesPerHour = 60, PutsPerHour = 96, FetchesPerHour = 96 };
+            ?? new RbgCapacity { DoubleCyclesPerHour = 60, PutsPerHour = 96, GetsPerHour = 96 };
 
         // Verbindung → Anzeigename und Auslegung; mehrere Punkte auf derselben Verbindung: erster gewinnt.
         var meta = new Dictionary<string, (string Label, RbgCapacity Cap)>(StringComparer.OrdinalIgnoreCase);
@@ -181,7 +181,7 @@ public sealed record RbgHistoryReport
 
         var sums = connections.ToDictionary(
             c => c,
-            _ => (Puts: 0, Fetches: 0, Double: 0, Single: 0, Cycles: 0.0, Busy: 0.0,
+            _ => (Puts: 0, Gets: 0, Double: 0, Single: 0, Cycles: 0.0, Busy: 0.0,
                   Active: new HashSet<long>(), Latest: (DateTime?)null),
             StringComparer.OrdinalIgnoreCase);
 
@@ -195,16 +195,16 @@ public sealed record RbgHistoryReport
             // /auslastung dieselbe Leistung ausweisen. Ein Einzelspiel ist nicht pauschal ein
             // halbes Doppelspiel — das Verhältnis kommt aus den Auslegungsdaten des Geräts.
             var rowCap = meta.TryGetValue(r.Connection, out var rm) ? rm.Cap : fallback;
-            var equivalent = rowCap.DemandSeconds(r.Puts, r.Fetches) / rowCap.DoubleSeconds;
+            var equivalent = rowCap.DemandSeconds(r.Puts, r.Gets) / rowCap.DoubleSeconds;
 
             line[slot] += equivalent;
             busy[r.Connection][slot] += r.BusySeconds;
 
             var s = sums[r.Connection];
-            if (r.Puts + r.Fetches > 0)
+            if (r.Puts + r.Gets > 0)
                 s.Active.Add(slot);
             sums[r.Connection] = (
-                s.Puts + r.Puts, s.Fetches + r.Fetches,
+                s.Puts + r.Puts, s.Gets + r.Gets,
                 s.Double + r.DoubleCycles, s.Single + r.SingleCycles,
                 s.Cycles + equivalent, s.Busy + r.BusySeconds,
                 s.Active, s.Latest is { } prev && prev >= r.Bucket ? prev : r.Bucket);
@@ -245,7 +245,7 @@ public sealed record RbgHistoryReport
                 Label = meta.TryGetValue(c, out var m2) ? m2.Label : c,
                 MaxCyclesPerHour = max,
                 Puts = s.Puts,
-                Fetches = s.Fetches,
+                Gets = s.Gets,
                 DoubleCycles = s.Double,
                 SingleCycles = s.Single,
                 Cycles = Math.Round(s.Cycles, 1),

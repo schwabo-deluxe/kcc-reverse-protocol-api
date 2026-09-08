@@ -61,12 +61,27 @@ public sealed class TelegramStore : IDisposable
                 Bucket      TEXT    NOT NULL,
                 Connection  TEXT    NOT NULL,
                 Puts        INTEGER NOT NULL,
-                Fetches     INTEGER NOT NULL,
+                Gets        INTEGER NOT NULL,
                 BusySeconds REAL    NOT NULL,
                 PRIMARY KEY (Bucket, Connection)
             );
             """);
         Execute("CREATE INDEX IF NOT EXISTS ix_rbg_samples_bucket ON rbg_samples(Bucket);");
+
+        // Bestandsdatenbanken tragen die Spalte noch als 'Fetches' (Umbenennung Fetch → Get in
+        // der Auslagerungs-Terminologie). Umbenennen statt neu anlegen — die RBG-Langzeitreihe
+        // reicht weiter zurück als die Rohtelegramme und darf nicht verloren gehen.
+        if (HasColumn("rbg_samples", "Fetches"))
+            Execute("ALTER TABLE rbg_samples RENAME COLUMN Fetches TO Gets;");
+    }
+
+    /// <summary>Ob die Tabelle diese Spalte hat — für Schema-Anpassungen an Bestandsdateien.</summary>
+    bool HasColumn(string table, string column)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $name;";
+        command.Parameters.AddWithValue("$name", column);
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
     }
 
     /// <summary>Schreibt einen Stapel in einer Transaktion. Bereits vorhandene Ids werden übersprungen.</summary>
@@ -376,15 +391,15 @@ public sealed class TelegramStore : IDisposable
         {
             insert.Transaction = transaction;
             insert.CommandText = """
-                INSERT INTO rbg_samples (Bucket, Connection, Puts, Fetches, BusySeconds)
-                VALUES ($bucket, $connection, $puts, $fetches, $busy)
+                INSERT INTO rbg_samples (Bucket, Connection, Puts, Gets, BusySeconds)
+                VALUES ($bucket, $connection, $puts, $gets, $busy)
                 ON CONFLICT(Bucket, Connection) DO UPDATE SET
-                    Puts = excluded.Puts, Fetches = excluded.Fetches, BusySeconds = excluded.BusySeconds;
+                    Puts = excluded.Puts, Gets = excluded.Gets, BusySeconds = excluded.BusySeconds;
                 """;
             var bucket = insert.Parameters.Add("$bucket", SqliteType.Text);
             var connection = insert.Parameters.Add("$connection", SqliteType.Text);
             var puts = insert.Parameters.Add("$puts", SqliteType.Integer);
-            var fetches = insert.Parameters.Add("$fetches", SqliteType.Integer);
+            var gets = insert.Parameters.Add("$gets", SqliteType.Integer);
             var busy = insert.Parameters.Add("$busy", SqliteType.Real);
 
             foreach (var row in rows)
@@ -392,7 +407,7 @@ public sealed class TelegramStore : IDisposable
                 bucket.Value = Stamp(row.Bucket);
                 connection.Value = row.Connection;
                 puts.Value = row.Puts;
-                fetches.Value = row.Fetches;
+                gets.Value = row.Gets;
                 busy.Value = row.BusySeconds;
                 insert.ExecuteNonQuery();
             }
@@ -415,7 +430,7 @@ public sealed class TelegramStore : IDisposable
     {
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            SELECT Bucket, Connection, Puts, Fetches, BusySeconds FROM rbg_samples
+            SELECT Bucket, Connection, Puts, Gets, BusySeconds FROM rbg_samples
             WHERE Bucket >= $from AND Bucket < $to
             ORDER BY Bucket;
             """;
@@ -432,7 +447,7 @@ public sealed class TelegramStore : IDisposable
                     DateTimeStyles.RoundtripKind),
                 Connection = reader.GetString(1),
                 Puts = reader.GetInt32(2),
-                Fetches = reader.GetInt32(3),
+                Gets = reader.GetInt32(3),
                 BusySeconds = reader.GetDouble(4),
             });
         }

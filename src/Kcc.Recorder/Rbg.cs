@@ -9,12 +9,12 @@ public sealed record RbgCycleStats
     public required int Puts { get; init; }
 
     /// <summary>Abgeschlossene Auslagerungen (Holen) im Fenster.</summary>
-    public required int Fetches { get; init; }
+    public required int Gets { get; init; }
 
-    /// <summary>Doppelspiele = <c>min(Puts, Fetches)</c> — gepaarte Ein- und Auslagerung.</summary>
+    /// <summary>Doppelspiele = <c>min(Puts, Gets)</c> — gepaarte Ein- und Auslagerung.</summary>
     public required int DoubleCycles { get; init; }
 
-    /// <summary>Einzelspiele = <c>|Puts − Fetches|</c> — ungepaarte Einzelfahrten.</summary>
+    /// <summary>Einzelspiele = <c>|Puts − Gets|</c> — ungepaarte Einzelfahrten.</summary>
     public required int SingleCycles { get; init; }
 
     /// <summary>Doppelspiele pro Stunde laut Auslegung — die Bezugsgröße des Leistungsgrads.</summary>
@@ -22,7 +22,7 @@ public sealed record RbgCycleStats
 
     /// <summary>Reine Ein- bzw. Auslagerungen pro Stunde laut Auslegung.</summary>
     public required int MaxPutsPerHour { get; init; }
-    public required int MaxFetchesPerHour { get; init; }
+    public required int MaxGetsPerHour { get; init; }
 
     /// <summary>
     /// Erreichte Spiele pro Stunde in Doppelspiel-Äquivalent. Gerechnet über den Zeitbedarf laut
@@ -53,7 +53,7 @@ public sealed record RbgCycleStats
     public required double AvgPutSeconds { get; init; }
 
     /// <summary>Ø Sekunden von der Auftragserteilung bis zum Abschluss — Auslagerung.</summary>
-    public required double AvgFetchSeconds { get; init; }
+    public required double AvgGetSeconds { get; init; }
 
     public required DateTime? LatestAt { get; init; }
 
@@ -82,29 +82,29 @@ public sealed record RbgCapacity
     public required int PutsPerHour { get; init; }
 
     /// <summary>Reine Auslagerungen pro Stunde laut Auslegung.</summary>
-    public required int FetchesPerHour { get; init; }
+    public required int GetsPerHour { get; init; }
 
     public double DoubleSeconds => 3600.0 / Math.Max(1, DoubleCyclesPerHour);
     public double PutSeconds => 3600.0 / Math.Max(1, PutsPerHour);
-    public double FetchSeconds => 3600.0 / Math.Max(1, FetchesPerHour);
+    public double GetSeconds => 3600.0 / Math.Max(1, GetsPerHour);
 
     /// <summary>
     /// Zeitbedarf laut Auslegung für die gefahrenen Spiele. Ungepaarte Ein- und Auslagerungen
     /// werden mit ihrer eigenen Spielzeit bewertet, nicht als halbes Doppelspiel.
     /// </summary>
-    public double DemandSeconds(int puts, int fetches)
+    public double DemandSeconds(int puts, int gets)
     {
-        var doubles = Math.Min(puts, fetches);
+        var doubles = Math.Min(puts, gets);
         return doubles * DoubleSeconds
              + (puts - doubles) * PutSeconds
-             + (fetches - doubles) * FetchSeconds;
+             + (gets - doubles) * GetSeconds;
     }
 
     public static RbgCapacity From(KccConfig c) => new()
     {
         DoubleCyclesPerHour = c.RbgMaxCyclesPerHour,
         PutsPerHour = c.RbgMaxPutsPerHour,
-        FetchesPerHour = c.RbgMaxFetchesPerHour,
+        GetsPerHour = c.RbgMaxGetsPerHour,
     };
 
     /// <summary>Kapazität dieses Geräts: Werte am Ressourcenpunkt schlagen die Vorgabe.</summary>
@@ -112,7 +112,7 @@ public sealed record RbgCapacity
     {
         DoubleCyclesPerHour = point.MaxCyclesPerHour is > 0 ? point.MaxCyclesPerHour.Value : DoubleCyclesPerHour,
         PutsPerHour = point.MaxPutsPerHour is > 0 ? point.MaxPutsPerHour.Value : PutsPerHour,
-        FetchesPerHour = point.MaxFetchesPerHour is > 0 ? point.MaxFetchesPerHour.Value : FetchesPerHour,
+        GetsPerHour = point.MaxGetsPerHour is > 0 ? point.MaxGetsPerHour.Value : GetsPerHour,
     };
 }
 
@@ -130,9 +130,9 @@ public sealed record RbgOptions
     public required string CountTelegramType { get; init; }
 
     public required IReadOnlyList<string> PutDoneCodes { get; init; }
-    public required IReadOnlyList<string> FetchDoneCodes { get; init; }
+    public required IReadOnlyList<string> GetDoneCodes { get; init; }
     public required IReadOnlyList<string> PutOrderCodes { get; init; }
-    public required IReadOnlyList<string> FetchOrderCodes { get; init; }
+    public required IReadOnlyList<string> GetOrderCodes { get; init; }
 
     static IReadOnlyList<string> Or(List<string> configured, IReadOnlyList<string> fallback) =>
         configured is { Count: > 0 } ? configured : fallback;
@@ -142,9 +142,9 @@ public sealed record RbgOptions
         Capacity = RbgCapacity.From(c),
         CountTelegramType = c.CountTelegramType,
         PutDoneCodes = Or(c.RbgPutDoneCodes, RbgReport.DefaultPutDone),
-        FetchDoneCodes = Or(c.RbgFetchDoneCodes, RbgReport.DefaultFetchDone),
+        GetDoneCodes = Or(c.RbgGetDoneCodes, RbgReport.DefaultGetDone),
         PutOrderCodes = Or(c.RbgPutOrderCodes, RbgReport.DefaultPutOrder),
-        FetchOrderCodes = Or(c.RbgFetchOrderCodes, RbgReport.DefaultFetchOrder),
+        GetOrderCodes = Or(c.RbgGetOrderCodes, RbgReport.DefaultGetOrder),
     };
 }
 
@@ -165,13 +165,13 @@ public sealed record RbgOptions
 public static class RbgReport
 {
     public static readonly IReadOnlyList<string> DefaultPutDone = ["ENDDEP"];
-    public static readonly IReadOnlyList<string> DefaultFetchDone = ["ENDPUP"];
+    public static readonly IReadOnlyList<string> DefaultGetDone = ["ENDPUP"];
     public static readonly IReadOnlyList<string> DefaultPutOrder = ["DEPORD"];
-    public static readonly IReadOnlyList<string> DefaultFetchOrder = ["PUPORD"];
+    public static readonly IReadOnlyList<string> DefaultGetOrder = ["PUPORD"];
 
     const double DedupWindowSeconds = 10;
 
-    enum Kind { PutDone, FetchDone, PutOrder, FetchOrder }
+    enum Kind { PutDone, GetDone, PutOrder, GetOrder }
 
     readonly record struct Ev(DateTime At, string Label, Kind Kind);
 
@@ -191,15 +191,15 @@ public static class RbgReport
         var seqIdx = FieldIndex(format, "SequenceNumber");
 
         var putDone = Set(options.PutDoneCodes);
-        var fetchDone = Set(options.FetchDoneCodes);
+        var getDone = Set(options.GetDoneCodes);
         var putOrder = Set(options.PutOrderCodes);
-        var fetchOrder = Set(options.FetchOrderCodes);
+        var getOrder = Set(options.GetOrderCodes);
 
         Kind? Classify(string code) =>
             putDone.Contains(code) ? Kind.PutDone
-            : fetchDone.Contains(code) ? Kind.FetchDone
+            : getDone.Contains(code) ? Kind.GetDone
             : putOrder.Contains(code) ? Kind.PutOrder
-            : fetchOrder.Contains(code) ? Kind.FetchOrder
+            : getOrder.Contains(code) ? Kind.GetOrder
             : null;
 
         var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
@@ -277,23 +277,23 @@ public static class RbgReport
         {
             foreach (var e in events)
             {
-                if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.FetchDone))
+                if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.GetDone))
                     continue;
                 var row = Row(e.At, connection);
                 if (e.Kind == Kind.PutDone) row.Puts++;
-                else row.Fetches++;
+                else row.Gets++;
             }
 
-            foreach (var kind in new[] { Kind.PutDone, Kind.FetchDone })
+            foreach (var kind in new[] { Kind.PutDone, Kind.GetDone })
             {
-                var order = kind == Kind.PutDone ? Kind.PutOrder : Kind.FetchOrder;
+                var order = kind == Kind.PutDone ? Kind.PutOrder : Kind.GetOrder;
                 foreach (var (doneAt, seconds) in PairDurations(events, kind, order, from, to))
                     Row(doneAt, connection).BusySeconds += seconds;
             }
         }
 
         return rows.Values
-            .Where(r => r.Puts > 0 || r.Fetches > 0)
+            .Where(r => r.Puts > 0 || r.Gets > 0)
             .OrderBy(r => r.Bucket).ThenBy(r => r.Connection, StringComparer.Ordinal)
             .ToList();
     }
@@ -319,25 +319,25 @@ public static class RbgReport
         var mFrom = metricsFrom is { } m && m > from && m < to ? m : from;
         var doneInWindow = events.Where(e => e.At >= mFrom && e.At < to).ToList();
         var puts = doneInWindow.Count(e => e.Kind == Kind.PutDone);
-        var fetches = doneInWindow.Count(e => e.Kind == Kind.FetchDone);
-        var full = Math.Min(puts, fetches);
-        var half = Math.Abs(puts - fetches);
+        var gets = doneInWindow.Count(e => e.Kind == Kind.GetDone);
+        var full = Math.Min(puts, gets);
+        var half = Math.Abs(puts - gets);
 
         // Leistungsgrad über den Zeitbedarf laut Auslegung: ein Doppelspiel belegt das Gerät
         // 3600/DS-pro-Stunde Sekunden, eine ungepaarte Ein-/Auslagerung ihre eigene Spielzeit.
         // Auf eine Stunde hochgerechnet, auch wenn das Messfenster kürzer ist.
         var metricSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
-        var demand = capacity.DemandSeconds(puts, fetches);
+        var demand = capacity.DemandSeconds(puts, gets);
         var load = demand / metricSeconds;
         var cyclesPerHour = load * capacity.DoubleCyclesPerHour;
         var percent = Math.Round(load * 100, 1);
 
         var putPairs = PairDurations(events, Kind.PutDone, Kind.PutOrder, mFrom, to);
-        var fetchPairs = PairDurations(events, Kind.FetchDone, Kind.FetchOrder, mFrom, to);
+        var getPairs = PairDurations(events, Kind.GetDone, Kind.GetOrder, mFrom, to);
         var avgPut = putPairs.Count == 0 ? 0 : Math.Round(putPairs.Average(p => p.Seconds), 1);
-        var avgFetch = fetchPairs.Count == 0 ? 0 : Math.Round(fetchPairs.Average(p => p.Seconds), 1);
+        var avgGet = getPairs.Count == 0 ? 0 : Math.Round(getPairs.Average(p => p.Seconds), 1);
         var windowSeconds = Math.Max(1e-9, (to - mFrom).TotalSeconds);
-        var busy = putPairs.Sum(p => p.Seconds) + fetchPairs.Sum(p => p.Seconds);
+        var busy = putPairs.Sum(p => p.Seconds) + getPairs.Sum(p => p.Seconds);
         var idle = Math.Max(0, windowSeconds - busy);
 
         return new RbgCycleStats
@@ -346,17 +346,17 @@ public static class RbgReport
             Series = RollingSeries(events, from, to, bucketMinutes, stepMinutes),
             Connection = connection,
             Puts = puts,
-            Fetches = fetches,
+            Gets = gets,
             DoubleCycles = full,
             SingleCycles = half,
             MaxCyclesPerHour = capacity.DoubleCyclesPerHour,
             MaxPutsPerHour = capacity.PutsPerHour,
-            MaxFetchesPerHour = capacity.FetchesPerHour,
+            MaxGetsPerHour = capacity.GetsPerHour,
             CyclesPerHour = Math.Round(cyclesPerHour, 1),
             Percent = percent,
             IdleSeconds = Math.Round(idle, 1),
             AvgPutSeconds = avgPut,
-            AvgFetchSeconds = avgFetch,
+            AvgGetSeconds = avgGet,
             LatestAt = doneInWindow.Count > 0 ? doneInWindow.Max(e => e.At) : null,
         };
     }
@@ -375,36 +375,36 @@ public static class RbgReport
         var winSteps = Math.Max(1, (int)Math.Round(win / (double)step));
 
         var finePut = new int[fineCount];
-        var fineFetch = new int[fineCount];
+        var fineGet = new int[fineCount];
         foreach (var e in events)
         {
-            if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.FetchDone))
+            if (e.At < from || e.At >= to || e.Kind is not (Kind.PutDone or Kind.GetDone))
                 continue;
             var slot = (int)((e.At - from).TotalMinutes / step);
             if (slot < 0 || slot >= fineCount)
                 continue;
             if (e.Kind == Kind.PutDone) finePut[slot]++;
-            else fineFetch[slot]++;
+            else fineGet[slot]++;
         }
 
         var winHours = winSteps * step / 60.0;
         var series = new List<UtilizationBucket>(fineCount);
-        int accPut = 0, accFetch = 0;
+        int accPut = 0, accGet = 0;
         for (var i = 0; i < fineCount; i++)
         {
             accPut += finePut[i];
-            accFetch += fineFetch[i];
+            accGet += fineGet[i];
             if (i >= winSteps)
             {
                 accPut -= finePut[i - winSteps];
-                accFetch -= fineFetch[i - winSteps];
+                accGet -= fineGet[i - winSteps];
             }
-            var full = Math.Min(accPut, accFetch);
-            var half = Math.Abs(accPut - accFetch);
+            var full = Math.Min(accPut, accGet);
+            var half = Math.Abs(accPut - accGet);
             series.Add(new UtilizationBucket
             {
                 At = from.AddMinutes((i + 1) * step),
-                Count = accPut + accFetch,
+                Count = accPut + accGet,
                 Uph = Math.Round((full + half / 2.0) / winHours, 1),
             });
         }

@@ -161,6 +161,47 @@ public class TelegramStoreTests : IDisposable
         Assert.Equal(2, store.UphSampleCount());
     }
 
+    /// <summary>
+    /// Bestandsdatenbanken tragen die RBG-Spalte noch als <c>Fetches</c>. Beim Öffnen wird sie
+    /// umbenannt statt neu angelegt — die Langzeitreihe reicht weiter zurück als die
+    /// Rohtelegramme und darf dabei nicht verloren gehen.
+    /// </summary>
+    [Fact]
+    public void Benennt_die_alte_Fetches_Spalte_um_und_behaelt_die_Werte()
+    {
+        var t0 = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Unspecified);
+
+        // Alte Datei von Hand anlegen, wie sie vor der Umbenennung aussah.
+        using (var legacy = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            { DataSource = _path, Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate, Pooling = false }
+            .ToString()))
+        {
+            legacy.Open();
+            using var cmd = legacy.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE rbg_samples (
+                    Bucket      TEXT    NOT NULL,
+                    Connection  TEXT    NOT NULL,
+                    Puts        INTEGER NOT NULL,
+                    Fetches     INTEGER NOT NULL,
+                    BusySeconds REAL    NOT NULL,
+                    PRIMARY KEY (Bucket, Connection)
+                );
+                INSERT INTO rbg_samples VALUES ('2026-09-01T08:00:00.0000000', 'RBG01', 7, 5, 120.0);
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        using var store = new TelegramStore(_path);
+
+        var row = Assert.Single(store.ReadRbgSamples(t0, t0.AddHours(1)));
+        Assert.Equal("RBG01", row.Connection);
+        Assert.Equal(7, row.Puts);
+        Assert.Equal(5, row.Gets);        // aus der alten Spalte übernommen
+        Assert.Equal(120, row.BusySeconds);
+    }
+
     public void Dispose()
     {
         foreach (var file in new[] { _path, _path + "-wal", _path + "-shm" })

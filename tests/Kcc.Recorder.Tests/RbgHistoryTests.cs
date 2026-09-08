@@ -82,14 +82,14 @@ public class RbgHistoryTests
 
         var first = rows.Single(r => r.Connection == "RBG01" && r.Bucket == T0);
         Assert.Equal(2, first.Puts);
-        Assert.Equal(2, first.Fetches);
+        Assert.Equal(2, first.Gets);
         Assert.Equal(2, first.DoubleCycles);
         Assert.Equal(0, first.SingleCycles);
         Assert.Equal(2, first.Cycles);
 
         var second = rows.Single(r => r.Connection == "RBG01" && r.Bucket == T0.AddMinutes(15));
         Assert.Equal(0, second.Puts);
-        Assert.Equal(1, second.Fetches);
+        Assert.Equal(1, second.Gets);
         Assert.Equal(0.5, second.Cycles);   // Einzelspiel zählt halb
 
         var other = rows.Single(r => r.Connection == "RBG02");
@@ -103,10 +103,10 @@ public class RbgHistoryTests
         // RBG01 fährt doppelt so viel wie RBG02.
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Fetches = 10, BusySeconds = 1800 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 10, Fetches = 10 },
-            new() { Bucket = T0, Connection = "RBG02", Puts = 5, Fetches = 5, BusySeconds = 900 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG02", Puts = 5, Fetches = 5 },
+            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Gets = 10, BusySeconds = 1800 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 10, Gets = 10 },
+            new() { Bucket = T0, Connection = "RBG02", Puts = 5, Gets = 5, BusySeconds = 900 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG02", Puts = 5, Gets = 5 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(2), 60, Points());
@@ -150,8 +150,8 @@ public class RbgHistoryTests
         // auch wenn die Anzeige beide Stunden zu einem Balken zusammenfasst.
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Fetches = 0 },
-            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 0, Fetches = 10 },
+            new() { Bucket = T0, Connection = "RBG01", Puts = 10, Gets = 0 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Puts = 0, Gets = 10 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(2), 120, Points());
@@ -170,7 +170,7 @@ public class RbgHistoryTests
     {
         var rows = new List<RbgSampleRow>
         {
-            new() { Bucket = T0, Connection = "RBG01", Puts = 4, Fetches = 4 },
+            new() { Bucket = T0, Connection = "RBG01", Puts = 4, Gets = 4 },
         };
 
         var r = RbgHistoryReport.Compute(rows, T0, T0.AddHours(1), 60, Points());

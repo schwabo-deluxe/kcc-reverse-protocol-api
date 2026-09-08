@@ -75,8 +75,8 @@ public sealed class ResourcePointConfig
     /// <summary>Reine Einlagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxPutsPerHour"/>.</summary>
     public int? MaxPutsPerHour { get; set; }
 
-    /// <summary>Reine Auslagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxFetchesPerHour"/>.</summary>
-    public int? MaxFetchesPerHour { get; set; }
+    /// <summary>Reine Auslagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxGetsPerHour"/>.</summary>
+    public int? MaxGetsPerHour { get; set; }
 
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
     public string GroupOrDefault => string.IsNullOrWhiteSpace(Group) ? "Ohne Gruppe" : Group!;
@@ -236,7 +236,7 @@ public sealed class KccConfig
     /// Doppelspiel). Das ist der <em>gemessene</em> Richtwert der Anlage, nicht die
     /// Datenblattangabe: die Auslegung nennt für die HRL-RBG 1–5 zwar 30 Doppelspiele/h, die
     /// Fahraufträge zeigen aber rund 60 s je Doppelspiel. Zusammen mit
-    /// <see cref="RbgMaxPutsPerHour"/> und <see cref="RbgMaxFetchesPerHour"/> ergibt sich die
+    /// <see cref="RbgMaxPutsPerHour"/> und <see cref="RbgMaxGetsPerHour"/> ergibt sich die
     /// Spielzeit je Betriebsart und damit der Leistungsgrad. Je Gerät über
     /// <c>ResourcePoints[].MaxCyclesPerHour</c> überschreibbar.
     /// </summary>
@@ -251,19 +251,19 @@ public sealed class KccConfig
     public int RbgMaxPutsPerHour { get; set; } = 96;
 
     /// <summary>Bezugsleistung in reinen Auslagerungen pro Stunde (Standard <c>96</c>).</summary>
-    public int RbgMaxFetchesPerHour { get; set; } = 96;
+    public int RbgMaxGetsPerHour { get; set; } = 96;
 
     /// <summary>MessageCodes einer abgeschlossenen Einlagerung (Bringen). Leer ⇒ <c>["ENDDEP"]</c>.</summary>
     public List<string> RbgPutDoneCodes { get; set; } = [];
 
     /// <summary>MessageCodes einer abgeschlossenen Auslagerung (Holen). Leer ⇒ <c>["ENDPUP"]</c>.</summary>
-    public List<string> RbgFetchDoneCodes { get; set; } = [];
+    public List<string> RbgGetDoneCodes { get; set; } = [];
 
     /// <summary>MessageCodes der Auftragserteilung Einlagerung. Leer ⇒ <c>["DEPORD"]</c>.</summary>
     public List<string> RbgPutOrderCodes { get; set; } = [];
 
     /// <summary>MessageCodes der Auftragserteilung Auslagerung. Leer ⇒ <c>["PUPORD"]</c>.</summary>
-    public List<string> RbgFetchOrderCodes { get; set; } = [];
+    public List<string> RbgGetOrderCodes { get; set; } = [];
 
     /// <summary>MessageCodes eines erteilten Transportauftrags. Leer ⇒ <c>["TSPORD"]</c>.</summary>
     public List<string> ConveyorOrderCodes { get; set; } = [];
