@@ -226,6 +226,15 @@ public sealed class KccConfig
     /// <summary>MessageCodes der Auftragserteilung Auslagerung. Leer ⇒ <c>["PUPORD"]</c>.</summary>
     public List<string> RbgFetchOrderCodes { get; set; } = [];
 
+    /// <summary>MessageCodes eines erteilten Transportauftrags. Leer ⇒ <c>["TSPORD"]</c>.</summary>
+    public List<string> ConveyorOrderCodes { get; set; } = [];
+
+    /// <summary>MessageCodes eines beendeten Transports. Leer ⇒ <c>["ENDTSP"]</c>.</summary>
+    public List<string> ConveyorEndCodes { get; set; } = [];
+
+    /// <summary>MessageCodes der Frei-Meldung eines Ressourcenpunkts. Leer ⇒ <c>["RPFREE"]</c>.</summary>
+    public List<string> ConveyorFreeCodes { get; set; } = [];
+
     /// <summary>
     /// Klartext für Endziele (führendes Token des letzten 33er-Blocks, 4–5 Zeichen), z. B.
     /// <c>{ "GA51": "Kommissionierung" }</c> ⇒ Anzeige <c>GA51 (Kommissionierung)</c>. Ein Schlüssel

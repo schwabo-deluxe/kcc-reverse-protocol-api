@@ -280,6 +280,20 @@ public static class UtilizationDashboard
           const dur = s => s < 60 ? `${Math.round(s)} s`
             : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min`;
 
+          // Fördertechnik: Belegung, Transport- und Wartezeit aus TSPORD/ENDTSP/RPFREE.
+          const convRow = p => {
+            const c = p.conveyor;
+            if (!c) return '';
+            return `<div class="rbg">
+              <span${help('cbusy')}>Belegung <b style="color:${color(c.busyPercent)}">${fmt(c.busyPercent)} %</b></span>
+              <span${help('ccount')}>Aufträge/Ende <b>${c.orders}/${c.completed}</b></span>
+              <span${help('ctransport')}>Ø Transport <b>${dur(c.avgTransportSeconds)}</b></span>
+              <span${help('cwait')}>Ø Wartezeit <b>${dur(c.avgWaitSeconds)}</b></span>
+              <span${help('idle')}>Frei <b>${dur(c.idleSeconds)}</b></span>
+              ${c.freeSignals ? `<span${help('cfree')}>RPFREE <b>${c.freeSignals}</b></span>` : ''}
+            </div>`;
+          };
+
           const rbgRow = p => {
             const r = p.rbg;
             if (!r) return '';
@@ -316,10 +330,16 @@ public static class UtilizationDashboard
             const head = r
               ? `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
               : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
+            const c = p.conveyor;
             const dials = r
               ? `<div class="duo">
                    ${dial(r.busyPercent, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
                    ${dial(r.percent, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
+                 </div>`
+              : c
+              ? `<div class="duo">
+                   ${dial(c.busyPercent, 'Belegung', `Ø Transport ${dur(c.avgTransportSeconds)}`, 'cbusy', `${p.resourcePoint}:busy`)}
+                   ${dial(p.percent, 'Leistung', `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH`, 'load', `${p.resourcePoint}:uph`)}
                  </div>`
               : dial(p.percent, '% vom Richtwert', '', null, `${p.resourcePoint}:uph`);
             return `
@@ -336,6 +356,7 @@ public static class UtilizationDashboard
                 </div>
               </div>
               ${rbgRow(p)}
+              ${convRow(p)}
               ${destTable(p)}
             </div>`;
           };

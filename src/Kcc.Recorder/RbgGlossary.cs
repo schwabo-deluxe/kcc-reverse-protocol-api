@@ -59,6 +59,24 @@ public static class RbgGlossary
         ("peak",
             "Höchster Stützpunkt der Verlaufskurve in Spiele/h — die Spitzenlast, die das Gerät " +
             "in einem Raster tatsächlich gefahren hat."),
+        ("cbusy",
+            "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem ein " +
+            "Transport lief. Gemessen von der Auftragserteilung (TSPORD) bis zum Transportende " +
+            "(ENDTSP). Die Transporte eines Punkts laufen nacheinander, der Wert ist deshalb " +
+            "ein echtes Zeitmaß — anders als beim RBG wird hier nichts doppelt gezählt."),
+        ("ctransport",
+            "Ø Dauer eines Transports an diesem Punkt: von TSPORD bis ENDTSP, gepaart über die " +
+            "LE-Nummer. Steigt dieser Wert bei gleichbleibender Menge, wird der Punkt langsamer."),
+        ("cwait",
+            "Ø Wartezeit von ENDTSP bis zum nächsten TSPORD — wie lange der Punkt ohne Auftrag " +
+            "dastand. Lange Wartezeiten heißen: nicht dieser Punkt ist der Engpass, sondern die " +
+            "Zuführung davor."),
+        ("cfree",
+            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft er sich als frei " +
+            "gemeldet hat."),
+        ("ccount",
+            "Transportaufträge (TSPORD) / beendete Transporte (ENDTSP) im Zeitraum. Klaffen die " +
+            "Zahlen auseinander, laufen Transporte über den Fensterrand hinaus oder stehen noch aus."),
         ("active",
             "Stunden mit mindestens einer Fahrt. Zeigt, ob ein niedriger Durchschnitt von " +
             "gleichmäßig wenig Arbeit kommt oder von längerem Stillstand."),

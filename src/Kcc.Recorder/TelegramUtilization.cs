@@ -67,6 +67,13 @@ public sealed record ResourcePointUtilization
 
     /// <summary>Spielauswertung der zugeordneten RBG-Verbindung, sofern konfiguriert.</summary>
     public RbgCycleStats? Rbg { get; init; }
+
+    /// <summary>
+    /// Belegungsauswertung eines Fördertechnikpunkts (TSPORD→ENDTSP), gesetzt für Punkte ohne
+    /// RBG-Verbindung. Beantwortet, wie stark der Punkt zeitlich belegt ist — die
+    /// TSPORD-Zählung allein sagt nur, wie viel durchlief, nicht wie ausgelastet er dabei war.
+    /// </summary>
+    public ConveyorStats? Conveyor { get; init; }
 }
 
 /// <summary>Zusammenfassung einer Gruppe von Ressourcenpunkten.</summary>
@@ -158,7 +165,8 @@ public sealed record TelegramUtilization
         IReadOnlyDictionary<string, string>? destinationLabels = null,
         IReadOnlyList<string>? groupOrder = null,
         int seriesStepMinutes = 1,
-        RbgOptions? rbg = null)
+        RbgOptions? rbg = null,
+        ConveyorOptions? conveyor = null)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
@@ -278,6 +286,11 @@ public sealed record TelegramUtilization
                     from, now, rbg, bucketWidth, step)
                 : null;
 
+            // Fördertechnikpunkt (keine RBG-Verbindung): Belegung aus Auftrag und Transportende.
+            var conveyorStats = conveyor is not null && rbgStats is null
+                ? ConveyorReport.Compute(window, format, name, from, now, conveyor, bucketWidth, step)
+                : null;
+
             return new ResourcePointUtilization
             {
                 ResourcePoint = name,
@@ -305,6 +318,7 @@ public sealed record TelegramUtilization
                     })
                     .ToList(),
                 Rbg = rbgStats,
+                Conveyor = conveyorStats,
             };
         }).ToList();
 
