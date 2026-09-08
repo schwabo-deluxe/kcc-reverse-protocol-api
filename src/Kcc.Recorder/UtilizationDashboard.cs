@@ -56,6 +56,8 @@ public static class UtilizationDashboard
           .spark .hit { fill: transparent; }
           .spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
           .axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
+          /* Einheit der Kurve — bei RBG-Kacheln samt Verbindung, damit klar ist, woher sie stammt. */
+          .axis .unit { color: #9aa4b2; }
           table.dest { margin: 10px 0 0; border: 0; border-radius: 0; background: none; }
           table.dest th, table.dest td { padding: 3px 8px; font-size: 12px; border-bottom: 1px solid #232830; }
           table.dest tbody tr:last-child td { border-bottom: 0; }
@@ -353,7 +355,11 @@ public static class UtilizationDashboard
                 ${dials}
                 <div class="spark-col">
                   ${spark(p, sMax, sTarget)}
-                  <div class="axis"><span>vor ${data.windowMinutes} min</span><span>jetzt</span></div>
+                  <div class="axis">
+                    <span>vor ${data.windowMinutes} min</span>
+                    <span class="unit">${r ? `Spiele/h · ${r.connection}` : 'UPH'}</span>
+                    <span>jetzt</span>
+                  </div>
                 </div>
               </div>
               ${rbgRow(p)}
@@ -440,8 +446,13 @@ public static class UtilizationDashboard
 
           const at = new Date(hit.bucket.at);
           const tip = $('tip');
+          // Die Kurve einer RBG-Kachel zeigt die Spiele der Verbindung, nicht die TSPORD des
+          // Ressourcenpunkts — der Kopf nennt deshalb die Verbindung als Quelle.
+          const who = hit.rbg
+            ? `<b>${hit.point.rbg.connection}</b> · ${hit.point.resourcePoint}`
+            : `<b>${hit.point.resourcePoint}</b>`;
           tip.innerHTML =
-            `<b>${hit.point.resourcePoint}</b> · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
+            `${who} · ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` +
             (hit.rbg
               ? `<br>${fmt(hit.bucket.uph)} Spiele/h · ${hit.bucket.count} Fahrten`
               : `<br>${fmt(hit.bucket.uph)} UPH · ${hit.bucket.count} Telegramme`);
