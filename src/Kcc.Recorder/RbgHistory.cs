@@ -140,7 +140,7 @@ public sealed record RbgHistoryReport
             to = from.AddMinutes(step);
 
         var fallback = defaultCapacity
-            ?? new RbgCapacity { DoubleCyclesPerHour = 30, PutsPerHour = 48, FetchesPerHour = 48 };
+            ?? new RbgCapacity { DoubleCyclesPerHour = 60, PutsPerHour = 96, FetchesPerHour = 96 };
 
         // Verbindung → Anzeigename und Auslegung; mehrere Punkte auf derselben Verbindung: erster gewinnt.
         var meta = new Dictionary<string, (string Label, RbgCapacity Cap)>(StringComparer.OrdinalIgnoreCase);

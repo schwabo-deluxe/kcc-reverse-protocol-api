@@ -69,8 +69,9 @@ public sealed record RbgCycleStats
 /// Auslegungsleistung eines RBG: wie viele Spiele es je Betriebsart in der Stunde schafft.
 /// Daraus ergibt sich die Zeit, die ein einzelnes Spiel das Gerät belegt — und damit ein
 /// belastbares Verhältnis zwischen Doppel- und Einzelspiel. Ein Einzelspiel ist gerade
-/// <em>nicht</em> ein halbes Doppelspiel: bei 30 Doppelspielen/h (120 s) und 48
-/// Einlagerungen/h (75 s) kostet es 62,5 % davon.
+/// <em>nicht</em> ein halbes Doppelspiel: laut Datenblatt der HRL-RBG (30 Doppelspiele/h = 120 s,
+/// 48 Einlagerungen/h = 75 s) kostet es 62,5 % davon. Dieses Verhältnis ist Gerätekinematik;
+/// das Niveau kommt aus der Konfiguration.
 /// </summary>
 public sealed record RbgCapacity
 {

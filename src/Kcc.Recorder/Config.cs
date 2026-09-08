@@ -69,13 +69,13 @@ public sealed class ResourcePointConfig
     /// </summary>
     public string? Connection { get; set; }
 
-    /// <summary>Doppelspiele pro Stunde dieses RBG laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
+    /// <summary>Doppelspiele pro Stunde dieses RBG. Ohne Angabe gilt <see cref="KccConfig.RbgMaxCyclesPerHour"/>.</summary>
     public int? MaxCyclesPerHour { get; set; }
 
-    /// <summary>Reine Einlagerungen pro Stunde laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxPutsPerHour"/>.</summary>
+    /// <summary>Reine Einlagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxPutsPerHour"/>.</summary>
     public int? MaxPutsPerHour { get; set; }
 
-    /// <summary>Reine Auslagerungen pro Stunde laut Auslegung. Ohne Angabe gilt <see cref="KccConfig.RbgMaxFetchesPerHour"/>.</summary>
+    /// <summary>Reine Auslagerungen pro Stunde. Ohne Angabe gilt <see cref="KccConfig.RbgMaxFetchesPerHour"/>.</summary>
     public int? MaxFetchesPerHour { get; set; }
 
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label!;
@@ -232,18 +232,26 @@ public sealed class KccConfig
     public string CountTelegramType { get; set; } = "DM";
 
     /// <summary>
-    /// Auslegungsleistung eines RBG in Doppelspielen pro Stunde (Standard <c>30</c> — HRL
-    /// RBG 1–5). Zusammen mit <see cref="RbgMaxPutsPerHour"/> und
-    /// <see cref="RbgMaxFetchesPerHour"/> ergibt sich die Spielzeit je Betriebsart und damit
-    /// der Leistungsgrad. Je Gerät über <c>ResourcePoints[].MaxCyclesPerHour</c> überschreibbar.
+    /// Bezugsleistung eines RBG in Doppelspielen pro Stunde (Standard <c>60</c> = 60 s je
+    /// Doppelspiel). Das ist der <em>gemessene</em> Richtwert der Anlage, nicht die
+    /// Datenblattangabe: die Auslegung nennt für die HRL-RBG 1–5 zwar 30 Doppelspiele/h, die
+    /// Fahraufträge zeigen aber rund 60 s je Doppelspiel. Zusammen mit
+    /// <see cref="RbgMaxPutsPerHour"/> und <see cref="RbgMaxFetchesPerHour"/> ergibt sich die
+    /// Spielzeit je Betriebsart und damit der Leistungsgrad. Je Gerät über
+    /// <c>ResourcePoints[].MaxCyclesPerHour</c> überschreibbar.
     /// </summary>
-    public int RbgMaxCyclesPerHour { get; set; } = 30;
+    public int RbgMaxCyclesPerHour { get; set; } = 60;
 
-    /// <summary>Auslegungsleistung in reinen Einlagerungen pro Stunde (Standard <c>48</c>).</summary>
-    public int RbgMaxPutsPerHour { get; set; } = 48;
+    /// <summary>
+    /// Bezugsleistung in reinen Einlagerungen pro Stunde (Standard <c>96</c> = 37,5 s je
+    /// Einlagerung). Das Verhältnis zum Doppelspiel stammt aus dem Datenblatt (30 DS/h zu
+    /// 48 E/h ⇒ ein Einzelspiel kostet 62,5 % eines Doppelspiels) und ist Gerätekinematik —
+    /// nur das Niveau ist auf die gemessenen Zeiten skaliert.
+    /// </summary>
+    public int RbgMaxPutsPerHour { get; set; } = 96;
 
-    /// <summary>Auslegungsleistung in reinen Auslagerungen pro Stunde (Standard <c>48</c>).</summary>
-    public int RbgMaxFetchesPerHour { get; set; } = 48;
+    /// <summary>Bezugsleistung in reinen Auslagerungen pro Stunde (Standard <c>96</c>).</summary>
+    public int RbgMaxFetchesPerHour { get; set; } = 96;
 
     /// <summary>MessageCodes einer abgeschlossenen Einlagerung (Bringen). Leer ⇒ <c>["ENDDEP"]</c>.</summary>
     public List<string> RbgPutDoneCodes { get; set; } = [];

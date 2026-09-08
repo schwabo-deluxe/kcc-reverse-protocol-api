@@ -39,9 +39,10 @@ public class RbgReportTests
 
     static readonly RbgOptions Opts = RbgOptions.From(new KccConfig());
 
-    // Auslegung HRL RBG 1–5: 30 Doppelspiele/h (120 s), je 48 Ein-/Auslagerungen/h (75 s).
+    // Bezugsleistung wie konfiguriert: 60 Doppelspiele/h (60 s), je 96 Ein-/Auslagerungen/h
+    // (37,5 s). Das Verhältnis 62,5 % stammt aus dem Datenblatt, das Niveau aus der Messung.
     static readonly RbgCapacity Cap =
-        new() { DoubleCyclesPerHour = 30, PutsPerHour = 48, FetchesPerHour = 48 };
+        new() { DoubleCyclesPerHour = 60, PutsPerHour = 96, FetchesPerHour = 96 };
 
     sealed class Feed
     {
@@ -84,10 +85,9 @@ public class RbgReportTests
         Assert.Equal(5, r.Fetches);     // ENDPUP L1,L3,L5,L7,L9
         Assert.Equal(4, r.DoubleCycles);
         Assert.Equal(1, r.SingleCycles);
-        // Zeitbedarf laut Auslegung: 4 Doppelspiele à 120 s + 1 Auslagerung à 75 s = 555 s
-        // in einem 240-s-Fenster.
-        Assert.Equal(231.2, r.Percent);        // 555 / 240
-        Assert.Equal(69.4, r.CyclesPerHour);   // 231,3 % von 30 Doppelspielen/h
+        // Zeitbedarf: 4 Doppelspiele à 60 s + 1 Auslagerung à 37,5 s = 277,5 s im 240-s-Fenster.
+        Assert.Equal(115.6, r.Percent);        // 277,5 / 240
+        Assert.Equal(69.4, r.CyclesPerHour);   // 115,6 % von 60 Doppelspielen/h
         Assert.Equal(25, r.AvgPutSeconds);
         Assert.Equal(25, r.AvgFetchSeconds);
         Assert.Equal(15, r.IdleSeconds); // 240 - (4*25 + 5*25)
