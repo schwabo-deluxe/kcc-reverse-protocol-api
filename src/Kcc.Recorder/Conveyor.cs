@@ -15,8 +15,9 @@ public sealed record ConveyorStats
     public required int FreeSignals { get; init; }
 
     /// <summary>
-    /// Belegungsgrad in Prozent = belegte Zeit ÷ Fenster. Belegt ist der Punkt von
-    /// <c>TSPORD</c> bis <c>RPFREE</c>; <c>ENDTSP</c> liegt innerhalb dieser Spanne.
+    /// Belegungsgrad in Prozent = belegte Zeit ÷ Fenster. Belegt ist der Punkt von der Ankunft
+    /// (<c>ENDTSP</c>) bis zum Verlassen (<c>RPFREE</c>); der Weitertransport-Auftrag
+    /// (<c>TSPORD</c>) wird innerhalb dieser Spanne erteilt.
     /// </summary>
     public required double BusyPercent { get; init; }
 
@@ -26,20 +27,24 @@ public sealed record ConveyorStats
     /// <summary>Effektiv leere Zeit in Sekunden = Fenster − belegte Zeit.</summary>
     public required double IdleSeconds { get; init; }
 
-    /// <summary>Ø Dauer einer Belegung: <c>TSPORD</c> → <c>RPFREE</c>.</summary>
+    /// <summary>Ø Verweildauer einer Ladeeinheit: <c>ENDTSP</c> → <c>RPFREE</c>.</summary>
     public required double AvgOccupiedSeconds { get; init; }
 
-    /// <summary>Ø Dauer des Fahrauftrags: <c>TSPORD</c> → <c>ENDTSP</c>.</summary>
-    public required double AvgTransportSeconds { get; init; }
-
     /// <summary>
-    /// Ø Zeit vom Transportende bis zur Frei-Meldung: <c>ENDTSP</c> → <c>RPFREE</c>. Der Auftrag
-    /// ist fertig, der Platz aber noch belegt — lange Zeiten deuten auf Rückstau dahinter.
+    /// Ø Zeit von der Ankunft bis zum Weitertransport-Auftrag: <c>ENDTSP</c> → <c>TSPORD</c>.
+    /// Die Ladeeinheit steht und wartet auf die Entscheidung des MFR — Steuerungszeit, keine
+    /// Fahrzeit.
     /// </summary>
-    public required double AvgClearSeconds { get; init; }
+    public required double AvgOrderWaitSeconds { get; init; }
 
     /// <summary>
-    /// Ø Leerzeit zwischen zwei Belegungen: <c>RPFREE</c> → nächstes <c>TSPORD</c>. Lange
+    /// Ø Zeit vom Auftrag bis zum Verlassen des Punkts: <c>TSPORD</c> → <c>RPFREE</c>. Lange
+    /// Zeiten deuten auf Rückstau dahinter — die Ladeeinheit kommt nicht weg.
+    /// </summary>
+    public required double AvgDepartSeconds { get; init; }
+
+    /// <summary>
+    /// Ø Leerzeit zwischen zwei Ladeeinheiten: <c>RPFREE</c> → nächstes <c>ENDTSP</c>. Lange
     /// Leerzeiten heißen, dass die Zuführung davor bremst, nicht dieser Punkt.
     /// </summary>
     public required double AvgIdleSeconds { get; init; }
@@ -72,17 +77,23 @@ public sealed record ConveyorOptions
 }
 
 /// <summary>
-/// Wertet aus, wie stark ein Fördertechnik-Ressourcenpunkt belegt ist. Der Ablauf an einem Punkt:
-/// <list type="bullet">
-///   <item><c>TSPORD</c> — Transportauftrag erteilt, der Platz ist ab jetzt belegt</item>
-///   <item><c>ENDTSP</c> — Fahrauftrag beendet; der Platz ist noch <em>nicht</em> frei</item>
-///   <item><c>RPFREE</c> — der Platz ist effektiv frei</item>
+/// Wertet aus, wie stark ein Fördertechnik-Ressourcenpunkt belegt ist. Ablauf einer Ladeeinheit
+/// an einem Punkt (Kardex-Doku „Transportverwaltung Paletten-Fördertechnik"):
+/// <list type="number">
+///   <item><c>ENDTSP</c> — die SPS meldet die <b>Ankunft</b> auf dem Punkt; ab jetzt belegt</item>
+///   <item><c>TSPORD</c> — der MFR erteilt den Auftrag zum <b>Weitertransport</b>; der Punkt ist
+///         dabei weiterhin belegt</item>
+///   <item><c>RPFREE</c> — die SPS meldet das <b>Verlassen</b> des Punkts; ab jetzt frei</item>
 /// </list>
 ///
-/// Belegt ist der Punkt also von <c>TSPORD</c> bis <c>RPFREE</c>, leer von <c>RPFREE</c> bis zum
-/// nächsten <c>TSPORD</c>. Statt Ereignisse zu paaren läuft ein Zustandsautomat über den
-/// Zeitstrahl — Belegung ist eine Eigenschaft des <em>Platzes</em>, nicht einer LE, und das hält
-/// die Rechnung auch bei fehlenden oder doppelten Meldungen stabil.
+/// Belegt ist der Punkt also von <c>ENDTSP</c> bis <c>RPFREE</c> mit dem <c>TSPORD</c> dazwischen,
+/// leer von <c>RPFREE</c> bis zur nächsten Ankunft. Die Belegung zerfällt damit in zwei
+/// aussagekräftige Hälften: <c>ENDTSP</c>→<c>TSPORD</c> ist Wartezeit auf die Entscheidung des
+/// MFR, <c>TSPORD</c>→<c>RPFREE</c> der eigentliche Abtransport.
+///
+/// Statt Ereignisse zu paaren läuft ein Zustandsautomat über den Zeitstrahl — Belegung ist eine
+/// Eigenschaft des <em>Platzes</em>, nicht einer LE, und das hält die Rechnung auch bei
+/// fehlenden oder doppelten Meldungen stabil.
 ///
 /// Reine Funktion über einem Zeitfenster.
 /// </summary>
@@ -111,7 +122,7 @@ public static class ConveyorReport
         var events = Events(window, format, resourcePoint, options);
         var inWindow = events.Where(e => e.At >= from && e.At < to).ToList();
 
-        var (spans, transports, clears, idles) = Walk(events, from, to);
+        var (spans, orderWaits, departs, idles) = Walk(events, from, to);
 
         var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
         var busy = spans.Sum(s => (s.End - s.Start).TotalSeconds);
@@ -126,8 +137,8 @@ public static class ConveyorReport
             BusyPercent = Math.Round(Math.Min(100, busy / windowSeconds * 100), 1),
             IdleSeconds = Math.Round(Math.Max(0, windowSeconds - busy), 1),
             AvgOccupiedSeconds = Avg(spans.Select(s => (s.End - s.Start).TotalSeconds)),
-            AvgTransportSeconds = Avg(transports),
-            AvgClearSeconds = Avg(clears),
+            AvgOrderWaitSeconds = Avg(orderWaits),
+            AvgDepartSeconds = Avg(departs),
             AvgIdleSeconds = Avg(idles),
             LatestAt = inWindow.Count > 0 ? inWindow.Max(e => e.At) : null,
             Series = RollingSeries(spans, inWindow, from, to, bucketMinutes, stepMinutes),
@@ -178,26 +189,18 @@ public static class ConveyorReport
     }
 
     /// <summary>
-    /// Läuft über den Zeitstrahl und schneidet Belegungsintervalle heraus. Nebenbei fallen die
-    /// Teilzeiten an: Fahrauftrag (Order→End), Räumen (End→Free) und Leerzeit (Free→Order).
+    /// Läuft über den Zeitstrahl und schneidet Belegungsintervalle heraus (Ankunft → Verlassen).
+    /// Nebenbei fallen die Teilzeiten an: Wartezeit auf den Auftrag (End→Order), Abtransport
+    /// (Order→Free) und Leerzeit (Free→End).
     /// </summary>
-    static (List<(DateTime Start, DateTime End)> Spans, List<double> Transports,
-            List<double> Clears, List<double> Idles)
+    static (List<(DateTime Start, DateTime End)> Spans, List<double> OrderWaits,
+            List<double> Departs, List<double> Idles)
         Walk(List<Ev> events, DateTime from, DateTime to)
     {
         var spans = new List<(DateTime, DateTime)>();
-        List<double> transports = [], clears = [], idles = [];
+        List<double> orderWaits = [], departs = [], idles = [];
 
-        DateTime? occupiedSince = null, lastEnd = null, freeSince = null;
-
-        void Release(DateTime at)
-        {
-            occupiedSince ??= from;              // war schon vor dem Fenster belegt
-            AddSpan(spans, occupiedSince.Value, at, from, to);
-            occupiedSince = null;
-            lastEnd = null;
-            freeSince = at;
-        }
+        DateTime? occupiedSince = null, orderAt = null, freeSince = null;
 
         foreach (var e in events)
         {
@@ -206,28 +209,35 @@ public static class ConveyorReport
 
             switch (e.Kind)
             {
-                case Kind.Order:
+                // Ankunft auf dem Punkt — ab hier belegt.
+                case Kind.End:
                     if (freeSince is { } free && e.At > free)
                         idles.Add((e.At - free).TotalSeconds);
                     freeSince = null;
-                    // Ein zweiter Auftrag ohne zwischenzeitliches RPFREE verlängert dieselbe
-                    // Belegung, statt eine neue zu beginnen.
+                    // Zweite Ankunft ohne zwischenzeitliches RPFREE: dieselbe Belegung läuft
+                    // weiter, statt neu zu beginnen.
                     occupiedSince ??= e.At;
-                    lastEnd = null;
+                    orderAt = null;
                     break;
 
-                case Kind.End:
-                    // Transportende ohne bekannten Beginn: der Punkt war schon vor dem Fenster belegt.
+                // Weitertransport-Auftrag — der Punkt bleibt belegt.
+                case Kind.Order:
+                    // Auftrag ohne bekannte Ankunft: der Punkt war schon vor dem Fenster belegt.
                     occupiedSince ??= from;
-                    if (e.At >= from)
-                        transports.Add((e.At - Max(occupiedSince.Value, from)).TotalSeconds);
-                    lastEnd = e.At;
+                    if (orderAt is null && e.At >= from)
+                        orderWaits.Add((e.At - Max(occupiedSince.Value, from)).TotalSeconds);
+                    orderAt ??= e.At;
                     break;
 
+                // Verlassen des Punkts — ab hier frei.
                 case Kind.Free:
-                    if (lastEnd is { } end && e.At >= end)
-                        clears.Add((e.At - end).TotalSeconds);
-                    Release(e.At);
+                    occupiedSince ??= from;      // war vor dem Fenster schon belegt
+                    if (orderAt is { } ord && e.At >= ord)
+                        departs.Add((e.At - ord).TotalSeconds);
+                    AddSpan(spans, occupiedSince.Value, e.At, from, to);
+                    occupiedSince = null;
+                    orderAt = null;
+                    freeSince = e.At;
                     break;
             }
         }
@@ -236,7 +246,7 @@ public static class ConveyorReport
         if (occupiedSince is { } open)
             AddSpan(spans, open, to, from, to);
 
-        return (spans, transports, clears, idles);
+        return (spans, orderWaits, departs, idles);
     }
 
     static void AddSpan(

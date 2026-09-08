@@ -61,34 +61,36 @@ public static class RbgGlossary
             "in einem Raster tatsächlich gefahren hat."),
         ("cbusy",
             "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem der " +
-            "Platz besetzt war. Belegt ist er von der Auftragserteilung (TSPORD) bis zur " +
-            "Frei-Meldung (RPFREE); das Transportende (ENDTSP) liegt innerhalb dieser Spanne — " +
-            "der Fahrauftrag ist dann fertig, der Platz aber noch nicht geräumt. Ein echtes " +
-            "Zeitmaß ohne die Doppelzählung, die beim RBG-Doppelspiel entsteht."),
+            "Platz besetzt war. Belegt ist er von der Ankunft der Ladeeinheit (ENDTSP) bis zu " +
+            "ihrem Verlassen (RPFREE); der Weitertransport-Auftrag (TSPORD) wird dazwischen " +
+            "erteilt. Ein echtes Zeitmaß ohne die Doppelzählung, die beim RBG-Doppelspiel " +
+            "entsteht."),
         ("coccupied",
-            "Ø Dauer einer Belegung: von TSPORD bis RPFREE, also wie lange eine Ladeeinheit den " +
-            "Platz im Schnitt besetzt hielt — Fahren und Räumen zusammen."),
-        ("ctransport",
-            "Ø Dauer des Fahrauftrags: von TSPORD bis ENDTSP. Steigt dieser Wert bei " +
-            "gleichbleibender Menge, wird der Punkt selbst langsamer."),
-        ("cclear",
-            "Ø Zeit vom Transportende (ENDTSP) bis zur Frei-Meldung (RPFREE): der Auftrag ist " +
-            "abgeschlossen, der Platz aber noch besetzt. Lange Zeiten deuten auf Rückstau " +
-            "dahinter — die Ladeeinheit kommt nicht weg."),
+            "Ø Verweildauer einer Ladeeinheit auf dem Punkt: von der Ankunft (ENDTSP) bis zum " +
+            "Verlassen (RPFREE) — Warten auf den Auftrag und Abtransport zusammen."),
+        ("corderwait",
+            "Ø Zeit von der Ankunft (ENDTSP) bis zum Weitertransport-Auftrag (TSPORD): die " +
+            "Ladeeinheit steht und wartet auf die Entscheidung des MFR. Das ist Steuerungszeit, " +
+            "keine Fahrzeit — hohe Werte hier kosten Durchsatz, ohne dass die Mechanik langsamer " +
+            "wäre."),
+        ("cdepart",
+            "Ø Zeit vom Auftrag (TSPORD) bis zum Verlassen des Punkts (RPFREE): der eigentliche " +
+            "Abtransport. Lange Zeiten deuten auf Rückstau dahinter — die Ladeeinheit kommt " +
+            "nicht weg."),
         ("cwait",
-            "Ø Leerzeit von RPFREE bis zum nächsten TSPORD — wie lange der Platz effektiv leer " +
-            "dastand, ohne Fahrauftrag. Lange Leerzeiten heißen: nicht dieser Punkt ist der " +
-            "Engpass, sondern die Zuführung davor."),
+            "Ø Leerzeit von RPFREE bis zur nächsten Ankunft (ENDTSP) — wie lange der Platz " +
+            "effektiv leer dastand. Lange Leerzeiten heißen: nicht dieser Punkt ist der Engpass, " +
+            "sondern die Zuführung davor."),
         ("cidle",
             "Gesamte effektiv leere Zeit im Zeitraum = Zeitraum − belegte Zeit, also die Summe " +
-            "aller Spannen zwischen RPFREE und dem nächsten TSPORD."),
+            "aller Spannen zwischen dem Verlassen und der nächsten Ankunft."),
         ("cfree",
-            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft der Platz wieder " +
-            "geräumt war."),
+            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft eine Ladeeinheit " +
+            "den Platz verlassen hat."),
         ("ccount",
-            "Transportaufträge (TSPORD) / beendete Fahraufträge (ENDTSP) / Frei-Meldungen " +
-            "(RPFREE) im Zeitraum. Klaffen die Zahlen auseinander, reicht eine Belegung über den " +
-            "Fensterrand hinaus oder steht noch aus."),
+            "Ankünfte (ENDTSP) / Weitertransport-Aufträge (TSPORD) / Frei-Meldungen (RPFREE) im " +
+            "Zeitraum. Klaffen die Zahlen auseinander, reicht eine Belegung über den Fensterrand " +
+            "hinaus oder steht noch aus."),
         ("active",
             "Stunden mit mindestens einer Fahrt. Zeigt, ob ein niedriger Durchschnitt von " +
             "gleichmäßig wenig Arbeit kommt oder von längerem Stillstand."),

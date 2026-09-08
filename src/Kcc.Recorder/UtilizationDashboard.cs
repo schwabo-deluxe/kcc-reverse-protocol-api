@@ -286,11 +286,11 @@ public static class UtilizationDashboard
             if (!c) return '';
             return `<div class="rbg">
               <span${help('cbusy')}>Belegung <b style="color:${color(c.busyPercent)}">${fmt(c.busyPercent)} %</b></span>
-              <span${help('ccount')}>Auftrag/Ende/Frei <b>${c.orders}/${c.completed}/${c.freeSignals}</b></span>
+              <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${c.completed}/${c.orders}/${c.freeSignals}</b></span>
               <span${help('coccupied')}>Ø belegt <b>${dur(c.avgOccupiedSeconds)}</b></span>
-              <span${help('ctransport')}>Ø Fahrauftrag <b>${dur(c.avgTransportSeconds)}</b></span>
-              <span${help('cclear')}>Ø Räumen <b>${dur(c.avgClearSeconds)}</b></span>
-              <span${help('cwait')}>Ø Leer <b>${dur(c.avgIdleSeconds)}</b></span>
+              <span${help('corderwait')}>Ø bis Auftrag <b>${dur(c.avgOrderWaitSeconds)}</b></span>
+              <span${help('cdepart')}>Ø Abtransport <b>${dur(c.avgDepartSeconds)}</b></span>
+              <span${help('cwait')}>Ø leer <b>${dur(c.avgIdleSeconds)}</b></span>
               <span${help('cidle')}>Leer gesamt <b>${dur(c.idleSeconds)}</b></span>
             </div>`;
           };

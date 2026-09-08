@@ -51,33 +51,34 @@ public class ConveyorReportTests
     }
 
     [Fact]
-    public void Belegt_ist_von_TSPORD_bis_RPFREE_ENDTSP_liegt_dazwischen()
+    public void Belegt_ist_von_der_Ankunft_bis_zum_Verlassen()
     {
         var feed = new Feed();
-        // Zwei Vorgänge: Auftrag, Fahrt zu Ende nach 20 s, Platz frei nach weiteren 10 s.
-        feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(20, "ENDTSP", "LB41", "LE1");
+        // Doku-Ablauf je Ladeeinheit: ENDTSP = Ankunft, TSPORD = Auftrag zum Weitertransport,
+        // RPFREE = Verlassen. Zwei Durchläufe, dazwischen 30 s leer.
+        feed.Add(0, "ENDTSP", "LB41", "LE1");
+        feed.Add(20, "TSPORD", "LB41", "LE1");
         feed.Add(30, "RPFREE", "LB41", "LE1");
-        feed.Add(60, "TSPORD", "LB41", "LE2");
-        feed.Add(80, "ENDTSP", "LB41", "LE2");
+        feed.Add(60, "ENDTSP", "LB41", "LE2");
+        feed.Add(80, "TSPORD", "LB41", "LE2");
         feed.Add(90, "RPFREE", "LB41", "LE2");
         feed.Add(45, "ENDTSP", "EA21", "LE9");   // anderer Punkt — bleibt draußen
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
 
-        Assert.Equal(2, r.Orders);
-        Assert.Equal(2, r.Completed);
+        Assert.Equal(2, r.Completed);      // Ankünfte
+        Assert.Equal(2, r.Orders);         // Weitertransport-Aufträge
         Assert.Equal(2, r.FreeSignals);
 
-        // 2 × 30 s belegt (0–30 und 60–90), nicht 2 × 20 s: ENDTSP gibt den Platz nicht frei.
+        // 2 × 30 s belegt (0–30 und 60–90) — der TSPORD dazwischen beendet nichts.
         Assert.Equal(60, r.BusySeconds);
         Assert.Equal(50, r.BusyPercent);
         Assert.Equal(60, r.IdleSeconds);
 
-        Assert.Equal(30, r.AvgOccupiedSeconds);    // TSPORD -> RPFREE
-        Assert.Equal(20, r.AvgTransportSeconds);   // TSPORD -> ENDTSP
-        Assert.Equal(10, r.AvgClearSeconds);       // ENDTSP -> RPFREE
-        Assert.Equal(30, r.AvgIdleSeconds);        // RPFREE(30) -> TSPORD(60)
+        Assert.Equal(30, r.AvgOccupiedSeconds);    // ENDTSP -> RPFREE
+        Assert.Equal(20, r.AvgOrderWaitSeconds);   // ENDTSP -> TSPORD
+        Assert.Equal(10, r.AvgDepartSeconds);      // TSPORD -> RPFREE
+        Assert.Equal(30, r.AvgIdleSeconds);        // RPFREE(30) -> ENDTSP(60)
         Assert.Equal(T0.AddSeconds(90), r.LatestAt);
     }
 
@@ -97,8 +98,8 @@ public class ConveyorReportTests
     public void Noch_belegt_am_Fensterende_zaehlt_bis_zum_Rand()
     {
         var feed = new Feed();
-        feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(20, "ENDTSP", "LB41", "LE1");
+        feed.Add(0, "ENDTSP", "LB41", "LE1");
+        feed.Add(20, "TSPORD", "LB41", "LE1");
         // Kein RPFREE: die Ladeeinheit steht noch auf dem Platz.
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(100), Opts);
@@ -106,13 +107,14 @@ public class ConveyorReportTests
         Assert.Equal(100, r.BusySeconds);
         Assert.Equal(100, r.BusyPercent);
         Assert.Equal(0, r.IdleSeconds);
+        Assert.Equal(20, r.AvgOrderWaitSeconds);
     }
 
     [Fact]
     public void Belegung_von_vor_dem_Fenster_zaehlt_ab_Fensteranfang()
     {
         var feed = new Feed();
-        feed.Add(-100, "TSPORD", "LB41", "LE1");   // Auftrag lief schon vor dem Fenster
+        feed.Add(-100, "ENDTSP", "LB41", "LE1");   // Ankunft lag vor dem Fenster
         feed.Add(40, "RPFREE", "LB41", "LE1");
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(200), Opts);
@@ -123,16 +125,15 @@ public class ConveyorReportTests
     }
 
     [Fact]
-    public void Zweiter_Auftrag_ohne_Freimeldung_verlaengert_dieselbe_Belegung()
+    public void Zweite_Ankunft_ohne_Freimeldung_verlaengert_dieselbe_Belegung()
     {
         var feed = new Feed();
-        feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(30, "TSPORD", "LB41", "LE2");     // Umlagerung ohne zwischenzeitliches RPFREE
+        feed.Add(0, "ENDTSP", "LB41", "LE1");
+        feed.Add(30, "ENDTSP", "LB41", "LE2");     // Nachrücker ohne zwischenzeitliches RPFREE
         feed.Add(60, "RPFREE", "LB41", "LE2");
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
 
-        Assert.Single(new[] { r.AvgOccupiedSeconds });
         Assert.Equal(60, r.BusySeconds);           // eine durchgehende Belegung 0–60
         Assert.Equal(60, r.AvgOccupiedSeconds);
     }
@@ -143,15 +144,15 @@ public class ConveyorReportTests
         var feed = new Feed();
         // Meldet ein Punkt kein RPFREE, gilt er durchgehend als belegt — nur RPFREE gibt frei.
         // Der Zählerstand Frei=0 macht das in der Kachel sichtbar, statt es zu kaschieren.
-        feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(20, "ENDTSP", "LB41", "LE1");
-        feed.Add(60, "TSPORD", "LB41", "LE2");
-        feed.Add(80, "ENDTSP", "LB41", "LE2");
+        feed.Add(0, "ENDTSP", "LB41", "LE1");
+        feed.Add(20, "TSPORD", "LB41", "LE1");
+        feed.Add(60, "ENDTSP", "LB41", "LE2");
+        feed.Add(80, "TSPORD", "LB41", "LE2");
 
         var r = ConveyorReport.Compute(feed.Rows, Fmt, "LB41", T0, T0.AddSeconds(120), Opts);
 
         Assert.Equal(0, r.FreeSignals);
-        Assert.Equal(2, r.Orders);
+        Assert.Equal(2, r.Completed);
         Assert.Equal(100, r.BusyPercent);
         Assert.Equal(0, r.AvgIdleSeconds);
     }
@@ -160,8 +161,8 @@ public class ConveyorReportTests
     public void Verlauf_endet_am_rechten_Fensterrand_und_bleibt_in_Prozent()
     {
         var feed = new Feed();
-        feed.Add(0, "TSPORD", "LB41", "LE1");
-        feed.Add(60, "ENDTSP", "LB41", "LE1");
+        feed.Add(0, "ENDTSP", "LB41", "LE1");
+        feed.Add(60, "TSPORD", "LB41", "LE1");
         feed.Add(90, "RPFREE", "LB41", "LE1");
 
         var r = ConveyorReport.Compute(
@@ -176,8 +177,8 @@ public class ConveyorReportTests
     public void Punkt_mit_RBG_Verbindung_bekommt_keine_Foerdertechnik_Auswertung()
     {
         var feed = new Feed();
-        feed.Add(0, "TSPORD", "MA72", "LE1");
-        feed.Add(30, "ENDTSP", "MA72", "LE1");
+        feed.Add(0, "ENDTSP", "MA72", "LE1");
+        feed.Add(30, "RPFREE", "MA72", "LE1");
 
         var report = TelegramUtilization.Compute(
             feed.Rows, Fmt, 60, 200, T0.AddMinutes(60),
