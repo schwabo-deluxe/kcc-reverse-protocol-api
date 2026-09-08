@@ -63,8 +63,10 @@ public static class RbgHistoryDashboard
           svg.plot .cap { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 4 4; }
           svg.plot .ln { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
           svg.plot .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
-          svg.plot .sel { fill: #1f6feb; opacity: .18; }
-          svg.plot .sel[hidden] { display: none; }
+          /* Auswahlrechteck beim Aufziehen. Sichtbarkeit über das SVG-Attribut 'visibility',
+             nicht über 'hidden' — letzteres gibt es auf SVGElement nicht. */
+          svg.plot .sel { fill: #1f6feb; fill-opacity: .18; stroke: #1f6feb; stroke-opacity: .6;
+                          stroke-width: 1; pointer-events: none; }
           #chart { height: 340px; }
 
           .minis { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
@@ -259,8 +261,10 @@ public static class RbgHistoryDashboard
         const path = (b, x, y, get) =>
           b.map((pt, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(get(pt)).toFixed(1)}`).join(' ');
 
+        const showSel = (sel, on) => sel && sel.setAttribute('visibility', on ? 'visible' : 'hidden');
+
         const overlay = (L, T, w, h) =>
-          `<rect class="sel" x="${L}" y="${T}" width="0" height="${h}" hidden></rect>` +
+          `<rect class="sel" x="${L}" y="${T}" width="0" height="${h}" visibility="hidden"></rect>` +
           `<line class="cursor" y1="${T}" y2="${T + h}"></line>` +
           `<rect class="hit" x="${L}" y="${T}" width="${w}" height="${h}" fill="transparent"></rect>`;
 
@@ -438,8 +442,7 @@ public static class RbgHistoryDashboard
           const { svg, f0 } = brush;
           const f1 = fracAtClientX(svg, e.clientX);
           brush = null;
-          const sel = svg.querySelector('.sel');
-          if (sel) sel.hidden = true;
+          showSel(svg.querySelector('.sel'), false);
           if (f1 === null || Math.abs(f1 - f0) < 0.01) return;   // reiner Klick — kein Zoom
           zoom = {
             from: fmtLocal(timeAtFrac(Math.min(f0, f1))),
@@ -462,7 +465,7 @@ public static class RbgHistoryDashboard
             if (sel) {
               sel.setAttribute('x', (plotL + Math.min(f0, f1) * (plotR - plotL)).toFixed(1));
               sel.setAttribute('width', (Math.abs(f1 - f0) * (plotR - plotL)).toFixed(1));
-              sel.hidden = false;
+              showSel(sel, true);
             }
             clearCursors();
             $('tip').style.opacity = 0;
