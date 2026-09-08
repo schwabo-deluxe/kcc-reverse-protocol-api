@@ -178,10 +178,10 @@ public static class UtilizationDashboard
           });
           if (!items.length) return;
 
+          // Linear: gleichmäßiges Wandern des Zeigers über die ganze Dauer, kein Auslaufen.
           const paint = k => {
-            const e = 1 - Math.pow(1 - k, 3);            // sanft auslaufen
             for (const it of items) {
-              const v = it.from + (it.to - it.from) * e;
+              const v = it.from + (it.to - it.from) * k;
               paintGauge(it.el, v, it.max);
               if (it.txt) {
                 it.txt.textContent = fmt(v) + ' %';
