@@ -25,8 +25,12 @@ function bucketFor(h) {
 
 const chart = echarts.init($('area'), null, { renderer: 'canvas' });
 addEventListener('resize', () => chart.resize());
-// Doppelklick im Chart setzt den Zoom zurück.
-$('area').addEventListener('dblclick', () => chart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }));
+
+// Mit der Maus einen Zeitbereich aufziehen (X-Zoom), wie in der alten HTML-Version.
+// Dauerhaft aktiv; Doppelklick setzt zurück und schaltet es wieder scharf.
+const DRAG_ZOOM = { show: false, feature: { dataZoom: { yAxisIndex: 'none', filterMode: 'none' } } };
+const armDragZoom = () => chart.dispatchAction({ type: 'takeGlobalCursor', key: 'dataZoomSelect', dataZoomSelectActive: true });
+$('area').addEventListener('dblclick', () => { chart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }); armDragZoom(); });
 
 // Gemeinsames dunkles Grundgerüst — sparam die Serien/Achsen dazu.
 function baseOption() {
@@ -87,6 +91,7 @@ function drawArea(data) {
 
   chart.setOption({
     ...baseOption(),
+    toolbox: DRAG_ZOOM,
     legend: {
       type: 'scroll', top: 0, right: 8, left: 52,
       textStyle: { color: '#cdd6e0', fontSize: 11 },
@@ -98,6 +103,7 @@ function drawArea(data) {
     }] : [],
     series,
   }, { notMerge: true });
+  armDragZoom();
 }
 
 function drawRatio(data) {

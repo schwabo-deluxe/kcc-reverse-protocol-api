@@ -32,7 +32,18 @@ const bucketFor = h => h <= 24 ? 5 : h <= 72 ? 15 : h <= 168 ? 30 : h <= 672 ? 2
 const mainChart = echarts.init($('chart'), null, { renderer: 'canvas' });
 const minis = new Map();   // connection -> ECharts-Instanz
 addEventListener('resize', () => { mainChart.resize(); minis.forEach(c => c.resize()); });
-$('chart').addEventListener('dblclick', () => mainChart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }));
+
+// Aufziehen mit der Maus wählt einen Zeitbereich (X-Zoom), wie in der alten HTML-Version.
+// ECharts kann das dauerhaft aktiv halten (sonst bräuchte es erst einen Toolbox-Klick).
+// Doppelklick setzt zurück und schaltet das Aufziehen wieder scharf.
+const dragZoom = { show: false, feature: { dataZoom: { yAxisIndex: 'none', filterMode: 'none' } } };
+function armDragZoom(inst, el) {
+  const arm = () => inst.dispatchAction({ type: 'takeGlobalCursor', key: 'dataZoomSelect', dataZoomSelectActive: true });
+  arm();
+  if (el.dataset.zoomBound) return;
+  el.dataset.zoomBound = '1';
+  el.addEventListener('dblclick', () => { inst.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }); arm(); });
+}
 
 function darkBase(extra) {
   return Object.assign({
@@ -87,6 +98,7 @@ function drawMain() {
   }
 
   mainChart.setOption(darkBase({
+    toolbox: dragZoom,
     grid: { left: 52, right: 16, top: 34, bottom: 60 },
     legend: {
       type: 'scroll', top: 0, left: 52, right: 8,
@@ -119,6 +131,7 @@ function drawMain() {
       style: { text: 'keine Daten im Zeitraum', fill: '#7a8494', fontSize: 13 } }] : [],
     series,
   }), { notMerge: true });
+  armDragZoom(mainChart, $('chart'));
 
   $('chartTitle').textContent = metricTitle(metric);
 }
@@ -144,9 +157,12 @@ function drawMinis() {
 
   for (const box of $('minis').querySelectorAll('.mini')) {
     const c = box.dataset.c;
-    const inst = echarts.init(box.querySelector('.plot'), null, { renderer: 'canvas' });
+    const plot = box.querySelector('.plot');
+    const inst = echarts.init(plot, null, { renderer: 'canvas' });
     minis.set(c, inst);
     inst.setOption(darkBase({
+      toolbox: dragZoom,
+      dataZoom: [{ type: 'inside', filterMode: 'none' }],
       grid: { left: 30, right: 10, top: 10, bottom: 22 },
       yAxis: { type: 'value', min: 0, max: 100, interval: 50,
         axisLabel: { color: '#7a8494' }, splitLine: { lineStyle: { color: '#232830' } } },
@@ -174,6 +190,7 @@ function drawMinis() {
           data: b.map(pt => [pt.at, pt.loadPercent[c] ?? 0]) },
       ],
     }), { notMerge: true });
+    armDragZoom(inst, plot);
   }
 }
 
