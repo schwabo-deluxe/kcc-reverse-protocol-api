@@ -13,13 +13,13 @@
 <body>
 <header>
   <h1>Auslastung (TSPORD)</h1>
-  <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
-  <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (TargetUph in appsettings.json)"></label>
-  <label>Glättung (min) <input type="number" id="bucket" value="10" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
-  <label>Tacho RBG (min) <input type="number" id="rate" value="5" min="1" max="240"
-    title="Trailing-Fenster der RBG-Tachos: Auslastung, Leistung und Spiele/h werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort, aber sprunghaft; groß = träger, aber ruhiger. Die Verlaufskurve bleibt davon unberührt."></label>
-  <label>Tacho FT (min) <input type="number" id="rateFt" value="5" min="1" max="240"
-    title="Trailing-Fenster der Fördertechnik-Tachos (Belegung + Leistung der Punkte ohne RBG-Verbindung). Getrennt vom RBG-Fenster, weil beide unterschiedlich träge reagieren."></label>
+  <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440" title="Zeitraum der Verlaufskurven (UtilizationWindowMinutes in appsettings.json)"></label>
+  <label>Richtwert (UPH) <input type="number" id="target" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (UtilizationTargetUph in appsettings.json)"></label>
+  <label>Glättung (min) <input type="number" id="bucket" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve (UtilizationBucketMinutes in appsettings.json)"></label>
+  <label>Tacho RBG (min) <input type="number" id="rate" min="1" max="240"
+    title="Trailing-Fenster der RBG-Tachos: Auslastung, Leistung und Spiele/h werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort, aber sprunghaft; groß = träger, aber ruhiger. Standard: UtilizationRateMinutes in appsettings.json."></label>
+  <label>Tacho FT (min) <input type="number" id="rateFt" min="1" max="240"
+    title="Trailing-Fenster der Fördertechnik-Tachos (Belegung + Leistung der Punkte ohne RBG-Verbindung), getrennt vom RBG-Fenster. Standard: UtilizationConveyorRateMinutes in appsettings.json."></label>
   <button type="button" class="hbtn" id="arrange"
     title="Kacheln frei anordnen und in der Größe ändern; die Anordnung wird pro Browser gespeichert">Anordnen</button>
   <button type="button" class="hbtn" id="resetLayout" hidden>Anordnung zurücksetzen</button>
