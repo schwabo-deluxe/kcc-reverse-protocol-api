@@ -40,8 +40,7 @@ public class DashboardNavTests
         // serverseitigen Injektion; die übrigen Seiten sind weiterhin C#-Konstanten.
         foreach (var html in new[]
         {
-            Dashboard.Html, UphHistoryDashboard.Html, ContourDashboard.Html,
-            WallboardDashboard.Html, RbgHistoryDashboard.Html,
+            Dashboard.Html, ContourDashboard.Html, WallboardDashboard.Html,
         })
             Assert.Contains(DashboardNav.Placeholder, html);
     }

@@ -340,9 +340,7 @@ int DumpDashboards(CommandLine cli)
     var files = new[]
     {
         ("dashboard.html", Dashboard.Html),
-        ("verlauf.html", UphHistoryDashboard.Html),
         ("kontur.html", ContourDashboard.Html),
-        ("rbg.html", RbgHistoryDashboard.Html),
         ("wand.html", WallboardDashboard.Html),
     };
     foreach (var (name, html) in files)
@@ -450,7 +448,7 @@ static void PrintUsage() => Console.WriteLine(
                                        RBG-Rasterzeilen vor dem ältesten Telegramm bleiben erhalten
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
-      dump-dashboards [--out verz]     dashboard/verlauf/kontur/rbg/wand.html + wwwroot schreiben
+      dump-dashboards [--out verz]     dashboard/kontur/wand.html + wwwroot schreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)

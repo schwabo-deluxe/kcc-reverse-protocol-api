@@ -130,10 +130,10 @@ public static class ApiServer
             {
                 "/" or "/index.html" => Html(Dashboard.Html, "/"),
                 "/auslastung" or "/auslastung.html" => StaticPage("auslastung.html"),
-                "/verlauf" or "/verlauf.html" => Html(UphHistoryDashboard.Html, "/verlauf"),
+                "/verlauf" or "/verlauf.html" => StaticPage("verlauf.html"),
                 "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
                 "/wand" or "/wand.html" => Html(WallboardDashboard.Html, "/wand"),
-                "/rbg" or "/rbg.html" => Html(RbgHistoryDashboard.Html, "/rbg"),
+                "/rbg" or "/rbg.html" => StaticPage("rbg.html"),
                 "/api/rbg-history" => Ok(RbgHistory(config,
                     RbgHours(q), RbgBucket(q, config), HistStamp(q, "from"), HistStamp(q, "to"))),
                 "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),

@@ -1,0 +1,36 @@
+/* Gemeinsame Grundlage für die ECharts-Ansichten (/verlauf, /rbg). */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: #14171c; color: #e6e6e6; }
+
+header { padding: 14px 20px; border-bottom: 1px solid #2a2f37; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0 6px 0 0; font-weight: 600; }
+label { color: #9aa4b2; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+select { background: #10141a; color: #e6e6e6; border: 1px solid #2a2f37; border-radius: 6px; padding: 5px 7px; font: inherit; }
+
+/* Segment-Umschalter (Zeitraum, Metrik …). */
+.seg { display: flex; gap: 2px; background: #10141a; border: 1px solid #2a2f37; border-radius: 7px; padding: 2px; }
+.seg button { background: none; border: 0; color: #9aa4b2; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 5px; cursor: pointer; }
+.seg button:hover { color: #e6e6e6; }
+.seg button.on { background: #1f6feb; color: #fff; }
+.seg-label { color: #7a8494; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+
+.meta { margin-left: auto; color: #9aa4b2; font-size: 12px; }
+.meta.err { color: #ff6b6b; }
+
+main { padding: 18px 20px 40px; max-width: 1400px; margin: 0 auto; }
+.card { background: #1c2128; border: 1px solid #2a2f37; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+.card h2 { font-size: 13px; margin: 0 0 12px; color: #9aa4b2; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.hint { color: #7a8494; font-size: 12px; margin-top: 10px; }
+[title] { cursor: help; }
+
+/* ECharts-Container. */
+.chart { width: 100%; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #262c34; font-variant-numeric: tabular-nums; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: #9aa4b2; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+tbody tr:last-child td { border-bottom: 0; }
+td .sw, .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 7px; flex: 0 0 auto; }
+.wrap { overflow-x: auto; }

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UPH-Historie je Endziel</title>
+<link rel="stylesheet" href="/css/nav.css">
+<link rel="stylesheet" href="/css/charts.css">
+<link rel="stylesheet" href="/css/verlauf.css">
+<script defer src="/js/nav.js"></script>
+<script defer src="/vendor/echarts.min.js"></script>
+<script defer src="/js/verlauf.js"></script>
+</head>
+<body>
+<header>
+  <h1>UPH-Historie</h1>
+  <div class="ranges" id="ranges">
+    <button data-h="8" data-rolling="5" class="on">8 h</button>
+    <button data-h="24">24 h</button>
+    <button data-h="168">7 T</button>
+    <button data-h="336">14 T</button>
+    <button data-h="672">4 W</button>
+  </div>
+  <label>Stapeln nach
+    <select id="dim">
+      <option value="destination">Endziel</option>
+      <option value="resourcePoint">Ressourcenpunkt</option>
+    </select>
+  </label>
+  <label>Ressourcenpunkt <select id="rp"><option value="">alle</option></select></label>
+  <div class="meta" id="meta">lädt …</div>
+</header>
+<main>
+  <div class="card">
+    <h2 id="h-area">UPH je Endziel (gestapelt)</h2>
+    <div id="area" class="chart"></div>
+    <div class="hint">Im Chart ziehen zoomt hinein, Mausrad zoomt, der Balken unten verschiebt den Ausschnitt · Doppelklick setzt zurück</div>
+  </div>
+  <div class="card">
+    <h2 id="h-ratio">Mengenverhältnis der Ziele</h2>
+    <div class="ratio" id="ratio"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="card">
+    <h2 id="h-table">Ziele im Zeitraum</h2>
+    <div class="wrap">
+      <table>
+        <thead><tr><th id="h-key">Ziel</th><th>Ø UPH</th><th>Aufträge</th><th>Anteil</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</body>
+</html>

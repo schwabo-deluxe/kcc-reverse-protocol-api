@@ -3,8 +3,9 @@ using Xunit;
 namespace Kcc.Recorder.Tests;
 
 /// <summary>
-/// Die aufgetrennte Auslastungsansicht liegt als lose Dateien unter <c>wwwroot/</c> und wird
-/// per <c>CopyToOutputDirectory</c> neben die EXE (und in die Testausgabe) gelegt.
+/// Die aufgetrennten Ansichten (<c>/auslastung</c>, <c>/verlauf</c>, <c>/rbg</c>) liegen als
+/// lose Dateien unter <c>wwwroot/</c> und werden per <c>CopyToOutputDirectory</c> neben die EXE
+/// (und in die Testausgabe) gelegt.
 /// </summary>
 public class WwwrootTests
 {
@@ -17,25 +18,37 @@ public class WwwrootTests
     {
         foreach (var rel in new[]
         {
-            "auslastung.html",
-            "css/nav.css", "css/auslastung.css",
-            "js/nav.js", "js/glossary.js", "js/auslastung.js",
+            "auslastung.html", "verlauf.html", "rbg.html",
+            "css/nav.css", "css/auslastung.css", "css/charts.css", "css/verlauf.css", "css/rbg.css",
+            "js/nav.js", "js/glossary.js", "js/auslastung.js", "js/verlauf.js", "js/rbg.js",
+            "vendor/echarts.min.js",
         })
             Assert.True(File.Exists(Path.Combine(Root, rel.Replace('/', Path.DirectorySeparatorChar))),
                 $"fehlt: wwwroot/{rel}");
     }
 
     [Fact]
-    public void Auslastung_html_bindet_die_geteilten_Skripte_ein()
+    public void Echarts_ist_die_vendorte_Apache_Version()
     {
-        var html = Read("auslastung.html");
-        Assert.Contains("/js/glossary.js", html);
-        Assert.Contains("/js/nav.js", html);
-        Assert.Contains("/js/auslastung.js", html);
-        Assert.Contains("/css/nav.css", html);
-        // Kein serverseitiger Platzhalter mehr.
-        Assert.DoesNotContain("<!--nav-->", html);
-        Assert.DoesNotContain("<!--rbghelp-->", html);
+        var js = Read("vendor/echarts.min.js");
+        Assert.True(js.Length > 500_000, "echarts.min.js wirkt zu klein");
+        Assert.Contains("Apache", js);
+    }
+
+    [Fact]
+    public void Aufgetrennte_Seiten_binden_die_geteilten_Skripte_ein()
+    {
+        foreach (var page in new[] { "auslastung.html", "verlauf.html", "rbg.html" })
+        {
+            var html = Read(page);
+            Assert.Contains("/js/nav.js", html);
+            Assert.Contains("/css/nav.css", html);
+            Assert.DoesNotContain("<!--nav-->", html);
+            Assert.DoesNotContain("<!--rbghelp-->", html);
+        }
+        Assert.Contains("/vendor/echarts.min.js", Read("verlauf.html"));
+        Assert.Contains("/vendor/echarts.min.js", Read("rbg.html"));
+        Assert.Contains("/js/glossary.js", Read("rbg.html"));
     }
 
     [Fact]
@@ -67,5 +80,18 @@ public class WwwrootTests
         Assert.Contains("function layoutTiles", js);
         Assert.Contains("pointerdown", js);
         Assert.Contains("resetLayout", js);
+    }
+
+    [Fact]
+    public void Verlauf_und_rbg_zeichnen_mit_echarts()
+    {
+        foreach (var js in new[] { "js/verlauf.js", "js/rbg.js" })
+        {
+            var body = Read(js);
+            Assert.Contains("echarts.init", body);
+            Assert.Contains("dataZoom", body);
+        }
+        Assert.Contains("/api/uph-history", Read("js/verlauf.js"));
+        Assert.Contains("/api/rbg-history", Read("js/rbg.js"));
     }
 }
