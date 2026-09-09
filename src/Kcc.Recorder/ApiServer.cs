@@ -352,13 +352,13 @@ public static class ApiServer
         Clamp(q("bucket"), fallback: config.UtilizationBucketMinutes, min: 1, max: 120);
 
     static int Rate(Func<string, string?> q, KccConfig config) =>
-        Clamp(q("rate"), fallback: config.UtilizationRateMinutes, min: 1, max: 240);
+        Clamp(q("rate"), fallback: config.UtilizationSRMRateMinutes, min: 1, max: 240);
 
     static int ConveyorRate(Func<string, string?> q, KccConfig config) =>
         Clamp(q("rateFt"),
             fallback: config.UtilizationConveyorRateMinutes > 0
                 ? config.UtilizationConveyorRateMinutes
-                : config.UtilizationRateMinutes,
+                : config.UtilizationSRMRateMinutes,
             min: 1, max: 240);
 
     static int SeriesStep(Func<string, string?> q, KccConfig config) =>

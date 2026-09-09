@@ -206,16 +206,16 @@ public sealed class KccConfig
     /// Trailing-Fenster in Minuten, aus dem UPH und Prozent der Auslastung hochgerechnet werden
     /// (Standard: <c>15</c>). Klein = reagiert schnell auf kurze Stöße; groß = geglättet.
     /// </summary>
-    public int UtilizationRateMinutes { get; set; } = 5;
+    public int UtilizationSRMRateMinutes { get; set; } = 5;
 
     /// <summary>
     /// Eigenes Trailing-Fenster in Minuten für die Fördertechnik-Tachos (Belegung + Leistung der
-    /// Punkte ohne RBG-Verbindung). Ohne Angabe / <c>0</c> gilt <see cref="UtilizationRateMinutes"/>.
+    /// Punkte ohne RBG-Verbindung). Ohne Angabe / <c>0</c> gilt <see cref="UtilizationSRMRateMinutes"/>.
     /// Getrennt einstellbar, weil Fördertechnik und RBG unterschiedlich träge reagieren.
     /// </summary>
     public int UtilizationConveyorRateMinutes { get; set; } = 5;
 
-    // Hinweis: die RBG-Tachos rechnen aus UtilizationRateMinutes hoch, die Fördertechnik-Tachos
+    // Hinweis: die RBG-Tachos rechnen aus UtilizationSRMRateMinutes hoch, die Fördertechnik-Tachos
     // aus UtilizationConveyorRateMinutes. Die Verlaufskurven nutzen davon unabhängig
     // UtilizationBucketMinutes.
 
