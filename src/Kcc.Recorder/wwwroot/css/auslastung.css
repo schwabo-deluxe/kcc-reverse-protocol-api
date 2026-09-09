@@ -1,0 +1,95 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: #14171c; color: #e6e6e6; }
+header { padding: 16px 20px; border-bottom: 1px solid #2a2f37; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; }
+label { color: #9aa4b2; font-size: 12px; display: flex; gap: 6px; align-items: center; }
+input { background: #10141a; color: #e6e6e6; border: 1px solid #2a2f37; border-radius: 6px; padding: 5px 7px; font: inherit; width: 84px; }
+
+/* Kopfzeilen-Schaltflächen (Anordnen / Zurücksetzen). */
+.hbtn { background: #10141a; color: #9aa4b2; border: 1px solid #2a2f37; border-radius: 6px;
+        padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.hbtn:hover { color: #e6e6e6; }
+.hbtn.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+.meta { margin-left: auto; color: #9aa4b2; font-size: 12px; }
+.meta.err { color: #ff6b6b; }
+main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+.tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; position: relative; }
+.tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.tile .label .code { color: #7a8494; font-weight: 400; }
+.tile .sub { color: #9aa4b2; font-size: 12px; }
+.tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+/* Tacho links, Verlauf rechts, auf gleicher Höhe. */
+.tile-body { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.rbg [title], [title] { cursor: help; }
+.rbg { margin-top: 8px; padding-top: 8px; border-top: 1px solid #232830; font-size: 12px; color: #9aa4b2; display: flex; flex-wrap: wrap; gap: 3px 12px; }
+.rbg b { color: #e6e6e6; font-weight: 600; }
+.gauge-col { flex: 0 0 auto; text-align: center; }
+/* RBG-Kacheln: zwei Tachos nebeneinander — Zeitseite und Mengenseite. */
+.duo { display: flex; gap: 10px; flex: 0 0 auto; }
+.duo .gauge { width: 104px; height: 54px; }
+.duo .pct { font-size: 15px; }
+.gcap { font-size: 12px; color: #e6e6e6; text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
+.gsub { font-size: 12px; color: #e6e6e6; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spark-col { flex: 1 1 0; min-width: 0; }
+.gauge { display: block; width: 128px; height: 66px; overflow: visible; }
+.gauge .track { stroke: #2a2f37; }
+.gauge .tick { stroke: #cdd6e0; }
+.gauge.sm { width: 80px; height: 42px; }
+.pct { font-weight: 700; font-size: 17px; line-height: 1; margin-top: 2px; }
+.spark { display: block; width: 100%; height: 66px; overflow: visible; }
+.spark .grid { stroke: #2a2f37; stroke-width: 1; }
+.spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
+.spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark .dot { r: 2.5; }
+.spark .hit { fill: transparent; }
+.spark .cursor { stroke: #7a8494; stroke-width: 1; visibility: hidden; }
+.axis { display: flex; justify-content: space-between; color: #7a8494; font-size: 11px; margin-top: 4px; }
+/* Einheit der Kurve — bei RBG-Kacheln samt Verbindung, damit klar ist, woher sie stammt. */
+.axis .unit { color: #9aa4b2; }
+table.dest { margin: 10px 0 0; border: 0; border-radius: 0; background: none; }
+table.dest th, table.dest td { padding: 3px 8px; font-size: 12px; border-bottom: 1px solid #232830; }
+table.dest tbody tr:last-child td { border-bottom: 0; }
+.grp { margin-bottom: 24px; }
+.grp-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 2px 12px; }
+.grp-name { font-size: 13px; font-weight: 600; color: #cdd6e0; text-transform: uppercase; letter-spacing: .04em; }
+.grp-sum { font-size: 12px; font-variant-numeric: tabular-nums; }
+tr.grp td { background: #171b21; font-weight: 600; }
+td.sub-row { padding-left: 24px; color: #cdd6e0; }
+#tip { position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s; background: #10141a; border: 1px solid #2a2f37; border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; z-index: 10; }
+#tip b { font-weight: 600; }
+#tip .win { color: #7a8494; }
+table { width: 100%; border-collapse: collapse; margin-top: 22px; background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; overflow: hidden; }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #2a2f37; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+tbody tr:last-child td { border-bottom: 0; }
+td.err { color: #ff6b6b; }
+
+/* ------------------------------------------------------------------ *
+ * Freie Kachel-Anordnung (Anordnen-Modus). Position und Größe werden
+ * je Browser in localStorage gehalten und auch außerhalb des Modus
+ * angewandt, solange eine gespeicherte Anordnung besteht.
+ * ------------------------------------------------------------------ */
+
+/* Sobald eine Anordnung gilt: der äußere Container hört auf, die Gruppen in schmale
+   Spalten zu setzen — jede Gruppe wird eine volle Bahn, in der die Kacheln frei liegen. */
+body.custom-layout #tiles { display: block; }
+body.custom-layout .grp > .tiles { display: block; position: relative; }
+body.custom-layout .grp > .tiles > .tile { position: absolute; margin: 0; }
+
+/* Anordnen-Modus: Griffe sichtbar, Kopf zieht, gestrichelter Rahmen. */
+body.arrange .grp > .tiles > .tile { outline: 1px dashed #3a4453; outline-offset: -1px; }
+body.arrange .tile-head { cursor: move; user-select: none; }
+body.arrange .grp > .tiles > .tile > .grip { display: block; }
+
+.tile > .grip {
+  position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px;
+  display: none; cursor: nwse-resize; border-radius: 0 0 7px 0;
+  background: repeating-linear-gradient(135deg, #3d4655 0 2px, transparent 2px 4px);
+}
+
+body.dragging { cursor: grabbing; user-select: none; }
+body.dragging .tile.drag { opacity: .92; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); z-index: 5; }

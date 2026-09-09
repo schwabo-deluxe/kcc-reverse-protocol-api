@@ -154,7 +154,7 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /api/kpis?minutes=240` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
-| `GET /auslastung` | Auslastung der Ressourcenpunkte, gebündelt nach `Group`. Jede Kachel zeigt **zwei Tachos — Zeitseite und Mengenseite**. Punkte mit `Connection` (RBG): **Auslastung** (Zeit mit offenem Auftrag) und **Leistung** (Spiele/h gegen `RbgMaxCyclesPerHour`); Tacho, Linienchart und Kopfzeile rechnen dort in Doppel-/Einzelspielen, die `TSPORD`-Zähler dienen nur der Ziel-Identifikation. Punkte ohne `Connection` (Fördertechnik): **Belegung** (`ENDTSP`→`RPFREE` ÷ Fenster) und **Leistung** (% vom UPH-Richtwert), darunter Ø Verweildauer, Ø bis Auftrag, Ø Abtransport und Ø Leerzeit. Alle Kennzahlen tragen einen Erklär-Tooltip; die Tachos blenden zwischen zwei Abrufen über, statt zu springen |
+| `GET /auslastung` | Auslastung der Ressourcenpunkte, gebündelt nach `Group`. Jede Kachel zeigt **zwei Tachos — Zeitseite und Mengenseite**. Punkte mit `Connection` (RBG): **Auslastung** (Zeit mit offenem Auftrag) und **Leistung** (Spiele/h gegen `RbgMaxCyclesPerHour`); Tacho, Linienchart und Kopfzeile rechnen dort in Doppel-/Einzelspielen, die `TSPORD`-Zähler dienen nur der Ziel-Identifikation. Punkte ohne `Connection` (Fördertechnik): **Belegung** (`ENDTSP`→`RPFREE` ÷ Fenster) und **Leistung** (% vom UPH-Richtwert), darunter Ø Verweildauer, Ø bis Auftrag, Ø Abtransport und Ø Leerzeit. Alle Kennzahlen tragen einen Erklär-Tooltip; die Tachos blenden zwischen zwei Abrufen über, statt zu springen. **„Anordnen"** in der Kopfzeile macht jede Kachel frei ziehbar (Kopf) und in der Größe änderbar (Griff unten rechts); die Anordnung wird je Browser in `localStorage` gehalten und auch außerhalb des Modus angewandt, „Anordnung zurücksetzen" stellt das Raster wieder her |
 | `GET /api/utilization?minutes=60&target=200&bucket=5&rate=1&step=1` | Dieselbe Auswertung als JSON. `rate` = Trailing-Fenster für UPH/Prozent; `bucket` = Breite des gleitenden Verlaufsfensters; `step` = Abtastschritt des Verlaufs |
 | `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Zeitbereich per Maus aufziehen zoomt hinein (Doppelklick / „Zoom zurück" setzt zurück). Bereich **8 h** ist ein gleitender Kurzzeit-Verlauf (5-min-Fenster, direkt aus den Rohtelegrammen, letzter Punkt = aktueller Wert wie bei `/auslastung`); die längeren Bereiche speisen sich aus einer verdichteten Rollup-Tabelle mit **eigener Aufbewahrung** `UphHistoryRetentionDays` (Standard 4 Wochen) — weiter zurück als dieser Zeitraum reicht `/verlauf` nicht, auch nach `backfill` nicht |
 | `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand; `rolling=<min>` schaltet auf ein gleitendes Fenster aus den Rohtelegrammen um (`bucket` wird dann der Abtastschritt); `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
@@ -209,12 +209,19 @@ installiertes Framework nötig, dafür ~90–100 MB. `RollForward=Major` erlaubt
 abhängigen `dotnet test`/`run` auch neuere Runtimes (der Publish bleibt bei net8).
 
 Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
-(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `auslastung.html`, `verlauf.html`,
-`kontur.html`, `rbg.html`, `wand.html`) samt Prüfsumme an ein GitHub-Release. Die HTML-Dateien sind dieselben
-Dashboards, die die API unter `/`, `/auslastung`, `/verlauf`, `/kontur`, `/rbg` bzw. `/wand` ausliefert —
-`kcc dump-dashboards [--out verz]` schreibt sie jederzeit heraus.
-Als lose Datei geöffnet fragen sie fest `http://localhost:8082` ab; mit `?api=http://host:port`
-lässt sich ein anderer Endpunkt vorgeben. Über die API selbst ausgeliefert zählt deren Herkunft.
+(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `verlauf.html`, `kontur.html`,
+`rbg.html`, `wand.html` sowie der Ordner `wwwroot/`) samt Prüfsumme an ein GitHub-Release.
+
+`/auslastung` ist in **lose Dateien unter `wwwroot/`** aufgetrennt (`auslastung.html` +
+`css/`, `js/`); Kestrel liefert den Ordner über `UseStaticFiles` aus. Der Ordner liegt neben
+der EXE und muss mitkopiert werden — die EXE allein reicht für diese Seite nicht mehr.
+`js/nav.js` baut die Navigationsleiste clientseitig, `js/glossary.js` trägt die Erklärtexte
+(früher serverseitig injiziert). Die übrigen Seiten (`/`, `/verlauf`, `/kontur`, `/rbg`,
+`/wand`) sind weiterhin eingebettete Konstanten; `kcc dump-dashboards [--out verz]` schreibt
+sie heraus und kopiert `wwwroot/` dazu.
+Als lose Datei geöffnet fragen die Seiten fest `http://localhost:8082` ab; mit
+`?api=http://host:port` lässt sich ein anderer Endpunkt vorgeben. Über die API selbst
+ausgeliefert zählt deren Herkunft.
 
 ## Hinweis
 

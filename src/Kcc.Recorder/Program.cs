@@ -330,7 +330,8 @@ int Prune(KccConfig config, CommandLine cli)
     return 0;
 }
 
-// Schreibt die eingebetteten Dashboards als eigenständige HTML-Dateien heraus — u. a. fürs Release-Zip.
+// Schreibt die noch eingebetteten Dashboards als eigenständige HTML-Dateien heraus und
+// kopiert den wwwroot-Ordner (aufgetrennte Seiten) mit — u. a. fürs Release-Zip.
 int DumpDashboards(CommandLine cli)
 {
     var dir = cli.GetString("out") ?? ".";
@@ -339,7 +340,6 @@ int DumpDashboards(CommandLine cli)
     var files = new[]
     {
         ("dashboard.html", Dashboard.Html),
-        ("auslastung.html", UtilizationDashboard.Html),
         ("verlauf.html", UphHistoryDashboard.Html),
         ("kontur.html", ContourDashboard.Html),
         ("rbg.html", RbgHistoryDashboard.Html),
@@ -349,7 +349,20 @@ int DumpDashboards(CommandLine cli)
         File.WriteAllText(Path.Combine(dir, name),
             DashboardNav.Strip(RbgGlossary.Inject(html)), new UTF8Encoding(false));
 
-    Log($"{string.Join(", ", files.Select(f => f.Item1))} nach {Path.GetFullPath(dir)} geschrieben.");
+    var wwwrootSource = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+    var wwwrootTarget = Path.Combine(dir, "wwwroot");
+    var copied = 0;
+    if (Directory.Exists(wwwrootSource))
+        foreach (var src in Directory.EnumerateFiles(wwwrootSource, "*", SearchOption.AllDirectories))
+        {
+            var dest = Path.Combine(wwwrootTarget, Path.GetRelativePath(wwwrootSource, src));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src, dest, overwrite: true);
+            copied++;
+        }
+
+    Log($"{string.Join(", ", files.Select(f => f.Item1))} + wwwroot ({copied} Dateien) " +
+        $"nach {Path.GetFullPath(dir)} geschrieben.");
     return 0;
 }
 
@@ -437,7 +450,7 @@ static void PrintUsage() => Console.WriteLine(
                                        RBG-Rasterzeilen vor dem ältesten Telegramm bleiben erhalten
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
-      dump-dashboards [--out verz]     dashboard/auslastung/verlauf/kontur/rbg/wand.html schreiben
+      dump-dashboards [--out verz]     dashboard/verlauf/kontur/rbg/wand.html + wwwroot schreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)

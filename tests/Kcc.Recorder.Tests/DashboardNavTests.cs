@@ -34,11 +34,13 @@ public class DashboardNavTests
     }
 
     [Fact]
-    public void Alle_Dashboards_tragen_den_Platzhalter()
+    public void Noch_eingebettete_Dashboards_tragen_den_Platzhalter()
     {
+        // /auslastung ist als eigene wwwroot-Datei aufgetrennt und nutzt nav.js statt der
+        // serverseitigen Injektion; die übrigen Seiten sind weiterhin C#-Konstanten.
         foreach (var html in new[]
         {
-            Dashboard.Html, UtilizationDashboard.Html, UphHistoryDashboard.Html, ContourDashboard.Html,
+            Dashboard.Html, UphHistoryDashboard.Html, ContourDashboard.Html,
             WallboardDashboard.Html, RbgHistoryDashboard.Html,
         })
             Assert.Contains(DashboardNav.Placeholder, html);

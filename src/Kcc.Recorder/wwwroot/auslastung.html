@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auslastung der Ressourcenpunkte</title>
+<link rel="stylesheet" href="/css/nav.css">
+<link rel="stylesheet" href="/css/auslastung.css">
+<script defer src="/js/glossary.js"></script>
+<script defer src="/js/nav.js"></script>
+<script defer src="/js/auslastung.js"></script>
+</head>
+<body>
+<header>
+  <h1>Auslastung (TSPORD)</h1>
+  <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440"></label>
+  <label>Richtwert (UPH) <input type="number" id="target" value="200" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (TargetUph in appsettings.json)"></label>
+  <label>Glättung (min) <input type="number" id="bucket" value="10" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve"></label>
+  <label>Tacho aus (min) <input type="number" id="rate" value="5" min="1" max="240"
+    title="Trailing-Fenster aller Tachos: UPH, RBG-Spiele/h und Belegung werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort, aber sprunghaft; groß = träger, aber ruhiger. Die Verlaufskurve bleibt davon unberührt."></label>
+  <button type="button" class="hbtn" id="arrange"
+    title="Kacheln frei anordnen und in der Größe ändern; die Anordnung wird pro Browser gespeichert">Anordnen</button>
+  <button type="button" class="hbtn" id="resetLayout" hidden>Anordnung zurücksetzen</button>
+  <div class="meta" id="meta">lädt …</div>
+</header>
+<main>
+  <div class="tiles" id="tiles"></div>
+  <div id="tip" role="status"></div>
+  <table>
+    <thead><tr>
+      <th>Ressourcenpunkt</th><th>TSPORD</th><th>UPH</th>
+      <th>% vom Richtwert</th><th>Fehler</th><th>Letztes Telegramm</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+</body>
+</html>

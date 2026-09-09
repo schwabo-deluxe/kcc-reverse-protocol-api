@@ -35,9 +35,11 @@ public class RbgGlossaryTests
     [Fact]
     public void Inject_ersetzt_den_Platzhalter_in_allen_RBG_Ansichten()
     {
+        // /auslastung lädt das Glossar als glossary.js; die übrigen RBG-Ansichten injizieren es
+        // weiterhin serverseitig.
         foreach (var html in new[]
         {
-            UtilizationDashboard.Html, RbgHistoryDashboard.Html, WallboardDashboard.Html,
+            RbgHistoryDashboard.Html, WallboardDashboard.Html,
         })
         {
             Assert.Contains(RbgGlossary.Placeholder, html);

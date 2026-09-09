@@ -63,12 +63,20 @@ public static class ApiServer
             : TelegramFormat.Default;
         var (host, port) = ParseApiUrl(config.ApiUrl);
 
-        var builder = WebApplication.CreateSlimBuilder();
+        // ContentRoot fest ans EXE-Verzeichnis binden — sonst zählt das Arbeitsverzeichnis und
+        // 'wwwroot' wird nicht gefunden, wenn kcc aus einem anderen Ordner gestartet wird.
+        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        });
         builder.Logging.ClearProviders();   // eigene Log-Ausgabe über 'log'
         // Kestrel bindet den Socket direkt — '+'/'*' = alle Schnittstellen, ohne URL-Freigabe.
         builder.WebHost.UseUrls($"http://{host}:{port}");
 
         var app = builder.Build();
+        // Statische Dateien aus dem wwwroot-Ordner neben der EXE (CSS/JS und die
+        // aufgetrennten Seiten). Greift vor dem Fallback-Handler unten.
+        app.UseStaticFiles();
         app.Run(async ctx =>
         {
             ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
@@ -95,6 +103,19 @@ public static class ApiServer
     static (int Status, string ContentType, string Body) Html(string page, string activePath) =>
         (200, HtmlContentType, DashboardNav.Inject(RbgGlossary.Inject(page), activePath));
 
+    /// <summary>
+    /// Liefert eine Seite aus dem <c>wwwroot</c>-Ordner neben der EXE. Für saubere URLs ohne
+    /// Dateiendung (<c>/auslastung</c>) — <c>UseStaticFiles</c> bedient nur <c>/auslastung.html</c>.
+    /// </summary>
+    static (int Status, string ContentType, string Body) StaticPage(string relativePath)
+    {
+        var full = Path.Combine(AppContext.BaseDirectory, "wwwroot",
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        return File.Exists(full)
+            ? (200, HtmlContentType, File.ReadAllText(full))
+            : (404, JsonContentType, JsonSerializer.Serialize(new { error = "not found", path = relativePath }, Json));
+    }
+
     /// <summary>Bearbeitet eine Anfrage transportunabhängig; gibt Status, Content-Type und Rumpf zurück.</summary>
     static (int Status, string ContentType, string Body) Handle(
         string method, string path, Func<string, string?> q,
@@ -108,7 +129,7 @@ public static class ApiServer
             return path switch
             {
                 "/" or "/index.html" => Html(Dashboard.Html, "/"),
-                "/auslastung" or "/auslastung.html" => Html(UtilizationDashboard.Html, "/auslastung"),
+                "/auslastung" or "/auslastung.html" => StaticPage("auslastung.html"),
                 "/verlauf" or "/verlauf.html" => Html(UphHistoryDashboard.Html, "/verlauf"),
                 "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
                 "/wand" or "/wand.html" => Html(WallboardDashboard.Html, "/wand"),

@@ -26,6 +26,9 @@
   <ItemGroup>
     <!-- Wird neben die EXE gelegt; Vorlage für die eigene Konfiguration. -->
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Statische Web-Dateien: liegen als loser Ordner neben der EXE, Kestrel liefert sie
+         über UseStaticFiles aus. Bei PublishSingleFile bleiben sie als eigener Ordner. -->
+    <Content Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
