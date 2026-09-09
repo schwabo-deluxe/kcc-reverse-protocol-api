@@ -152,12 +152,14 @@ public static class WallboardDashboard
             ? `${fmt(p.rbg.cyclesPerHour)} / ${p.rbg.maxCyclesPerHour} Spiele/h · ${p.count} TSPORD`
             : `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH · ${p.count} ges.`;
           const r = p.rbg;
+          const rateHours = Math.max(1e-9, data.rateMinutes / 60);
+          const perH = n => fmt(n / rateHours);
           const rbgRow = r ? `<div class="rbg">
               <span${help('busy')}>Ausl <b style="color:${color(r.busyPercent)}">${fmt(r.busyPercent)} %</b></span>
               <span${help('load')}>Leist <b style="color:${color(r.percent)}">${fmt(r.percent)} %</b></span>
-              <span${help('double')}>DS <b>${r.doubleCycles}</b></span>
-              <span${help('single')}>ES <b>${r.singleCycles}</b></span>
-              <span${help('inout')}>Ein/Aus <b>${r.stores}/${r.retrievals}</b></span>
+              <span${help('double')}>DS <b>${perH(r.doubleCycles)}/h</b></span>
+              <span${help('single')}>ES <b>${perH(r.singleCycles)}/h</b></span>
+              <span${help('inout')}>Ein/Aus <b>${perH(r.stores)}/${perH(r.retrievals)}</b> /h</span>
               <span${help('idle')}>Leerlauf <b>${dur(r.idleSeconds)}</b></span>
             </div>` : '';
           return `<div class="tile">

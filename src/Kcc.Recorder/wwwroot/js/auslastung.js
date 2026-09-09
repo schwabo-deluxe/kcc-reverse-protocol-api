@@ -205,13 +205,18 @@ function render(data) {
   const dur = s => s < 60 ? `${Math.round(s)} s`
     : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min`;
 
-  // Fördertechnik: Belegung, Transport- und Wartezeit aus TSPORD/ENDTSP/RPFREE.
+  // Mengen als Rate pro Stunde, hochgerechnet aus dem Trailing-Fenster der Tachos
+  // ("Tacho aus (min)" in der Kopfzeile) — dieselbe Basis wie Auslastung und Leistung.
+  const rateHours = Math.max(1e-9, data.rateMinutes / 60);
+  const perH = n => fmt(n / rateHours);
+
+  // Fördertechnik: Durchsatz je Meldung pro Stunde + Transport- und Wartezeiten.
   const convRow = p => {
     const c = p.conveyor;
     if (!c) return '';
     // Belegung und Ø Verweildauer stehen am Tacho darüber.
     return `<div class="rbg">
-      <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${c.completed}/${c.orders}/${c.freeSignals}</b></span>
+      <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${perH(c.completed)}/${perH(c.orders)}/${perH(c.freeSignals)}</b> /h</span>
       <span${help('corderwait')}>Ø bis Auftrag <b>${dur(c.avgOrderWaitSeconds)}</b></span>
       <span${help('cdepart')}>Ø Abtransport <b>${dur(c.avgDepartSeconds)}</b></span>
       <span${help('cwait')}>Ø leer <b>${dur(c.avgIdleSeconds)}</b></span>
@@ -223,11 +228,11 @@ function render(data) {
     const r = p.rbg;
     if (!r) return '';
     // Auslastung, Leistung und Leerlauf stehen an den Tachos darüber — hier nur, was
-    // dort nicht hinpasst.
+    // dort nicht hinpasst. Spiele und Ein/Aus als Rate pro Stunde.
     return `<div class="rbg">
-      <span${help('double')}>Doppelspiele <b>${r.doubleCycles}</b></span>
-      <span${help('single')}>Einzelspiele <b>${r.singleCycles}</b></span>
-      <span${help('inout')}>Ein/Aus <b>${r.stores}/${r.retrievals}</b></span>
+      <span${help('double')}>Doppelspiele <b>${perH(r.doubleCycles)}/h</b></span>
+      <span${help('single')}>Einzelspiele <b>${perH(r.singleCycles)}/h</b></span>
+      <span${help('inout')}>Ein/Aus <b>${perH(r.stores)}/${perH(r.retrievals)}</b> /h</span>
       <span${help('avgdur')}>Ø Transport ein <b>${dur(r.avgStoreSeconds)}</b> / aus <b>${dur(r.avgRetrieveSeconds)}</b></span>
     </div>`;
   };

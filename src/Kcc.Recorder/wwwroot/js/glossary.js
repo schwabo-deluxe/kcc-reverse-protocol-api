@@ -15,22 +15,24 @@ window.RBG_HELP = {
     'dauert zu lang. Gemessen über das Tacho-Fenster aus der Kopfzeile und auf eine Stunde ' +
     'hochgerechnet — die Verlaufskurve daneben nutzt ein eigenes, meist größeres Glättungsfenster.',
   double:
-    'Doppelspiel (kombiniertes Spiel, FEM 9.851): Ein- und Auslagerung in einer Fahrt — die ' +
-    'wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Es besteht aus ZWEI Transporten ' +
-    'und wird als min(Einlagerungen, Auslagerungen) gezählt.',
+    'Doppelspiele pro Stunde (kombiniertes Spiel, FEM 9.851): Ein- und Auslagerung in einer ' +
+    'Fahrt — die wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Ein Doppelspiel ' +
+    'besteht aus ZWEI Transporten, gezählt als min(Einlagerungen, Auslagerungen). Hochgerechnet ' +
+    'auf die Stunde aus dem Trailing-Fenster der Tachos ("Tacho aus (min)" in der Kopfzeile).',
   single:
-    'Einzelspiel (FEM 9.851): reine Ein- oder Auslagerung, die Gegenrichtung bleibt leer. ' +
-    'Gezählt als |Einlagerungen − Auslagerungen|. Es kostet laut Auslegung 75 s gegen 120 s ' +
-    'beim Doppelspiel, zählt bei der Leistung also mit 62,5 % — nicht mit der Hälfte.',
+    'Einzelspiele pro Stunde (FEM 9.851): reine Ein- oder Auslagerung, die Gegenrichtung bleibt ' +
+    'leer. Gezählt als |Einlagerungen − Auslagerungen|. Kostet laut Auslegung 75 s gegen 120 s ' +
+    'beim Doppelspiel, zählt bei der Leistung mit 62,5 % — nicht mit der Hälfte. Hochgerechnet ' +
+    'auf die Stunde aus dem Trailing-Fenster der Tachos ("Tacho aus (min)").',
   idle:
     'Leerlauf: Zeit ohne offenen Auftrag = Zeitraum − belegte Auftragszeit. Viel Leerlauf ' +
     'heißt, dem Gerät fehlt Arbeit (Versorgung oder Vorgelagertes bremst). Wenig Leerlauf bei ' +
     'niedriger Leistung heißt umgekehrt: die Spielzeit selbst ist der Engpass.',
   inout:
-    'Abgeschlossene Transporte im Zeitraum: Einlagerungen / Auslagerungen. Jeder Transport ' +
-    'besteht aus Aufnehmen (PUPORD→ENDPUP) und Abgeben (DEPORD→ENDDEP); die Richtung steht im ' +
-    'Ziel des ENDDEP — ein Regalplatz (rein numerisch) bedeutet Einlagerung, eine Station ' +
-    'Auslagerung.',
+    'Abgeschlossene Transporte pro Stunde: Einlagerungen / Auslagerungen, hochgerechnet aus dem ' +
+    'Trailing-Fenster der Tachos ("Tacho aus (min)"). Jeder Transport besteht aus Aufnehmen ' +
+    '(PUPORD→ENDPUP) und Abgeben (DEPORD→ENDDEP); die Richtung steht im Ziel des ENDDEP — ein ' +
+    'Regalplatz (rein numerisch) bedeutet Einlagerung, eine Station Auslagerung.',
   avgdur:
     'Mittlere Dauer eines Transports, gepaart über die LE-Nummer: vom Auftrag zum Aufnehmen ' +
     '(PUPORD) bis zum abgeschlossenen Abgeben (ENDDEP). Zwei solche Transporte ergeben ein ' +
@@ -77,9 +79,9 @@ window.RBG_HELP = {
     'Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft eine Ladeeinheit den ' +
     'Platz verlassen hat.',
   ccount:
-    'Ankünfte (ENDTSP) / Weitertransport-Aufträge (TSPORD) / Frei-Meldungen (RPFREE) im ' +
-    'Zeitraum. Klaffen die Zahlen auseinander, reicht eine Belegung über den Fensterrand hinaus ' +
-    'oder steht noch aus.',
+    'Ankünfte (ENDTSP) / Weitertransport-Aufträge (TSPORD) / Frei-Meldungen (RPFREE) pro ' +
+    'Stunde, hochgerechnet aus dem Trailing-Fenster der Tachos ("Tacho aus (min)"). Klaffen die ' +
+    'Zahlen auseinander, reicht eine Belegung über den Fensterrand hinaus oder steht noch aus.',
   active:
     'Stunden mit mindestens einer Fahrt. Zeigt, ob ein niedriger Durchschnitt von gleichmäßig ' +
     'wenig Arbeit kommt oder von längerem Stillstand.',
