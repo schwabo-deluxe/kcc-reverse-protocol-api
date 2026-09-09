@@ -25,13 +25,19 @@ public static class DashboardNav
         var items = string.Concat(Links.Select(l =>
             $"<a href=\"{l.Href}\"{(l.Href == activePath ? " class=\"on\"" : "")}>{l.Label}</a>"));
 
-        return "<nav class=\"kcc-nav\">" + items + "</nav>" +
+        var ver = BuildInfo.Version;
+        var verText = char.IsDigit(ver.FirstOrDefault()) ? "v" + ver : ver;
+
+        return "<nav class=\"kcc-nav\">" + items +
+            $"<span class=\"kcc-ver\" title=\"kcc {ver}\">{verText}</span></nav>" +
             "<style>" +
             ".kcc-nav{display:flex;flex-wrap:wrap;gap:2px;padding:6px 12px;background:#10141a;" +
             "border-bottom:1px solid #2a2f37;font:13px system-ui,sans-serif}" +
             ".kcc-nav a{color:#9aa4b2;text-decoration:none;padding:5px 12px;border-radius:6px}" +
             ".kcc-nav a:hover{color:#e6e6e6;background:#1c2128}" +
             ".kcc-nav a.on{color:#fff;background:#1f6feb}" +
+            ".kcc-nav .kcc-ver{margin-left:auto;align-self:center;color:#7a8494;padding:5px 4px;" +
+            "font-variant-numeric:tabular-nums}" +
             "</style>";
     }
 

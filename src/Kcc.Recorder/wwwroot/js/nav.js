@@ -17,7 +17,19 @@
   nav.className = 'kcc-nav';
   nav.innerHTML = links
     .map(([href, label]) => `<a href="${href}"${href === path ? ' class="on"' : ''}>${label}</a>`)
-    .join('');
+    .join('') + '<span class="kcc-ver" id="kcc-ver"></span>';
 
   document.body.insertBefore(nav, document.body.firstChild);
+
+  // Version rechts in der Leiste — vom Server, damit die losen Dateien sie nicht mitschleppen.
+  fetch('/api/version', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const v = d && d.version;
+      if (!v) return;
+      const el = document.getElementById('kcc-ver');
+      el.textContent = /^\d/.test(v) ? 'v' + v : v;
+      el.title = 'kcc ' + v;
+    })
+    .catch(() => {});
 })();

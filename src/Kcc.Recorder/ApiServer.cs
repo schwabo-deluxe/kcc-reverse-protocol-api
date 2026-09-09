@@ -144,6 +144,7 @@ public static class ApiServer
                     HistHours(q), HistBucket(q, config), HistGroupBy(q), q("rp"),
                     HistStamp(q, "from"), HistStamp(q, "to"), HistRolling(q))),
                 "/health" => Ok(Health(config)),
+                "/api/version" => Ok(new { version = BuildInfo.Version }),
                 "/api/kpis" => Ok(Kpis(config, format, Minutes(q, config))),
                 "/api/telegrams" => Ok(Telegrams(config, Minutes(q, config), Limit(q))),
                 "/api/fields" => Ok(Fields(config, format, Minutes(q, config), Limit(q))),
@@ -309,6 +310,7 @@ public static class ApiServer
         return new
         {
             status = "ok",
+            version = BuildInfo.Version,
             database = Path.GetFullPath(config.Database),
             telegrams = store.Count(),
             lastSeenId = store.GetLastSeenId(),

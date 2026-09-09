@@ -165,7 +165,8 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /api/rbg-history?hours=168&bucket=60` | Derselbe Vergleich als JSON. `hours` bis 8784 (1 Jahr) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand in Minuten |
 | `GET /api/point-history?hours=168&bucket=30&rp=EA21` | Langzeitverlauf **je Ressourcenpunkt**: Belegungsgrad (belegte Zeit ÷ Raster) und Leistungsgrad (Aufträge/h ÷ Richtwert) je Raster, aus der Rasterreihe `point_samples` (`PointHistoryRetentionDays`). Speist den zweiten Chart auf `/verlauf` bei Auswahl eines Ressourcenpunkts — auch für Fördertechnikpunkte ohne RBG. `hours` **oder** `from=…&to=…`; `bucket` = Stützpunktabstand; `rp` grenzt auf einen Punkt ein |
 | `GET /wand` | Wandansicht derselben Auslastungsdaten (`/api/utilization`): erkennt per `orientation: landscape` das Querformat und legt jede `Group` (RBG, Fördertechnik …) als eigene, klar getrennte, formatfüllende Spalte ohne Seiten-Scroll ab. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Doppel-/Einzelspiele/Leerlauf. Vollbild-Schaltfläche. Im Hochformat stapeln sich die Spalten |
-| `GET /health` | Status, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
+| `GET /health` | Status, Version, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
+| `GET /api/version` | `{ "version": "0.2.9" }` — der Release-Tag (lokale Builds: `dev`). Speist die Versionsanzeige rechts in der Navigationsleiste |
 
 Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
 Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Sekunden seit dem letzten Schreibvorgang, aktive
