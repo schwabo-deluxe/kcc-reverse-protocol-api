@@ -40,6 +40,8 @@ function darkBase(extra) {
     textStyle: { color: '#9aa4b2', fontFamily: 'system-ui, sans-serif' },
     tooltip: {
       trigger: 'axis',
+      confine: true,
+      extraCssText: 'max-height: 70vh; overflow: auto;',
       backgroundColor: '#10141a', borderColor: '#2a2f37',
       textStyle: { color: '#e6e6e6', fontSize: 12 },
     },
@@ -107,6 +109,8 @@ function drawMain() {
     ],
     tooltip: {
       trigger: 'axis', order: 'valueDesc',
+      confine: true,
+      extraCssText: 'max-height: 70vh; overflow: auto;',
       backgroundColor: '#10141a', borderColor: '#2a2f37',
       textStyle: { color: '#e6e6e6', fontSize: 12 },
       valueFormatter: v => `${fmt(v)} ${unitOf(metric)}`,
@@ -149,7 +153,8 @@ function drawMinis() {
       xAxis: { type: 'time', axisLabel: { color: '#7a8494', hideOverlap: true },
         axisLine: { lineStyle: { color: '#2a2f37' } }, splitLine: { show: false } },
       tooltip: {
-        trigger: 'axis', backgroundColor: '#10141a', borderColor: '#2a2f37',
+        trigger: 'axis', confine: true,
+        backgroundColor: '#10141a', borderColor: '#2a2f37',
         textStyle: { color: '#e6e6e6', fontSize: 12 },
       },
       series: [

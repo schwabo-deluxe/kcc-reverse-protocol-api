@@ -57,9 +57,11 @@ function baseOption() {
     ],
     tooltip: {
       trigger: 'axis',
+      confine: true,           // im Fenster halten, nicht oben/rechts rausrutschen
       backgroundColor: '#10141a',
       borderColor: '#2a2f37',
       textStyle: { color: '#e6e6e6', fontSize: 12 },
+      extraCssText: 'max-height: 70vh; overflow: auto;',
       valueFormatter: v => fmt(v) + ' UPH',
       order: 'valueDesc',
     },
