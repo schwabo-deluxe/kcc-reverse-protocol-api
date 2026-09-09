@@ -16,6 +16,16 @@ input { background: #10141a; color: #e6e6e6; border: 1px solid #2a2f37; border-r
 .meta.err { color: #ff6b6b; }
 main { padding: 20px; max-width: 1100px; margin: 0 auto; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+
+/* Automatische Wandansicht im Querformat: volle Breite, dichtes Kachelraster über die
+   ganze Fläche. Im Hochformat (schmales Fenster, Portrait-Monitor, Tablet) bleibt die
+   lesbare 1100px-Spalte. Rein per Seitenverhältnis — kein Umschalter nötig. */
+@media (orientation: landscape) {
+  main { max-width: none; }
+  .tiles { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
+  .grp { margin-bottom: 16px; }
+  table { margin-top: 16px; }
+}
 .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px; padding: 14px 16px; position: relative; }
 .tile .label { color: #9aa4b2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .tile .label .code { color: #7a8494; font-weight: 400; }
@@ -75,7 +85,10 @@ td.err { color: #ff6b6b; }
  * ------------------------------------------------------------------ */
 
 /* Sobald eine Anordnung gilt: der äußere Container hört auf, die Gruppen in schmale
-   Spalten zu setzen — jede Gruppe wird eine volle Bahn, in der die Kacheln frei liegen. */
+   Spalten zu setzen — jede Gruppe wird eine volle Bahn, in der die Kacheln frei liegen.
+   Dafür auch die 1100px-Deckelung von main aufheben, sonst zieht man nur im schmalen
+   mittigen Streifen (Bug: Kacheln ließen sich nicht nach links/rechts schieben). */
+body.arrange main, body.custom-layout main { max-width: none; }
 body.custom-layout #tiles { display: block; }
 body.custom-layout .grp > .tiles { display: block; position: relative; }
 body.custom-layout .grp > .tiles > .tile { position: absolute; margin: 0; }
