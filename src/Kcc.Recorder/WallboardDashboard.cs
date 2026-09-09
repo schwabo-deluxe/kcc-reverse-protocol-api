@@ -49,20 +49,19 @@ public static class WallboardDashboard
                     color: #cdd6e0; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
-          /* Die Tachos füllen die freie Kachelhöhe (gedeckelt), der Rest ist fix — kein Leerraum. */
-          .duo { display: flex; gap: 10px; justify-content: center; flex: 1 1 auto; min-height: 0; }
-          .gcell { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; min-height: 0; }
-          .gauge { flex: 1 1 auto; min-height: 0; min-width: 0; width: auto; max-width: 100%; max-height: 150px; overflow: visible; }
+          /* Tachos: Wert im Bogen, Breite = halbe Kachel, Höhe aus dem Seitenverhältnis.
+             Die Kurve darunter nimmt den restlichen Platz (kein Leerraum). */
+          .duo { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
+          .gcell { flex: 1 1 0; min-width: 0; display: flex; }
+          .gauge { width: 100%; height: auto; max-height: 200px; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
-          .pct { flex: 0 0 auto; font-weight: 800; font-size: clamp(15px, 2.6vh, 28px); line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
-          .gcap { flex: 0 0 auto; font-size: clamp(8px, .95vh, 11px); letter-spacing: .05em; text-transform: uppercase; color: #9aa4b2; white-space: nowrap; }
 
           .sub { flex: 0 0 auto; font-size: clamp(9px, 1.35vh, 12px); color: #9aa4b2; text-align: center;
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .sub b { color: #e6e6e6; font-weight: 600; }
 
-          .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(20px, 4vh, 46px); overflow: visible; }
+          .spark { flex: 1 1 auto; display: block; width: 100%; min-height: 34px; max-height: 150px; overflow: visible; }
           .spark .grid { stroke: #2a2f37; stroke-width: 1; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
           .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -107,8 +106,10 @@ public static class WallboardDashboard
         const dur = s => s < 60 ? `${Math.round(s)} s`
           : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min`;
 
-        function gauge(value, max, stroke) {
-          const cx = 100, cy = 92, r = 80;
+        // Halbkreis-Tacho mit Wert und Kurzlabel IM Bogen — spart die separate Beschriftungszeile.
+        function gauge(value, max, label) {
+          const cx = 100, cy = 96, r = 82;
+          const stroke = color(value);
           const f = Math.max(0, Math.min(value / max, 1));
           const pt = (frac, rad) => {
             const t = Math.PI * (1 - frac);
@@ -119,24 +120,21 @@ public static class WallboardDashboard
           const [t1x, t1y] = pt(Math.min(1, 100 / max), r + 8);
           const [t2x, t2y] = pt(Math.min(1, 100 / max), r - 8);
           const val = f > 0
-            ? `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="7" stroke-linecap="round"/>`
+            ? `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round"/>`
             : '';
-          return `<svg class="gauge" viewBox="0 0 200 104">
-            <path class="track" d="M20 92 A80 80 0 0 1 180 92" fill="none" stroke-width="13" stroke-linecap="round"/>
+          return `<svg class="gauge" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid meet">
+            <path class="track" d="M18 96 A82 82 0 0 1 182 96" fill="none" stroke-width="13" stroke-linecap="round"/>
             ${val}
             <line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>
             <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="7.5" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
+            <text x="100" y="86" text-anchor="middle" font-size="36" font-weight="800" fill="${stroke}"
+                  style="font-variant-numeric:tabular-nums">${fmt(value)} %</text>
+            <text x="100" y="112" text-anchor="middle" font-size="13" letter-spacing="1" fill="#9aa4b2">${label.toUpperCase()}</text>
           </svg>`;
         }
 
-        function dial(value, label, titleKey) {
-          const c = color(value);
-          return `<div class="gcell"${help(titleKey)}>
-            ${gauge(value, 150, c)}
-            <div class="pct" style="color:${c}">${fmt(value)} %</div>
-            <div class="gcap">${label}</div>
-          </div>`;
-        }
+        const dial = (value, label, titleKey) =>
+          `<div class="gcell"${help(titleKey)}>${gauge(value, 150, label)}</div>`;
 
         function spark(series, scaleMax, target, stroke) {
           const w = 240, h = 40, s = series || [];
