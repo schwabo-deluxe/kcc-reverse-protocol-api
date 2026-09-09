@@ -258,20 +258,20 @@ public sealed class KccConfig
     /// </summary>
     public string RbgRackLocationPattern { get; set; } = "";
 
-    /// <summary>Auftrag zum Aufnehmen auf das RBG. Leer ⇒ <c>["PUPORD"]</c>.</summary>
-    public List<string> RbgPickOrderCodes { get; set; } = [];
+    /// <summary>Pickup Order — Auftrag, eine Ladeeinheit aufs RBG zu nehmen (<c>PUPORD</c>). Leer ⇒ <c>["PUPORD"]</c>.</summary>
+    public List<string> RbgPickupOrderCodes { get; set; } = [];
 
-    /// <summary>Aufnehmen abgeschlossen. Leer ⇒ <c>["ENDPUP"]</c>.</summary>
-    public List<string> RbgPickDoneCodes { get; set; } = [];
+    /// <summary>Pickup abgeschlossen (<c>ENDPUP</c>). Leer ⇒ <c>["ENDPUP"]</c>.</summary>
+    public List<string> RbgPickupDoneCodes { get; set; } = [];
 
-    /// <summary>Auftrag zum Abgeben vom RBG. Leer ⇒ <c>["DEPORD"]</c>.</summary>
-    public List<string> RbgDropOrderCodes { get; set; } = [];
+    /// <summary>Depot Order — Auftrag, eine Ladeeinheit vom RBG abzugeben (<c>DEPORD</c>). Leer ⇒ <c>["DEPORD"]</c>.</summary>
+    public List<string> RbgDepotOrderCodes { get; set; } = [];
 
     /// <summary>
     /// Abgeben abgeschlossen. Leer ⇒ <c>["ENDDEP"]</c>. Diese Meldung beendet einen Transport;
     /// ihr Ziel entscheidet über Ein- oder Auslagerung.
     /// </summary>
-    public List<string> RbgDropDoneCodes { get; set; } = [];
+    public List<string> RbgDepotDoneCodes { get; set; } = [];
 
     /// <summary>MessageCodes eines erteilten Transportauftrags. Leer ⇒ <c>["TSPORD"]</c>.</summary>
     public List<string> ConveyorOrderCodes { get; set; } = [];

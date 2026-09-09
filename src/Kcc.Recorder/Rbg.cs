@@ -135,17 +135,17 @@ public sealed record RbgOptions
     /// </summary>
     public required string CountTelegramType { get; init; }
 
-    /// <summary>Auftrag zum Aufnehmen auf das RBG (<c>PUPORD</c>).</summary>
-    public required IReadOnlyList<string> PickOrderCodes { get; init; }
+    /// <summary>Pickup Order (<c>PUPORD</c>) — Auftrag, eine Ladeeinheit aufs RBG zu nehmen.</summary>
+    public required IReadOnlyList<string> PickupOrderCodes { get; init; }
 
-    /// <summary>Aufnehmen abgeschlossen (<c>ENDPUP</c>).</summary>
-    public required IReadOnlyList<string> PickDoneCodes { get; init; }
+    /// <summary>Pickup abgeschlossen (<c>ENDPUP</c>).</summary>
+    public required IReadOnlyList<string> PickupDoneCodes { get; init; }
 
-    /// <summary>Auftrag zum Abgeben vom RBG (<c>DEPORD</c>).</summary>
-    public required IReadOnlyList<string> DropOrderCodes { get; init; }
+    /// <summary>Depot Order (<c>DEPORD</c>) — Auftrag, eine Ladeeinheit vom RBG abzugeben.</summary>
+    public required IReadOnlyList<string> DepotOrderCodes { get; init; }
 
-    /// <summary>Abgeben abgeschlossen (<c>ENDDEP</c>) — beendet den Transport.</summary>
-    public required IReadOnlyList<string> DropDoneCodes { get; init; }
+    /// <summary>Depot abgeschlossen (<c>ENDDEP</c>) — beendet den Transport.</summary>
+    public required IReadOnlyList<string> DepotDoneCodes { get; init; }
 
     /// <summary>
     /// Muster eines Regalplatzes in <c>Source</c>/<c>Destination</c>. Regalplätze sind rein
@@ -161,10 +161,10 @@ public sealed record RbgOptions
     {
         Capacity = RbgCapacity.From(c),
         CountTelegramType = c.CountTelegramType,
-        PickOrderCodes = Or(c.RbgPickOrderCodes, RbgReport.DefaultPickOrder),
-        PickDoneCodes = Or(c.RbgPickDoneCodes, RbgReport.DefaultPickDone),
-        DropOrderCodes = Or(c.RbgDropOrderCodes, RbgReport.DefaultDropOrder),
-        DropDoneCodes = Or(c.RbgDropDoneCodes, RbgReport.DefaultDropDone),
+        PickupOrderCodes = Or(c.RbgPickupOrderCodes, RbgReport.DefaultPickupOrder),
+        PickupDoneCodes = Or(c.RbgPickupDoneCodes, RbgReport.DefaultPickupDone),
+        DepotOrderCodes = Or(c.RbgDepotOrderCodes, RbgReport.DefaultDepotOrder),
+        DepotDoneCodes = Or(c.RbgDepotDoneCodes, RbgReport.DefaultDepotDone),
         RackLocationPattern = string.IsNullOrWhiteSpace(c.RbgRackLocationPattern)
             ? RbgReport.DefaultRackLocationPattern
             : c.RbgRackLocationPattern,
@@ -174,10 +174,10 @@ public sealed record RbgOptions
 /// <summary>
 /// Wertet die Fahraufträge einer RBG-Verbindung aus.
 ///
-/// <b>Ablauf eines Transports</b> (aus den Anlagentelegrammen belegt): das RBG nimmt eine
-/// Ladeeinheit auf (<c>PUPORD</c> → <c>ENDPUP</c>) und gibt sie wieder ab
-/// (<c>DEPORD</c> → <c>ENDDEP</c>). Beides passiert bei <em>jedem</em> Transport — die Codes sagen
-/// also „aufnehmen" und „abgeben", nicht „einlagern" und „auslagern". Die Richtung steckt in
+/// <b>Ablauf eines Transports</b> (aus den Anlagentelegrammen belegt): eine <c>Pickup Order</c>
+/// (<c>PUPORD</c> → <c>ENDPUP</c>) nimmt eine Ladeeinheit aufs RBG, eine <c>Depot Order</c>
+/// (<c>DEPORD</c> → <c>ENDDEP</c>) gibt sie wieder ab. Beides passiert bei <em>jedem</em>
+/// Transport — die Aufträge sind kein Ein- bzw. Auslagerauftrag. Die Richtung steckt in
 /// Quelle und Ziel:
 /// <list type="bullet">
 ///   <item><b>Einlagerung</b>: von einer Station ins Regal — das <c>ENDDEP</c> hat einen
@@ -195,17 +195,17 @@ public sealed record RbgOptions
 /// </summary>
 public static class RbgReport
 {
-    public static readonly IReadOnlyList<string> DefaultPickOrder = ["PUPORD"];
-    public static readonly IReadOnlyList<string> DefaultPickDone = ["ENDPUP"];
-    public static readonly IReadOnlyList<string> DefaultDropOrder = ["DEPORD"];
-    public static readonly IReadOnlyList<string> DefaultDropDone = ["ENDDEP"];
+    public static readonly IReadOnlyList<string> DefaultPickupOrder = ["PUPORD"];
+    public static readonly IReadOnlyList<string> DefaultPickupDone = ["ENDPUP"];
+    public static readonly IReadOnlyList<string> DefaultDepotOrder = ["DEPORD"];
+    public static readonly IReadOnlyList<string> DefaultDepotDone = ["ENDDEP"];
 
     /// <summary>Regalplätze sind rein numerisch; Stationen tragen Buchstaben.</summary>
     public const string DefaultRackLocationPattern = "^[0-9]+$";
 
     const double DedupWindowSeconds = 10;
 
-    enum Kind { PickOrder, PickDone, DropOrder, DropDone }
+    enum Kind { PickupOrder, PickupDone, DepotOrder, DepotDone }
 
     readonly record struct Ev(DateTime At, string Label, Kind Kind, string Source, string Destination);
 
@@ -230,16 +230,16 @@ public static class RbgReport
         var dstIdx = FieldIndex(format, "Destination");
         var seqIdx = FieldIndex(format, "SequenceNumber");
 
-        var pickOrder = Set(options.PickOrderCodes);
-        var pickDone = Set(options.PickDoneCodes);
-        var dropOrder = Set(options.DropOrderCodes);
-        var dropDone = Set(options.DropDoneCodes);
+        var pickupOrder = Set(options.PickupOrderCodes);
+        var pickupDone = Set(options.PickupDoneCodes);
+        var depotOrder = Set(options.DepotOrderCodes);
+        var depotDone = Set(options.DepotDoneCodes);
 
         Kind? Classify(string code) =>
-            dropDone.Contains(code) ? Kind.DropDone
-            : pickDone.Contains(code) ? Kind.PickDone
-            : dropOrder.Contains(code) ? Kind.DropOrder
-            : pickOrder.Contains(code) ? Kind.PickOrder
+            depotDone.Contains(code) ? Kind.DepotDone
+            : pickupDone.Contains(code) ? Kind.PickupDone
+            : depotOrder.Contains(code) ? Kind.DepotOrder
+            : pickupOrder.Contains(code) ? Kind.PickupOrder
             : null;
 
         var byConnection = new Dictionary<string, List<Ev>>(StringComparer.OrdinalIgnoreCase);
@@ -293,13 +293,13 @@ public static class RbgReport
         {
             switch (e.Kind)
             {
-                case Kind.PickOrder:
+                case Kind.PickupOrder:
                     pickOrders[e.Label] = e.At;
                     break;
-                case Kind.DropOrder:
+                case Kind.DepotOrder:
                     dropOrders[e.Label] = e.At;
                     break;
-                case Kind.DropDone:
+                case Kind.DepotDone:
                     var start = pickOrders.TryGetValue(e.Label, out var p) ? p
                         : dropOrders.TryGetValue(e.Label, out var d) ? d
                         : e.At;
