@@ -41,13 +41,13 @@ public sealed record ResourcePointUtilization
     /// <summary>Anzahl der <c>TSPORD</c>-Telegramme dieses Punkts über das ganze Fenster.</summary>
     public required int Count { get; init; }
 
-    /// <summary>Anzahl im jüngsten <see cref="TelegramUtilization.RateMinutes"/>-Fenster — Basis für <see cref="Uph"/>.</summary>
+    /// <summary>
+    /// Anzahl im Trailing-Fenster — <see cref="TelegramUtilization.RateMinutes"/> bei
+    /// RBG-Punkten, <see cref="TelegramUtilization.ConveyorRateMinutes"/> sonst.
+    /// </summary>
     public required int RateCount { get; init; }
 
-    /// <summary>
-    /// Auf eine Stunde hochgerechnete Menge (Units per Hour) — aus <see cref="RateCount"/> der
-    /// letzten Minuten, damit kleine Stöße sofort durchschlagen.
-    /// </summary>
+    /// <summary><see cref="RateCount"/> ÷ Fensterstunden = Units per Hour.</summary>
     public required double Uph { get; init; }
 
     /// <summary>UPH-Richtwert dieses Punkts (eigener aus der Konfiguration oder der Vorgabewert).</summary>
@@ -69,9 +69,8 @@ public sealed record ResourcePointUtilization
     public RbgCycleStats? Rbg { get; init; }
 
     /// <summary>
-    /// Belegungsauswertung eines Fördertechnikpunkts (TSPORD→ENDTSP), gesetzt für Punkte ohne
-    /// RBG-Verbindung. Beantwortet, wie stark der Punkt zeitlich belegt ist — die
-    /// TSPORD-Zählung allein sagt nur, wie viel durchlief, nicht wie ausgelastet er dabei war.
+    /// Belegungsauswertung eines Fördertechnikpunkts (ENDTSP→RPFREE), gesetzt für Punkte ohne
+    /// RBG-Verbindung. Zeitmaß neben der reinen TSPORD-Menge.
     /// </summary>
     public ConveyorStats? Conveyor { get; init; }
 }

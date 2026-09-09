@@ -1,11 +1,10 @@
 # kcc — Telegramm-Recorder für Kardex MCC/KCC
 
 Schneidet die SPS-Telegramme (`PlcProtocolExtendedDTO`) einer Kardex MCC/KCC-Anlage über deren
-WebSocket-API mit und legt sie in einer lokalen SQLite-Datenbank ab. Eine Filterfunktion sorgt
-dafür, dass nur Telegramme mit tatsächlichem Dateninhalt aufgezeichnet werden.
+WebSocket-API mit, legt sie in SQLite ab und wertet sie über Dashboards aus. Ein Filter hält
+Handshake-Frames ohne Nutzdaten heraus.
 
-Das Werkzeug ist eine **self-contained Single-File-EXE für Windows** — kein installiertes .NET
-nötig, einfach `kcc.exe` kopieren und starten.
+Self-contained Single-File-EXE für Windows, kein installiertes .NET nötig.
 
 ## Schnellstart
 
@@ -70,27 +69,27 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 | `WindowMinutes` | Zeitfenster des KPI-Dashboards (`/`) und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |
 | `UtilizationWindowMinutes` | Zeitfenster der Auslastungsansicht (`/auslastung`) ohne `minutes`-Parameter (Standard: `60`) |
-| `UtilizationBucketMinutes` | Breite des **gleitenden** Fensters der Verlaufskurven in der Auslastungsansicht ohne `bucket`-Parameter (Standard: `10`). Der Verlauf gleitet, statt in feste Eimer zu springen — der letzte Punkt ist der aktuell laufende Trailing-Wert, deckungsgleich mit der Tacho-Anzeige. |
-| `UtilizationSeriesStepMinutes` | Abtastschritt der Verlaufskurven ohne `step`-Parameter (Standard: `1`) — ein Stützpunkt je Schritt |
-| `UtilizationTargetUph` | Vorgabe-Richtwert in Einheiten/Stunde, auf den sich die Auslastung in Prozent bezieht (Standard: `200`). Je Punkt über `ResourcePoints[].TargetUph` überschreibbar. |
-| `UtilizationSRMRateMinutes` | **Trailing-Fenster der RBG-Tachos** (Standard `5`): Auslastung, Leistung und Spiele/h werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort auf kurze Stöße, springt aber (bei wenigen Ereignissen je Fenster wird ein einzelnes Spiel zu mehreren Prozentpunkten); groß = träger, aber ruhiger. In der Kopfzeile als „Tacho RBG (min)" änderbar. `Count`, die Zieltabelle und die **Verlaufskurve** bleiben davon unberührt — die Kurve glättet über `UtilizationBucketMinutes`. |
-| `UtilizationConveyorRateMinutes` | Wie oben, aber für die **Fördertechnik-Tachos** (Punkte ohne RBG-Verbindung: Belegung + Leistung). Getrennt einstellbar, weil Fördertechnik und RBG unterschiedlich träge reagieren. `0` ⇒ es gilt `UtilizationSRMRateMinutes`. Kopfzeile: „Tacho FT (min)". |
-| `ResourcePoints` | Liste der ausgewerteten Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG A", "Order": 1, "TargetUph": 250, "Connection": "RBG01" }`. `Group`/`Label`/`Order`/`TargetUph`/`Connection`/`MaxCyclesPerHour` optional. Das Dashboard bündelt die Kacheln und die Tabelle nach `Group` und zeigt je Gruppe eine Summe. Innerhalb einer Gruppe wird nach `Order` (aufsteigend) sortiert, ohne Angabe nach Listenposition. `TargetUph` setzt den UPH-Richtwert dieses Punkts; ohne Angabe gilt `UtilizationTargetUph`. `Connection` (Telegramm-Feld `ConnectionName`, z. B. `RBG01`) blendet in der Kachel zusätzlich die RBG-Spielauswertung ein; `MaxCyclesPerHour` überschreibt dafür `RbgMaxCyclesPerHour`. Leere Liste ⇒ eingebaute Vorgabe. |
-| `GroupOrder` | Reihenfolge der Gruppen im Auslastungs-Dashboard, z. B. `[ "Auslagerung RBG", "Fördertechnik" ]`. Nicht genannte Gruppen folgen nach erstem Auftreten in `ResourcePoints`. |
-| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Das Endziel ist das führende Token des letzten 33er-Blocks im `Data`-Feld (4 oder 5 Zeichen, z. B. `GA51` oder `DLL13`); je Kachel zeigt eine kleine Tabelle den %-Anteil je Ziel. Gemappte Ziele erscheinen als `GA51 (Kommissionierung)`, unbekannte roh. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "Auslagerung DLL" }` fasst alle `DLL…` zu einem Ziel `DLL*` zusammen (exakte Treffer schlagen Muster, längstes Präfix gewinnt). |
-| `UphHistoryIntervalMinutes` | Rasterweite **beider** Langzeitreihen in Minuten (Standard `5`): UPH-Historie (`/verlauf`) und RBG-Aufzeichnung (`/rbg`). Das ist die feinste Auflösung, die diese Ansichten je zeigen können — was einmal gröber verdichtet wurde, lässt sich nachträglich nicht mehr auftrennen. Nach einer Änderung `kcc uph-rebuild` laufen lassen, sonst bleiben ältere Zeilen im alten Raster. |
-| `UphHistoryRetentionDays` | Aufbewahrung der UPH-Historie in Tagen (Standard `28` = 4 Wochen), getrennt von `RetentionDays` der Rohtelegramme. `0`/negativ = unbegrenzt. `/verlauf` zeigt nur diesen Zeitraum — für weiter zurück den Wert erhöhen und `kcc uph-rebuild` laufen lassen. Der Recorder baut die Historie bei jedem Start und nach `backfill` neu auf. |
-| `RbgHistoryRetentionDays` | Aufbewahrung der RBG-Langzeitaufzeichnung (`/rbg`) in Tagen (Standard `365`). Bewusst länger als `UphHistoryRetentionDays`: der Belastungsvergleich der Geräte lebt von langen Zeiträumen, und die Rasterzeilen sind winzig (eine je Raster und Verbindung, ~1.400/Tag bei 5 RBG und 5-min-Raster). `0`/negativ = unbegrenzt. Aufgezeichnet wird für jede unter `ResourcePoints` konfigurierte `Connection`. |
-| `PointHistoryRetentionDays` | Aufbewahrung der Ressourcenpunkt-Langzeitreihe (Belegung & Leistung, zweiter Chart auf `/verlauf`) in Tagen (Standard `365`). Aufgezeichnet werden nur die unter `ResourcePoints` angelegten Punkte — belegte Zeit (`ENDTSP`→`RPFREE`) und `TSPORD`-Menge je Raster. `0`/negativ = unbegrenzt. Neue Tabelle `point_samples`; Bestandsdatenbanken bekommen sie beim Start und füllen sie über den Recorder bzw. `kcc uph-rebuild` rückwirkend auf. |
-| `OperatingHours` | Hauptnutzungszeit der Anlage, `{ "Enabled": true, "Start": "06:00", "End": "15:15" }`. Für die Langzeit-Durchschnitte auf `/rbg` und im zweiten `/verlauf`-Chart (Ø Auslastung, Ø Leistung, Leerlauf, Anteil) zählt dann nur die Betriebszeit als Nenner, nicht der Kalenderzeitraum — Nächte, Wochenenden und Feiertage drücken sonst jeden Prozentwert nach unten. Ein Kalendertag ohne jede Bewegung zählt gar nicht; wird nach `End` noch gefahren, verlängert sich der Betrieb dieses Tages bis zur letzten Bewegung. `Enabled: false` ⇒ wieder der volle Kalenderzeitraum. Die per-Raster-Kurven bleiben unberührt. |
+| `UtilizationBucketMinutes` | Breite des gleitenden Fensters der Verlaufskurven, ohne `bucket`-Parameter (Standard: `10`). Letzter Stützpunkt = laufender Trailing-Wert. |
+| `UtilizationSeriesStepMinutes` | Abtastschritt der Verlaufskurven, ein Stützpunkt je Schritt (Standard: `1`) |
+| `UtilizationTargetUph` | Vorgabe-Richtwert in Einheiten/Stunde für die Prozentwerte (Standard: `200`). Je Punkt über `ResourcePoints[].TargetUph` überschreibbar. |
+| `UtilizationSRMRateMinutes` | Trailing-Fenster der RBG-Tachos (Standard `15`); Auslastung, Leistung und Spiele/h werden daraus auf 1 h hochgerechnet. Klein = reaktiv und sprunghaft, groß = träge und ruhig. Kopfzeile: „Tacho RBG (min)". Verlaufskurve und Zieltabelle bleiben unberührt. |
+| `UtilizationConveyorRateMinutes` | Dasselbe für die Fördertechnik-Tachos (Punkte ohne `Connection`), Standard `5`. `0` ⇒ es gilt `UtilizationSRMRateMinutes`. Kopfzeile: „Tacho FT (min)". |
+| `ResourcePoints` | Ausgewertete Ressourcenpunkte, je Eintrag `{ "Name": "MA72", "Group": "Auslagerung RBG", "Label": "RBG 1", "Order": 1, "TargetUph": 60, "Connection": "RBG01", "MaxCyclesPerHour": 30 }`. Alles außer `Name` optional. Kacheln und Tabelle werden nach `Group` gebündelt, innerhalb der Gruppe nach `Order` sortiert (ohne Angabe: Listenposition). `Connection` = Telegrammfeld `ConnectionName`; gesetzt ⇒ die Kachel bekommt die RBG-Spielauswertung statt der Fördertechnik-Belegung. `MaxCyclesPerHour`/`MaxStoresPerHour`/`MaxRetrievalsPerHour` überschreiben die `Rbg*`-Vorgaben. Leere Liste ⇒ eingebaute Vorgabe. |
+| `GroupOrder` | Reihenfolge der Gruppen, z. B. `[ "Auslagerung RBG", "Fördertechnik" ]`. Nicht genannte Gruppen folgen nach erstem Auftreten in `ResourcePoints`. |
+| `DestinationLabels` | Klartext für Endziele, z. B. `{ "GA51": "Kommissionierung" }`. Endziel = führendes Token (4–5 Zeichen) des letzten 33er-Blocks im `Data`-Feld. Ein Schlüssel mit `*` am Ende ist ein Präfixmuster: `{ "DLL*": "…" }` fasst alle `DLL…` zu `DLL*` zusammen. Exakter Treffer schlägt Muster, längstes Präfix gewinnt; unbekannte Ziele bleiben roh. |
+| `UphHistoryIntervalMinutes` | Rasterweite **aller drei** Langzeitreihen (`uph_samples`, `rbg_samples`, `point_samples`) in Minuten (Standard `5`) — die feinste je darstellbare Auflösung. Gröber Verdichtetes lässt sich nicht wieder auftrennen. Nach einer Änderung `kcc uph-rebuild` laufen lassen. |
+| `UphHistoryRetentionDays` | Aufbewahrung von `uph_samples` (`/verlauf`) in Tagen (Standard `28`), getrennt von `RetentionDays`. `0`/negativ = unbegrenzt. Weiter zurück: Wert erhöhen und `kcc uph-rebuild` laufen lassen. |
+| `RbgHistoryRetentionDays` | Aufbewahrung von `rbg_samples` (`/rbg`) in Tagen (Standard `365`). Eine Zeile je Raster und `Connection`, ~1.400/Tag bei 5 RBG und 5-min-Raster. `0`/negativ = unbegrenzt. |
+| `PointHistoryRetentionDays` | Aufbewahrung von `point_samples` (zweiter `/verlauf`-Chart) in Tagen (Standard `365`): belegte Zeit (`ENDTSP`→`RPFREE`) und `TSPORD`-Menge je Raster, nur für die unter `ResourcePoints` angelegten Punkte. `0`/negativ = unbegrenzt. Bestandsdatenbanken legen die Tabelle beim Start an und füllen sie über den Recorder bzw. `kcc uph-rebuild`. |
+| `OperatingHours` | Hauptnutzungszeit, `{ "Enabled": true, "Start": "06:00", "End": "15:15" }`. Nenner der Langzeit-Durchschnitte auf `/rbg` und im zweiten `/verlauf`-Chart (Ø Auslastung, Ø Leistung, Leerlauf, Anteil) ist dann die Betriebszeit statt des Kalenderzeitraums. Ein Kalendertag ohne Bewegung zählt gar nicht; wird nach `End` noch gefahren, verlängert der Tag bis zur letzten Bewegung. `Enabled: false` ⇒ voller Kalenderzeitraum. Die per-Raster-Kurven bleiben unberührt. |
 | `ContourCheckpoints` | Konturkontrollen für `/kontur`, je Eintrag `{ "ResourcePoint": "LB21", "MessageCode": "ENDTSP", "Label": "…" }`. Ausgewertet wird das `Status`-Feld (`Kxyz`) dieser Telegramme. Leere Liste ⇒ eingebaute Vorgabe (LB21 ENDTSP, DA91/AA41/NA41 TSPREG). |
 | `ContourFlags` | Bedeutung der Fehlerbits im Konturergebnis `Kxyz`, je Eintrag `{ "Nibble": 0, "Bit": 2, "Label": "Profil links" }` — `Nibble` 0 = `x`, 1 = `y`, 2 = `z`; `Bit` 0…3. Leere Liste ⇒ eingebaute Tabelle laut Doku „Konturenfehler (Kxyz)". `Status = "…."` (leer) = kein Konturfehler. |
 | `ContourWindowMinutes` | Zeitfenster der Konturauswertung ohne `minutes`-Parameter (Standard: `480` = 8 h) |
-| `RbgMaxCyclesPerHour` / `RbgMaxStoresPerHour` / `RbgMaxRetrievalsPerHour` | **Auslegungsleistung eines RBG** in Doppelspielen, reinen Ein- bzw. Auslagerungen pro Stunde (Standard `30` / `48` / `48` — HRL RBG 1–5, also 120 s bzw. 75 s je Spiel). Daraus folgt der **Leistungsgrad**: Zeitbedarf der gefahrenen Spiele ÷ Fenster. Ein Einzelspiel ist dabei **nicht** ein halbes Doppelspiel, sondern kostet 62,5 % davon. Begriffe nach FEM 9.851: **Einzelspiel** = reine Ein- oder Auslagerung, **Doppelspiel** = beides in einer Fahrt — es besteht aus **zwei Transporten**. Je Gerät über `ResourcePoints[].MaxCyclesPerHour` / `MaxStoresPerHour` / `MaxRetrievalsPerHour` überschreibbar (RBG 11 Versandpuffer: 56 / 105 / 105). |
-| `CountTelegramType` | Telegrammtyp, der bei **allen** Zählungen gewertet wird (Standard `DM`). Die Anlage schickt jedes Ereignis als Paar: `DM` (Data Message — die Meldung selbst) und `AK` (Acknowledge der Gegenstelle), dazu `LM` als leere Lebensmeldung. Bei Fördertechnik-Verbindungen ist der `AK` leer, bei RBG-Verbindungen trägt er denselben Inhalt wie das `DM`. Ohne diese Einschränkung hinge die Entdopplung allein an der inhaltlichen Zusammenführung; mit ihr ist sie eindeutig. `AK` wäre gleichwertig, leer = alle zählen. |
-| `RbgPickupOrderCodes` / `RbgPickupDoneCodes` / `RbgDepotOrderCodes` / `RbgDepotDoneCodes` | MessageCodes eines RBG-Transports. Leer ⇒ `["PUPORD"]` / `["ENDPUP"]` / `["DEPORD"]` / `["ENDDEP"]`. **Wichtig:** die Aufträge heißen *Pickup Order* (`PUPORD`, aufs RBG nehmen) und *Depot Order* (`DEPORD`, vom RBG abgeben) — jeder Transport besteht aus beidem, nicht aus einem Ein- bzw. Auslagerauftrag. `ENDDEP` beendet einen Transport und wird gezählt; `PUPORD` markiert seinen Beginn für die Dauermessung. |
-| `ConveyorOrderCodes` / `ConveyorEndCodes` / `ConveyorFreeCodes` | MessageCodes der Fördertechnik-Belegung. Leer ⇒ `["TSPORD"]` / `["ENDTSP"]` / `["RPFREE"]`. Ablauf einer Ladeeinheit laut Kardex-Doku „Transportverwaltung Paletten-Fördertechnik": `ENDTSP` meldet die **Ankunft** auf dem Punkt (ab hier belegt), `TSPORD` ist der Auftrag zum **Weitertransport** (der Punkt bleibt dabei belegt), `RPFREE` meldet das **Verlassen** (ab hier frei). **Belegt = ENDTSP → RPFREE**, leer = RPFREE → nächste Ankunft. Die Belegung zerfällt in zwei Hälften: `ENDTSP`→`TSPORD` ist Wartezeit auf die Entscheidung des MFR (Steuerungszeit, keine Fahrzeit), `TSPORD`→`RPFREE` der eigentliche Abtransport (langer Wert = Rückstau dahinter). Ausgewertet über einen Zustandsautomaten auf dem Zeitstrahl, nicht über Ereignispaare — Belegung ist eine Eigenschaft des Platzes, nicht der Ladeeinheit. Ein Punkt, der kein `RPFREE` meldet, gilt durchgehend als belegt; der Zählerstand `Ankunft/Auftrag/Frei` in der Kachel macht das sichtbar. |
-| `RbgRackLocationPattern` | Muster eines Regalplatzes in `Source`/`Destination` (Standard `^[0-9]+$`). Daran hängt die **Richtung**: endet ein Transport auf einem Regalplatz (rein numerisch, z. B. `010361211`), ist es eine Einlagerung; endet er an einer Station (`MA62`), eine Auslagerung. Daraus Doppelspiele = `min(Ein, Aus)`, Einzelspiele = `\|Ein − Aus\|`. |
+| `RbgMaxCyclesPerHour` / `RbgMaxStoresPerHour` / `RbgMaxRetrievalsPerHour` | Auslegungsleistung eines RBG in Doppelspielen bzw. reinen Ein-/Auslagerungen pro Stunde (Standard `30` / `48` / `48` = HRL RBG 1–5, also 120 s bzw. 75 s je Spiel). Leistungsgrad = Zeitbedarf der gefahrenen Spiele ÷ Fenster; ein Einzelspiel kostet damit 62,5 % eines Doppelspiels, nicht 50 %. Begriffe nach FEM 9.851: Einzelspiel = reine Ein- oder Auslagerung, Doppelspiel = beides in einer Fahrt (zwei Transporte). Je Gerät über `ResourcePoints[]` überschreibbar (RBG 11 Versandpuffer: 56 / 105 / 105). |
+| `CountTelegramType` | Telegrammtyp, der bei allen Zählungen gewertet wird (Standard `DM`). Jedes Ereignis kommt als Paar `DM` (Data Message) + `AK` (Acknowledge), dazu `LM` als leere Lebensmeldung. Bei Fördertechnik-Verbindungen ist der `AK` leer, bei RBG-Verbindungen inhaltsgleich zum `DM` — ohne die Einschränkung würde doppelt gezählt. `AK` wäre gleichwertig, leer = alle zählen. |
+| `RbgPickupOrderCodes` / `RbgPickupDoneCodes` / `RbgDepotOrderCodes` / `RbgDepotDoneCodes` | MessageCodes eines RBG-Transports. Leer ⇒ `["PUPORD"]` / `["ENDPUP"]` / `["DEPORD"]` / `["ENDDEP"]`. *Pickup Order* = aufs RBG nehmen, *Depot Order* = vom RBG abgeben; jeder Transport besteht aus beidem — es sind **keine** Ein-/Auslageraufträge. `ENDDEP` schließt einen Transport ab und wird gezählt, `PUPORD` markiert den Beginn für die Dauermessung. |
+| `ConveyorOrderCodes` / `ConveyorEndCodes` / `ConveyorFreeCodes` | MessageCodes der Fördertechnik-Belegung. Leer ⇒ `["TSPORD"]` / `["ENDTSP"]` / `["RPFREE"]`. Ablauf laut Kardex-Doku „Transportverwaltung Paletten-Fördertechnik": `ENDTSP` = Ankunft (ab hier belegt), `TSPORD` = Auftrag zum Weitertransport (weiterhin belegt), `RPFREE` = Verlassen (ab hier frei). Belegt = `ENDTSP → RPFREE`, leer = `RPFREE →` nächste Ankunft. Teilzeiten: `ENDTSP→TSPORD` = Wartezeit auf die MFR-Entscheidung, `TSPORD→RPFREE` = Abtransport (langer Wert = Rückstau dahinter). Ausgewertet über einen Zustandsautomaten auf dem Zeitstrahl, nicht über Ereignispaare — Belegung gehört zum Platz, nicht zur Ladeeinheit. Ein Punkt ohne `RPFREE` gilt durchgehend als belegt; der Zähler `Ankunft/Auftrag/Frei` macht das sichtbar. |
+| `RbgRackLocationPattern` | Muster eines Regalplatzes in `Source`/`Destination` (Standard `^[0-9]+$`). Bestimmt die Richtung: Transport endet auf einem Regalplatz (rein numerisch, z. B. `010361211`) = Einlagerung, an einer Station (`MA62`) = Auslagerung. Daraus Doppelspiele = `min(Ein, Aus)`, Einzelspiele = `\|Ein − Aus\|`. |
 | `RetentionDays` | Aufbewahrungsdauer in Tagen (Standard: `365`). Normalbetrieb/`backfill` löschen beim Start und danach täglich Telegramme mit älterem `DateTime`; `kcc prune` tut es einmalig. `0`/negativ = unbegrenzt. |
 | `ReconnectDelaySeconds` | Wartezeit vor dem ersten Reconnect nach Verbindungsabbruch (Standard `5`); verdoppelt sich je Fehlversuch bis `ReconnectMaxDelaySeconds`. Nach dem Reconnect wird bis zum aktuellen Ende nachgeholt. |
 | `ReconnectMaxDelaySeconds` | Obergrenze der Reconnect-Wartezeit (Standard `60`). |
@@ -157,49 +156,46 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /api/kpis?minutes=240` | Kennzahlen über das Zeitfenster |
 | `GET /api/telegrams?minutes=240&limit=2000` | Telegramme des Zeitfensters (aufsteigend) |
 | `GET /api/fields?minutes=5&limit=20` | Diagnose: die letzten Telegramme Feld für Feld nach `DataFormat` zerlegt — zeigt, welches Feld den Ressourcenpunkt trägt |
-| `GET /auslastung` | Auslastung der Ressourcenpunkte, gebündelt nach `Group`. Jede Kachel zeigt **zwei Tachos — Zeitseite und Mengenseite**. Punkte mit `Connection` (RBG): **Auslastung** (Zeit mit offenem Auftrag) und **Leistung** (Spiele/h gegen `RbgMaxCyclesPerHour`); Tacho, Linienchart und Kopfzeile rechnen dort in Doppel-/Einzelspielen, die `TSPORD`-Zähler dienen nur der Ziel-Identifikation. Punkte ohne `Connection` (Fördertechnik): **Belegung** (`ENDTSP`→`RPFREE` ÷ Fenster) und **Leistung** (% vom UPH-Richtwert), darunter Ø Verweildauer, Ø bis Auftrag, Ø Abtransport und Ø Leerzeit. Alle Kennzahlen tragen einen Erklär-Tooltip; die Tachos blenden zwischen zwei Abrufen über, statt zu springen. **„Anordnen"** in der Kopfzeile macht jede Kachel frei ziehbar (Kopf) und in der Größe änderbar (Griff unten rechts); die Anordnung wird je Browser in `localStorage` gehalten und auch außerhalb des Modus angewandt, „Anordnung zurücksetzen" stellt das Raster wieder her |
+| `GET /auslastung` | Auslastung der Ressourcenpunkte, nach `Group` gebündelt. Je Kachel zwei Tachos: Zeitseite und Mengenseite. Punkte mit `Connection` (RBG): **Auslastung** (Σ Transportdauern ÷ Fenster) und **Leistung** (Spiele/h gegen `RbgMaxCyclesPerHour`); gerechnet wird in Doppel-/Einzelspielen, die `TSPORD`-Zähler dienen nur der Ziel-Identifikation. Punkte ohne `Connection` (Fördertechnik): **Belegung** (`ENDTSP`→`RPFREE` ÷ Fenster) und **Leistung** (% vom UPH-Richtwert), dazu Ø Verweildauer, Ø bis Auftrag, Ø Abtransport, Ø Leerzeit. Jede Kennzahl hat einen Tooltip; die Tachos blenden zwischen zwei Abrufen über. „Anordnen" macht Kacheln ziehbar (Kopf) und skalierbar (Griff unten rechts), gespeichert je Browser in `localStorage`. Im Querformat volle Breite als Wandraster, im Hochformat eine Lesespalte |
 | `GET /api/utilization?minutes=60&target=200&bucket=5&rate=1&rateFt=5&step=1` | Dieselbe Auswertung als JSON. `rate` = Trailing-Fenster der RBG-Tachos, `rateFt` = das der Fördertechnik-Tachos; `bucket` = Breite des gleitenden Verlaufsfensters; `step` = Abtastschritt des Verlaufs |
-| `GET /verlauf` | UPH-Historie als gestapelte Fläche, wahlweise **je Endziel oder je Ressourcenpunkt** (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. Chart auf ECharts: im Chart ziehen oder Mausrad zoomt, der Balken unten verschiebt den Ausschnitt, Doppelklick setzt zurück. Bereich **8 h** ist ein gleitender Kurzzeit-Verlauf (5-min-Fenster, direkt aus den Rohtelegrammen, letzter Punkt = aktueller Wert wie bei `/auslastung`); die längeren Bereiche speisen sich aus einer verdichteten Rollup-Tabelle mit **eigener Aufbewahrung** `UphHistoryRetentionDays` (Standard 4 Wochen) — weiter zurück als dieser Zeitraum reicht `/verlauf` nicht, auch nach `backfill` nicht. Wird ein **Ressourcenpunkt** gewählt, kommt darunter ein zweiter Chart mit **Belegung & Leistung** (RBG-Punkte aus `/api/rbg-history`, sonst `/api/point-history`) |
+| `GET /verlauf` | UPH-Historie als gestapelte Fläche, je Endziel oder je Ressourcenpunkt (Umschalter „Stapeln nach"), plus Mengenverhältnis und Tabelle. ECharts: ziehen oder Mausrad zoomt, der Balken unten verschiebt den Ausschnitt, Doppelklick setzt zurück. Bereich 8 h = gleitender Kurzzeit-Verlauf (5-min-Fenster direkt aus den Rohtelegrammen); längere Bereiche aus `uph_samples` mit eigener Aufbewahrung `UphHistoryRetentionDays` — weiter zurück reicht `/verlauf` auch nach `backfill` nicht. Bei Auswahl eines Ressourcenpunkts kommt darunter ein zweiter Chart mit Belegung & Leistung (RBG-Punkte aus `/api/rbg-history`, sonst `/api/point-history`) |
 | `GET /api/uph-history?hours=168&bucket=15&groupBy=destination&rp=MA72` | Historie als JSON: Buckets je Reihe (Menge + UPH), Summen mit Ø UPH und Anteil. `groupBy` = `destination` (Vorgabe) oder `resourcePoint`; `hours` bis 672 (4 W) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand; `rolling=<min>` schaltet auf ein gleitendes Fenster aus den Rohtelegrammen um (`bucket` wird dann der Abtastschritt); `rp` grenzt zusätzlich auf einen Ressourcenpunkt ein |
 | `GET /kontur` | Auswertung der Konturkontrollen: welche Konturfehler an welchem Kontrollpunkt auflaufen. Zerlegt das `Status`-Feld (`Kxyz`) der Telegramme aus `ContourCheckpoints` in benannte Fehlerbits (`ContourFlags`). KPIs, Balken je Fehlerart, Kreuztabelle Kontrollpunkt × Fehlerart, sowie je Kontrollpunkt die letzten 10 Fehler mit Zeit, LE-/ID-Nummer und aufgelösten Fehlern |
 | `GET /api/kontur?minutes=480` | Dieselbe Auswertung als JSON |
-| `GET /rbg` | **Langzeitvergleich der RBG**: welches Gerät wird stärker belastet? Spreizung (der schwächste RBG fährt X % weniger als der stärkste), Anteil je Gerät an allen Spielen, Verlauf der Spiele/h bzw. des Auslastungsgrads als ECharts-Mehrlinien-Diagramm (Legende schaltet Geräte ab, Achsen-Tooltip zeigt alle Werte eines Zeitpunkts, ziehen/Mausrad zoomt), je Gerät ein Mini-Chart mit Auslastung/Leistung/Leerlauf und eine Kennzahlentabelle. Zeiträume 24 h bis 1 Jahr. Speist sich aus der eigenen Rasterreihe (`RbgHistoryRetentionDays`) und reicht damit weiter zurück als die Rohtelegramme |
+| `GET /rbg` | Langzeitvergleich der RBG. Spreizung `(meiste − wenigste Spiele) ÷ meiste`, Anteil je Gerät (Balken in Ein-/Auslagerung geteilt), Mehrlinien-Chart der Spiele/h bzw. Prozentwerte, je Gerät ein Mini-Chart mit Auslastung/Leistung/Leerlauf, Kennzahlentabelle. Zeiträume 24 h bis 1 Jahr aus `rbg_samples` — reicht weiter zurück als die Rohtelegramme |
 | `GET /api/rbg-history?hours=168&bucket=60` | Derselbe Vergleich als JSON. `hours` bis 8784 (1 Jahr) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand in Minuten |
-| `GET /api/point-history?hours=168&bucket=30&rp=EA21` | Langzeitverlauf **je Ressourcenpunkt**: Belegungsgrad (belegte Zeit ÷ Raster) und Leistungsgrad (Aufträge/h ÷ Richtwert) je Raster, aus der Rasterreihe `point_samples` (`PointHistoryRetentionDays`). Speist den zweiten Chart auf `/verlauf` bei Auswahl eines Ressourcenpunkts — auch für Fördertechnikpunkte ohne RBG. `hours` **oder** `from=…&to=…`; `bucket` = Stützpunktabstand; `rp` grenzt auf einen Punkt ein |
-| `GET /wand` | Wandansicht derselben Auslastungsdaten (`/api/utilization`): erkennt per `orientation: landscape` das Querformat und legt jede `Group` (RBG, Fördertechnik …) als eigene, klar getrennte, formatfüllende Spalte ohne Seiten-Scroll ab. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Doppel-/Einzelspiele/Leerlauf. Vollbild-Schaltfläche. Im Hochformat stapeln sich die Spalten |
+| `GET /api/point-history?hours=168&bucket=30&rp=EA21` | Langzeitverlauf je Ressourcenpunkt aus `point_samples`: Belegungsgrad (belegte Zeit ÷ Raster) und Leistungsgrad (Aufträge/h ÷ Richtwert). Auch für Fördertechnikpunkte ohne RBG. `hours` **oder** `from=…&to=…`; `bucket` = Stützpunktabstand; `rp` grenzt auf einen Punkt ein |
+| `GET /wand` | Wandansicht derselben Daten (`/api/utilization`). Im Querformat je `Group` eine formatfüllende Spalte ohne Seiten-Scroll, im Hochformat gestapelt. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Spiele/Leerlauf. Vollbild-Schaltfläche |
 | `GET /health` | Status, Version, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
-| `GET /api/version` | `{ "version": "0.2.9" }` — der Release-Tag (lokale Builds: `dev`). Speist die Versionsanzeige rechts in der Navigationsleiste |
+| `GET /api/version` | `{ "version": "0.3.0" }` — der Release-Tag, lokale Builds `dev`. Speist die Versionsanzeige rechts in der Navigationsleiste |
 
-Ohne `minutes` gilt `WindowMinutes` (Standard 4 Stunden); der Parameter wird auf 1…1440 begrenzt, `limit` auf 1…20000. Die KPIs (`/api/kpis`): Anzahl,
-Telegramme/Minute, Fehler (`ErrorCode`-Feld ≠ 0), Sekunden seit dem letzten Schreibvorgang, aktive
-Verbindungen sowie Verteilung nach Richtung, Verbindung und `MessageCode`.
+Ohne `minutes` gilt `WindowMinutes` (Standard 4 h); der Parameter wird auf 1…1440 begrenzt,
+`limit` auf 1…20000. `/api/kpis` liefert Anzahl, Telegramme/Minute, Fehler (`ErrorCode` ≠ 0),
+Sekunden seit dem letzten Schreibvorgang, aktive Verbindungen und die Verteilung nach Richtung,
+Verbindung und `MessageCode`.
 
-**Zeitfenster:** Der rechte Rand ist der Zeitstempel des **jüngsten Telegramms in der DB**, nicht
-die Uhr des API-Hosts. So bleibt „letzte N Minuten" richtig, auch wenn die Anlage ihre
-Zeitstempel in einer anderen Zeitzone schickt als der Rechner, auf dem `kcc` läuft.
-`GET /health` zeigt beide Zeiten, um einen solchen Versatz sichtbar zu machen.
+**Zeitfenster:** Rechter Rand ist der Zeitstempel des jüngsten Telegramms in der DB, nicht die Uhr
+des API-Hosts — „letzte N Minuten" bleibt damit auch bei abweichender Anlagen-Zeitzone richtig.
+`GET /health` zeigt beide Zeiten.
 
-**Zeitzone:** Die Anlage liefert die Zeitstempel in **UTC**; die DB legt sie zeitzonenfrei ab. Die
-API gibt sie als echtes UTC-ISO (`…Z`) aus, sodass die Dashboards sie in die **lokale Zeit des
-Betrachters** umrechnen. `GET /api/telegrams` liefert dieselben Werte, ebenfalls als UTC.
+**Zeitzone:** Die Anlage liefert UTC, die DB legt zeitzonenfrei ab, die API gibt UTC-ISO (`…Z`)
+aus; die Dashboards rechnen daraus die lokale Zeit des Betrachters.
 
 ## Wie es funktioniert
 
-Die Anlage bietet **keinen Push** für Protokolldaten — auch die Weboberfläche pollt. Da `Id`
-monoton vergeben wird, fragt der Recorder wiederholt „alles mit `Id > zuletzt gesehen`", aufsteigend
-sortiert. Das ist lückenlos und wiederholbar; ein Neustart setzt exakt dort wieder an, weil der
-Stand in der Datenbank liegt.
+Die Anlage bietet keinen Push für Protokolldaten; auch die Weboberfläche pollt. `Id` wird monoton
+vergeben, also fragt der Recorder wiederholt „alles mit `Id > zuletzt gesehen`", aufsteigend
+sortiert — lückenlos und wiederholbar. Der Stand liegt in der DB, ein Neustart setzt dort an.
 
-**Reconnect:** Bricht die WebSocket-Verbindung ab, beendet sich der Recorder nicht, sondern
-verbindet neu — mit wachsender Wartezeit (`ReconnectDelaySeconds`, verdoppelt bis
-`ReconnectMaxDelaySeconds`). Nach dem Reconnect holt er aus derselben `Id`-Logik alle in der
-Auszeit angefallenen Telegramme bis zum aktuellen Ende nach. Beenden weiterhin mit Strg+C.
+**Reconnect:** Nach einem Verbindungsabbruch verbindet der Recorder neu, Wartezeit
+`ReconnectDelaySeconds` verdoppelt bis `ReconnectMaxDelaySeconds`. Anschließend holt dieselbe
+`Id`-Logik die Auszeit nach. Beenden mit Strg+C.
 
-Die Anmeldung folgt dem Browser-Client: `Subscribe` liefert `SessionId` und den öffentlichen
-RSA-Schlüssel im .NET-XML-Format, das Passwort wird mit **RSA-2048/OAEP-SHA1** verschlüsselt und als
-Byte-Array (nicht Base64) an `LogonUser` geschickt. Dass dabei **keine** Byte-Umkehrung nötig ist,
-sichert ein Test gegen einen Ciphertext ab, den die originale Client-Bibliothek erzeugt hat —
-siehe `tests/Kcc.Recorder.Tests/Fixtures/README.md`.
+**Anmeldung** wie im Browser-Client: `Subscribe` liefert `SessionId` und den öffentlichen
+RSA-Schlüssel im .NET-XML-Format; das Passwort geht mit RSA-2048/OAEP-SHA1 verschlüsselt als
+Byte-Array (nicht Base64) an `LogonUser`. Eine Byte-Umkehrung ist nicht nötig — abgesichert durch
+einen Test gegen einen Ciphertext der originalen Client-Bibliothek
+(`tests/Kcc.Recorder.Tests/Fixtures/README.md`).
 
 ## Bauen
 
@@ -209,26 +205,22 @@ dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
   --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-Die EXE bündelt das .NET- **und** das ASP.NET-Core-Runtime (für Kestrel) — self-contained, kein
-installiertes Framework nötig, dafür ~90–100 MB. `RollForward=Major` erlaubt dem framework-
-abhängigen `dotnet test`/`run` auch neuere Runtimes (der Publish bleibt bei net8).
+Die EXE bündelt .NET und ASP.NET Core (für Kestrel), self-contained, ~90–100 MB.
+`RollForward=Major` erlaubt `dotnet test`/`run` auch neuere Runtimes; der Publish bleibt bei net8.
+Ein Tag `vX.Y.Z` startet den Release-Workflow: EXE bauen, ZIP (`kcc.exe`, `appsettings.json`,
+`README.md`, `dashboard.html`, `kontur.html`, `wand.html`, Ordner `wwwroot/`) samt Prüfsumme an
+ein GitHub-Release hängen. Die Version aus dem Tag geht als `-p:Version=` in den Build und
+erscheint unter `/api/version` sowie in der Navigationsleiste.
 
-Ein Tag `vX.Y.Z` löst den Release-Workflow aus: er baut die EXE und hängt das ZIP
-(`kcc.exe`, `appsettings.json`, `README.md`, `dashboard.html`, `kontur.html`, `wand.html`
-sowie der Ordner `wwwroot/`) samt Prüfsumme an ein GitHub-Release.
-
-`/auslastung`, `/verlauf` und `/rbg` sind in **lose Dateien unter `wwwroot/`** aufgetrennt
-(`*.html` + `css/`, `js/`, `vendor/`); Kestrel liefert den Ordner über `UseStaticFiles` aus.
-Der Ordner liegt neben der EXE und muss mitkopiert werden — die EXE allein reicht für diese
-Seiten nicht mehr. `/verlauf` und `/rbg` zeichnen mit **ECharts** (Apache-2.0, vendort unter
-`wwwroot/vendor/echarts.min.js`, ~1 MB) statt selbstgebautem SVG — Zoom, Cursor, Legende und
-Tooltip sind damit die Bibliotheksfunktionen, nicht wiederkehrende Bugquellen. `js/nav.js`
-baut die Navigationsleiste clientseitig, `js/glossary.js` trägt die Erklärtexte (früher
-serverseitig injiziert). `/`, `/kontur` und `/wand` sind weiterhin eingebettete Konstanten;
+`/auslastung`, `/verlauf` und `/rbg` liegen als lose Dateien unter `wwwroot/` (`*.html` + `css/`,
+`js/`, `vendor/`), ausgeliefert über `UseStaticFiles`. Der Ordner gehört neben die EXE — für diese
+Seiten reicht die EXE allein nicht. `/verlauf` und `/rbg` zeichnen mit ECharts (Apache-2.0,
+vendort unter `wwwroot/vendor/echarts.min.js`, ~1 MB); `js/nav.js` baut die Navigationsleiste,
+`js/glossary.js` trägt die Tooltip-Texte. `/`, `/kontur` und `/wand` sind weiterhin eingebettete
+C#-Konstanten mit serverseitiger Injektion (`DashboardNav`, `RbgGlossary`);
 `kcc dump-dashboards [--out verz]` schreibt sie heraus und kopiert `wwwroot/` dazu.
-Als lose Datei geöffnet fragen die Seiten fest `http://localhost:8082` ab; mit
-`?api=http://host:port` lässt sich ein anderer Endpunkt vorgeben. Über die API selbst
-ausgeliefert zählt deren Herkunft.
+Als lose Datei geöffnet fragen die Seiten `http://localhost:8082` ab, überschreibbar mit
+`?api=http://host:port`; über die API ausgeliefert zählt deren Herkunft.
 
 ## Hinweis
 

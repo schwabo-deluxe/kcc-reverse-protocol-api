@@ -141,8 +141,8 @@ function tweenGauges() {
 
 // Verlauf als Sparkline. Bei RBG-Kacheln zählt der Spiele/h-Verlauf, sonst die UPH-Reihe.
 function spark(point, scaleMax, target) {
-  const w = 240, h = 54, s = point.rbg ? point.rbg.series : point.series;
-  if (s.length < 2) return '<svg class="spark" viewBox="0 0 240 54"></svg>';
+  const w = 240, h = 88, s = point.rbg ? point.rbg.series : point.series;
+  if (s.length < 2) return `<svg class="spark" viewBox="0 0 ${w} ${h}"></svg>`;
 
   const x = i => (i / (s.length - 1)) * w;
   const y = v => h - (Math.min(v, scaleMax) / scaleMax) * h;
@@ -255,8 +255,10 @@ function render(data) {
   // ausdrücklich aus Doppel-/Einzelspielen, nicht aus den TSPORD des Ressourcenpunkts.
   const tile = p => {
     const r = p.rbg;
+    // Skala knapp über Kapazität bzw. Spitzenwert — bei 1,3× Kapazität nutzte die Kurve
+    // nur einen Bruchteil der Höhe und wirkte platt.
     const sMax = r
-      ? Math.max(r.maxCyclesPerHour * 1.3, 1, ...r.series.map(b => b.uph))
+      ? Math.max(r.maxCyclesPerHour * 1.1, 1, ...r.series.map(b => b.uph * 1.1))
       : peak;
     const sTarget = r ? r.maxCyclesPerHour : data.targetUph;
     // Der Tacho rechnet die letzten 'rateMinutes' auf eine Stunde hoch; die Kurve

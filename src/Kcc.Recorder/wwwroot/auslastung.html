@@ -13,15 +13,15 @@
 <body>
 <header>
   <h1>Auslastung (TSPORD)</h1>
-  <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440" title="Zeitraum der Verlaufskurven (UtilizationWindowMinutes in appsettings.json)"></label>
-  <label>Richtwert (UPH) <input type="number" id="target" min="1" title="Vorgabe für Punkte ohne eigenen Richtwert (UtilizationTargetUph in appsettings.json)"></label>
-  <label>Glättung (min) <input type="number" id="bucket" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve (UtilizationBucketMinutes in appsettings.json)"></label>
+  <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440" title="Zeitraum der Verlaufskurven. Standard: UtilizationWindowMinutes"></label>
+  <label>Richtwert (UPH) <input type="number" id="target" min="1" title="Bezugsgröße für Punkte ohne eigenen TargetUph. Standard: UtilizationTargetUph"></label>
+  <label>Glättung (min) <input type="number" id="bucket" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve. Standard: UtilizationBucketMinutes"></label>
   <label>Tacho RBG (min) <input type="number" id="rate" min="1" max="240"
-    title="Trailing-Fenster der RBG-Tachos: Auslastung, Leistung und Spiele/h werden daraus auf eine Stunde hochgerechnet. Klein = reagiert sofort, aber sprunghaft; groß = träger, aber ruhiger. Standard: UtilizationRateMinutes in appsettings.json."></label>
+    title="Trailing-Fenster der RBG-Tachos (Auslastung, Leistung, Spiele/h), auf 1 h hochgerechnet. Klein = reaktiv und sprunghaft, groß = träge und ruhig. Standard: UtilizationSRMRateMinutes"></label>
   <label>Tacho FT (min) <input type="number" id="rateFt" min="1" max="240"
-    title="Trailing-Fenster der Fördertechnik-Tachos (Belegung + Leistung der Punkte ohne RBG-Verbindung), getrennt vom RBG-Fenster. Standard: UtilizationConveyorRateMinutes in appsettings.json."></label>
+    title="Dasselbe für die Fördertechnik-Tachos (Punkte ohne RBG-Verbindung). Standard: UtilizationConveyorRateMinutes"></label>
   <button type="button" class="hbtn" id="arrange"
-    title="Kacheln frei anordnen und in der Größe ändern; die Anordnung wird pro Browser gespeichert">Anordnen</button>
+    title="Kacheln frei anordnen und skalieren; wird pro Browser gespeichert">Anordnen</button>
   <button type="button" class="hbtn" id="resetLayout" hidden>Anordnung zurücksetzen</button>
   <div class="meta" id="meta">lädt …</div>
 </header>

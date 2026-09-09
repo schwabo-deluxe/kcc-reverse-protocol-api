@@ -1,17 +1,17 @@
 namespace Kcc.Recorder;
 
 /// <summary>
-/// Verdichtet die Rohtelegramme laufend zu zwei Langzeitreihen und hält beide mit eigener
-/// Aufbewahrung — so beantworten die Ansichten Wochen- und Monatszeiträume, ohne Millionen
-/// Telegrammzeilen zu lesen, und überleben das Löschen der Rohtelegramme:
+/// Verdichtet die Rohtelegramme laufend zu drei Langzeitreihen mit je eigener Aufbewahrung; sie
+/// überleben das Löschen der Rohtelegramme:
 /// <list type="bullet">
-///   <item><see cref="UphSampleRow"/> (Zeitraster × Ressourcenpunkt × Endziel) für <c>/verlauf</c></item>
-///   <item><see cref="RbgSampleRow"/> (Zeitraster × RBG-Verbindung) für <c>/rbg</c></item>
+///   <item><see cref="UphSampleRow"/> (Raster × Ressourcenpunkt × Endziel) für <c>/verlauf</c></item>
+///   <item><see cref="RbgSampleRow"/> (Raster × RBG-Verbindung) für <c>/rbg</c></item>
+///   <item><see cref="PointSampleRow"/> (Raster × Ressourcenpunkt) für den zweiten <c>/verlauf</c>-Chart</item>
 /// </list>
 ///
-/// Im Poll-Takt aufgerufen (<see cref="Tick"/>), rechnet aber höchstens alle
-/// <c>UphHistoryIntervalMinutes</c>. Wiederholbar: es wird stets ab dem zuletzt verdichteten
-/// Raster neu gerechnet, das dabei ggf. noch unvollständige jüngste Raster inklusive.
+/// Im Poll-Takt aufgerufen (<see cref="Tick"/>), rechnet höchstens alle
+/// <c>UphHistoryIntervalMinutes</c>. Wiederholbar: gerechnet wird ab dem zuletzt verdichteten
+/// Raster, das jüngste noch unvollständige eingeschlossen.
 /// </summary>
 public sealed class HistorySampler
 {

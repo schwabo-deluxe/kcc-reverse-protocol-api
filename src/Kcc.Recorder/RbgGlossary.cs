@@ -1,103 +1,72 @@
 namespace Kcc.Recorder;
 
 /// <summary>
-/// Erklärtexte der RBG-Kennzahlen, an einer Stelle gepflegt und in jede Ansicht eingesetzt, die
-/// sie anzeigt (<c>/auslastung</c>, <c>/rbg</c>, <c>/wand</c>). Der Server ersetzt beim Ausliefern
-/// <see cref="Placeholder"/> durch ein Skript, das <c>window.RBG_HELP</c> definiert; die Seiten
-/// hängen die Texte als <c>title</c> an die jeweilige Kennzahl.
+/// Erklärtexte der RBG- und Fördertechnik-Kennzahlen für die Seiten, die noch als C#-Konstante
+/// ausgeliefert werden. Der Server ersetzt <see cref="Placeholder"/> durch ein Skript, das
+/// <c>window.RBG_HELP</c> definiert. Aufgetrennte Seiten laden stattdessen
+/// <c>wwwroot/js/glossary.js</c> — beide Fassungen synchron halten.
 /// </summary>
 public static class RbgGlossary
 {
     public const string Placeholder = "<!--rbghelp-->";
 
-    /// <summary>Kennzahl → Erklärung. Bewusst ausführlich; erscheint nur beim Überfahren.</summary>
+    /// <summary>Kennzahl → Erklärung (Definition und Formel, erscheint als Tooltip).</summary>
     static readonly (string Key, string Text)[] Entries =
     [
         ("busy",
-            "Auslastung — die Zeitseite: Anteil des Zeitraums, in dem das Gerät Transporte " +
-            "gefahren hat (Summe der Transportdauern ÷ Zeitraum). Die Transporte eines RBG laufen " +
-            "nacheinander, der Wert ist damit ein echtes Zeitmaß. Gemessen vom Auftrag zum " +
-            "Aufnehmen bis zum abgeschlossenen Abgeben, über das Tacho-Fenster aus der Kopfzeile."),
+            "Auslastung = Σ Transportdauern ÷ Fenster. Transport = PUPORD → ENDDEP; die Fahrten " +
+            "eines RBG laufen nacheinander. Fenster: „Tacho RBG (min)“."),
         ("load",
-            "Leistung — die Mengenseite: geschaffte Spiele gegen die Kapazität des Geräts. " +
-            "Gerechnet über den Zeitbedarf laut Auslegung: jedes Doppelspiel kostet 3600/DS-pro-" +
-            "Stunde Sekunden, jedes Einzelspiel seine eigene Spielzeit. Das ist die belastbare " +
-            "Durchsatzzahl. Hohe Auslastung bei niedriger Leistung heißt: es fehlt " +
-            "nicht an Aufträgen, die einzelne Fahrt dauert zu lang. Gemessen über das " +
-            "Tacho-Fenster aus der Kopfzeile und auf eine Stunde hochgerechnet — die " +
-            "Verlaufskurve daneben nutzt ein eigenes, meist größeres Glättungsfenster."),
+            "Leistung = Zeitbedarf laut Auslegung ÷ Fenster. Doppelspiel = 3600/DS-pro-h Sekunden, " +
+            "Einzelspiel = 3600/Einlagerungen-pro-h Sekunden. Fenster: „Tacho RBG (min)“; die " +
+            "Verlaufskurve nutzt das größere Glättungsfenster."),
         ("double",
-            "Doppelspiel (kombiniertes Spiel, FEM 9.851): Ein- und Auslagerung in einer Fahrt — " +
-            "die wirtschaftliche Betriebsart, weil keine Leerfahrt anfällt. Es besteht aus " +
-            "ZWEI Transporten und wird als min(Einlagerungen, Auslagerungen) gezählt."),
+            "Doppelspiele/h = min(Ein, Aus) ÷ Fensterstunden. Ein Doppelspiel = zwei Transporte " +
+            "in einer Fahrt (FEM 9.851). Fenster: „Tacho RBG (min)“."),
         ("single",
-            "Einzelspiel (FEM 9.851): reine Ein- oder Auslagerung, die Gegenrichtung bleibt leer. " +
-            "Gezählt als |Einlagerungen − Auslagerungen|. Es kostet laut Auslegung 75 s gegen " +
-            "120 s beim Doppelspiel, zählt bei der Leistung also mit 62,5 % — nicht mit der Hälfte."),
+            "Einzelspiele/h = |Ein − Aus| ÷ Fensterstunden (FEM 9.851). Laut Auslegung 75 s gegen " +
+            "120 s beim Doppelspiel, zählt bei der Leistung also mit 62,5 %."),
         ("idle",
-            "Leerlauf: Zeit ohne offenen Auftrag = Zeitraum − belegte Auftragszeit. Viel Leerlauf " +
-            "heißt, dem Gerät fehlt Arbeit (Versorgung oder Vorgelagertes bremst). Wenig Leerlauf " +
-            "bei niedriger Leistung heißt umgekehrt: die Spielzeit selbst ist der Engpass."),
+            "Leerlauf = Fenster − Σ Transportdauern."),
         ("inout",
-            "Abgeschlossene Transporte im Zeitraum: Einlagerungen / Auslagerungen. Jeder " +
-            "Transport besteht aus Aufnehmen (PUPORD→ENDPUP) und Abgeben (DEPORD→ENDDEP); die " +
-            "Richtung steht im Ziel des ENDDEP — ein Regalplatz (rein numerisch) bedeutet " +
-            "Einlagerung, eine Station Auslagerung."),
+            "Ein-/Auslagerungen pro Stunde. Transport = Aufnehmen (PUPORD→ENDPUP) + Abgeben " +
+            "(DEPORD→ENDDEP). Richtung aus dem Ziel des ENDDEP: rein numerisch = Regalplatz = " +
+            "Einlagerung, sonst Auslagerung."),
         ("avgdur",
-            "Mittlere Dauer eines Transports, gepaart über die LE-Nummer: vom Auftrag zum " +
-            "Aufnehmen (PUPORD) bis zum abgeschlossenen Abgeben (ENDDEP). Zwei solche " +
-            "Transporte ergeben ein Doppelspiel."),
+            "Ø Transportdauer, über die LE-Nummer gepaart: PUPORD → ENDDEP."),
         ("cycles",
-            "Spiele in Doppelspiel-Äquivalent: Doppelspiele + Einzelspiele/2. Im " +
-            "Aufzeichnungsraster bestimmt und erst dann summiert — die Zahl hängt damit nicht " +
-            "davon ab, wie grob die Ansicht gerade zusammenfasst."),
+            "Spiele = Doppelspiele + Einzelspiele/2, je Aufzeichnungsraster bestimmt und dann " +
+            "summiert (unabhängig von der Zoomstufe)."),
         ("share",
-            "Anteil dieses Geräts an den Spielen aller RBG im Zeitraum. Bei gleichmäßiger " +
-            "Verteilung läge jedes Gerät bei 100 % ÷ Anzahl der Geräte."),
+            "Anteil an den Spielen aller RBG im Zeitraum. Gleichverteilung = 100 % ÷ Anzahl Geräte."),
         ("spread",
-            "Spreizung der Belastung: (meiste − wenigste Spiele) ÷ meiste. 0 % = alle RBG gleich " +
-            "belastet. Geräte ohne jede Bewegung bleiben außen vor, damit ein abgeschaltetes RBG " +
-            "die Zahl nicht auf 100 % zieht."),
+            "Spreizung = (meiste − wenigste Spiele) ÷ meiste. Geräte ohne Bewegung zählen nicht mit."),
         ("avgcycles",
-            "Spiele pro Stunde über den gesamten Zeitraum, Stillstände eingerechnet — das ist " +
-            "die tatsächliche Belastung. Zum Einordnen daneben „Aktive Std.“."),
+            "Spiele ÷ Betriebsstunden im Zeitraum, Stillstände innerhalb der Nutzungszeit " +
+            "eingerechnet."),
         ("peak",
-            "Höchster Stützpunkt der Verlaufskurve in Spiele/h — die Spitzenlast, die das Gerät " +
-            "in einem Raster tatsächlich gefahren hat."),
+            "Höchster Stützpunkt der Verlaufskurve in Spiele/h."),
         ("cbusy",
-            "Belegung — Zeitseite eines Fördertechnikpunkts: Anteil des Zeitraums, in dem der " +
-            "Platz besetzt war. Belegt ist er von der Ankunft der Ladeeinheit (ENDTSP) bis zu " +
-            "ihrem Verlassen (RPFREE); der Weitertransport-Auftrag (TSPORD) wird dazwischen " +
-            "erteilt."),
+            "Belegung = Σ(ENDTSP → RPFREE) ÷ Fenster. ENDTSP = Ankunft, RPFREE = Verlassen, " +
+            "TSPORD liegt dazwischen. Fenster: „Tacho FT (min)“."),
         ("coccupied",
-            "Ø Verweildauer einer Ladeeinheit auf dem Punkt: von der Ankunft (ENDTSP) bis zum " +
-            "Verlassen (RPFREE) — Warten auf den Auftrag und Abtransport zusammen."),
+            "Ø Verweildauer ENDTSP → RPFREE."),
         ("corderwait",
-            "Ø Zeit von der Ankunft (ENDTSP) bis zum Weitertransport-Auftrag (TSPORD): die " +
-            "Ladeeinheit steht und wartet auf die Entscheidung des MFR. Das ist Steuerungszeit, " +
-            "keine Fahrzeit — hohe Werte hier kosten Durchsatz, ohne dass die Mechanik langsamer " +
-            "wäre."),
+            "Ø ENDTSP → TSPORD: Wartezeit auf die MFR-Entscheidung, keine Fahrzeit."),
         ("cdepart",
-            "Ø Zeit vom Auftrag (TSPORD) bis zum Verlassen des Punkts (RPFREE): der eigentliche " +
-            "Abtransport. Lange Zeiten deuten auf Rückstau dahinter — die Ladeeinheit kommt " +
-            "nicht weg."),
+            "Ø TSPORD → RPFREE: der Abtransport. Lange Zeiten = Rückstau dahinter."),
         ("cwait",
-            "Ø Leerzeit von RPFREE bis zur nächsten Ankunft (ENDTSP) — wie lange der Platz " +
-            "effektiv leer dastand. Lange Leerzeiten heißen: nicht dieser Punkt ist der Engpass, " +
-            "sondern die Zuführung davor."),
+            "Ø RPFREE → nächstes ENDTSP: Platz leer, Zuführung davor bremst."),
         ("cidle",
-            "Gesamte effektiv leere Zeit im Zeitraum = Zeitraum − belegte Zeit, also die Summe " +
-            "aller Spannen zwischen dem Verlassen und der nächsten Ankunft."),
+            "Leer gesamt = Fenster − belegte Zeit."),
         ("cfree",
-            "Frei-Meldungen (RPFREE) des Ressourcenpunkts im Zeitraum: wie oft eine Ladeeinheit " +
-            "den Platz verlassen hat."),
+            "Anzahl RPFREE im Fenster."),
         ("ccount",
-            "Ankünfte (ENDTSP) / Weitertransport-Aufträge (TSPORD) / Frei-Meldungen (RPFREE) im " +
-            "Zeitraum. Klaffen die Zahlen auseinander, reicht eine Belegung über den Fensterrand " +
-            "hinaus oder steht noch aus."),
+            "Ankünfte (ENDTSP) / Aufträge (TSPORD) / Frei-Meldungen (RPFREE) pro Stunde. " +
+            "Fenster: „Tacho FT (min)“. Klaffen die Zahlen auseinander, reicht eine Belegung " +
+            "über den Fensterrand."),
         ("active",
-            "Stunden mit mindestens einer Fahrt. Zeigt, ob ein niedriger Durchschnitt von " +
-            "gleichmäßig wenig Arbeit kommt oder von längerem Stillstand."),
+            "Stunden mit mindestens einer Fahrt."),
     ];
 
     /// <summary>Skriptblock, der <c>window.RBG_HELP</c> definiert.</summary>

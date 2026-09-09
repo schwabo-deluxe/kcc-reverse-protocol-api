@@ -90,16 +90,13 @@ public sealed record ConveyorOptions
 ///   <item><c>RPFREE</c> — die SPS meldet das <b>Verlassen</b> des Punkts; ab jetzt frei</item>
 /// </list>
 ///
-/// Belegt ist der Punkt also von <c>ENDTSP</c> bis <c>RPFREE</c> mit dem <c>TSPORD</c> dazwischen,
-/// leer von <c>RPFREE</c> bis zur nächsten Ankunft. Die Belegung zerfällt damit in zwei
-/// aussagekräftige Hälften: <c>ENDTSP</c>→<c>TSPORD</c> ist Wartezeit auf die Entscheidung des
-/// MFR, <c>TSPORD</c>→<c>RPFREE</c> der eigentliche Abtransport.
+/// Belegt = <c>ENDTSP</c> → <c>RPFREE</c> (mit dem <c>TSPORD</c> dazwischen), leer =
+/// <c>RPFREE</c> → nächste Ankunft. Teilzeiten: <c>ENDTSP</c>→<c>TSPORD</c> = Wartezeit auf die
+/// MFR-Entscheidung, <c>TSPORD</c>→<c>RPFREE</c> = Abtransport.
 ///
-/// Statt Ereignisse zu paaren läuft ein Zustandsautomat über den Zeitstrahl — Belegung ist eine
-/// Eigenschaft des <em>Platzes</em>, nicht einer LE, und das hält die Rechnung auch bei
-/// fehlenden oder doppelten Meldungen stabil.
-///
-/// Reine Funktion über einem Zeitfenster.
+/// Ausgewertet über einen Zustandsautomaten auf dem Zeitstrahl statt über Ereignispaare:
+/// Belegung ist eine Eigenschaft des <em>Platzes</em>, nicht der LE; das bleibt auch bei
+/// fehlenden oder doppelten Meldungen stabil. Reine Funktion über einem Zeitfenster.
 /// </summary>
 public static class ConveyorReport
 {
