@@ -262,6 +262,29 @@ public class TelegramUtilizationTests
     }
 
     [Fact]
+    public void Foerdertechnik_Tacho_nutzt_ein_eigenes_Trailing_Fenster()
+    {
+        // Alle Bewegungen liegen 8 min zurück: mit dem RBG-Fenster (5 min) fielen sie raus,
+        // mit dem eigenen Fördertechnik-Fenster (10 min) zählen sie.
+        var window = new[] { T(1, 8, "DA21"), T(2, 8, "DA21"), T(3, 8, "DA21") };
+
+        var rbgWin = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            rateMinutes: 5, conveyor: ConveyorOptions.From(new KccConfig()),
+            resourcePoints: [RP("DA21", "Fördertechnik")]);
+        Assert.Equal(0, Point(rbgWin, "DA21").Uph);
+
+        var ftWin = TelegramUtilization.Compute(
+            window, TelegramFormat.Default, windowMinutes: 60, targetUph: 200, windowEnd: Now,
+            rateMinutes: 5, conveyor: ConveyorOptions.From(new KccConfig()),
+            resourcePoints: [RP("DA21", "Fördertechnik")],
+            conveyorRateMinutes: 10);
+        Assert.Equal(18, Point(ftWin, "DA21").Uph);   // 3 / (10/60)
+        Assert.Equal(5, ftWin.RateMinutes);
+        Assert.Equal(10, ftWin.ConveyorRateMinutes);
+    }
+
+    [Fact]
     public void Ordnet_Punkte_nach_dem_Order_Schluessel()
     {
         var u = TelegramUtilization.Compute(

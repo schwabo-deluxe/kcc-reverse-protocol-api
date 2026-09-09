@@ -189,9 +189,16 @@ public sealed class KccConfig
     /// </summary>
     public int UtilizationRateMinutes { get; set; } = 5;
 
-    // Hinweis: dieses Fenster gilt für alle Tachos — UPH, RBG-Spiele/h und die
-    // Fördertechnik-Belegung werden daraus auf eine Stunde hochgerechnet. Die Verlaufskurven
-    // nutzen davon unabhängig UtilizationBucketMinutes.
+    /// <summary>
+    /// Eigenes Trailing-Fenster in Minuten für die Fördertechnik-Tachos (Belegung + Leistung der
+    /// Punkte ohne RBG-Verbindung). Ohne Angabe / <c>0</c> gilt <see cref="UtilizationRateMinutes"/>.
+    /// Getrennt einstellbar, weil Fördertechnik und RBG unterschiedlich träge reagieren.
+    /// </summary>
+    public int UtilizationConveyorRateMinutes { get; set; } = 5;
+
+    // Hinweis: die RBG-Tachos rechnen aus UtilizationRateMinutes hoch, die Fördertechnik-Tachos
+    // aus UtilizationConveyorRateMinutes. Die Verlaufskurven nutzen davon unabhängig
+    // UtilizationBucketMinutes.
 
     /// <summary>
     /// Ressourcenpunkte der Auslastungsauswertung, je Eintrag <c>{ "Name", "Group", "Label" }</c>.

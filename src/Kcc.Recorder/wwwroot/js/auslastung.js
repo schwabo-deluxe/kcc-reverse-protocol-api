@@ -173,6 +173,7 @@ function render(data) {
   $('target').value = data.targetUph;
   $('bucket').value = data.bucketMinutes;
   $('rate').value = data.rateMinutes;
+  $('rateFt').value = data.conveyorRateMinutes;
 
   // Eine UPH-Skala für alle Nicht-RBG-Kacheln — mindestens bis zum Richtwert.
   const peak = Math.max(
@@ -206,9 +207,11 @@ function render(data) {
     : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')} min`;
 
   // Mengen als Rate pro Stunde, hochgerechnet aus dem Trailing-Fenster der Tachos
-  // ("Tacho aus (min)" in der Kopfzeile) — dieselbe Basis wie Auslastung und Leistung.
-  const rateHours = Math.max(1e-9, data.rateMinutes / 60);
-  const perH = n => fmt(n / rateHours);
+  // ("Tacho RBG" bzw. "Tacho FT" in der Kopfzeile) — dieselbe Basis wie Auslastung und Leistung.
+  const rbgHours = Math.max(1e-9, data.rateMinutes / 60);
+  const ftHours = Math.max(1e-9, data.conveyorRateMinutes / 60);
+  const perHrbg = n => fmt(n / rbgHours);
+  const perHft = n => fmt(n / ftHours);
 
   // Fördertechnik: Durchsatz je Meldung pro Stunde + Transport- und Wartezeiten.
   const convRow = p => {
@@ -216,7 +219,7 @@ function render(data) {
     if (!c) return '';
     // Belegung und Ø Verweildauer stehen am Tacho darüber.
     return `<div class="rbg">
-      <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${perH(c.completed)}/${perH(c.orders)}/${perH(c.freeSignals)}</b> /h</span>
+      <span${help('ccount')}>Ankunft/Auftrag/Frei <b>${perHft(c.completed)}/${perHft(c.orders)}/${perHft(c.freeSignals)}</b> /h</span>
       <span${help('corderwait')}>Ø bis Auftrag <b>${dur(c.avgOrderWaitSeconds)}</b></span>
       <span${help('cdepart')}>Ø Abtransport <b>${dur(c.avgDepartSeconds)}</b></span>
       <span${help('cwait')}>Ø leer <b>${dur(c.avgIdleSeconds)}</b></span>
@@ -230,9 +233,9 @@ function render(data) {
     // Auslastung, Leistung und Leerlauf stehen an den Tachos darüber — hier nur, was
     // dort nicht hinpasst. Spiele und Ein/Aus als Rate pro Stunde.
     return `<div class="rbg">
-      <span${help('double')}>Doppelspiele <b>${perH(r.doubleCycles)}/h</b></span>
-      <span${help('single')}>Einzelspiele <b>${perH(r.singleCycles)}/h</b></span>
-      <span${help('inout')}>Ein/Aus <b>${perH(r.stores)}/${perH(r.retrievals)}</b> /h</span>
+      <span${help('double')}>Doppelspiele <b>${perHrbg(r.doubleCycles)}/h</b></span>
+      <span${help('single')}>Einzelspiele <b>${perHrbg(r.singleCycles)}/h</b></span>
+      <span${help('inout')}>Ein/Aus <b>${perHrbg(r.stores)}/${perHrbg(r.retrievals)}</b> /h</span>
       <span${help('avgdur')}>Ø Transport ein <b>${dur(r.avgStoreSeconds)}</b> / aus <b>${dur(r.avgRetrieveSeconds)}</b></span>
     </div>`;
   };
@@ -261,7 +264,7 @@ function render(data) {
     // Die Leistungszahl steht am Tacho — hier nur noch die Mengen, die er nicht zeigt.
     const head = r
       ? `${p.count} TSPORD`
-      : `${p.rateCount}/${data.rateMinutes}m · ${p.count} ges.`;
+      : `${p.rateCount}/${data.conveyorRateMinutes}m · ${p.count} ges.`;
     const c = p.conveyor;
     const dials = r
       ? `<div class="duo">
@@ -308,8 +311,10 @@ function render(data) {
       const max = members.reduce((a, p) => a + p.rbg.maxCyclesPerHour, 0);
       return `${fmt(cph)} / ${max} Spiele/h · ${g.count} TSPORD`;
     }
+    const rm = members.length && members.every(p => p.conveyor)
+      ? data.conveyorRateMinutes : data.rateMinutes;
     return `${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ` +
-      `${g.rateCount}/${data.rateMinutes}m · ${g.count} ges.`;
+      `${g.rateCount}/${rm}m · ${g.count} ges.`;
   };
 
   $('tiles').innerHTML = data.groups.map(g => `
@@ -343,7 +348,7 @@ function render(data) {
 
   $('meta').classList.remove('err');
   $('meta').textContent =
-    `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Verlauf gleitend ${data.bucketMinutes} min · Tachos aus ${data.rateMinutes} min` +
+    `${data.totalOrders} TSPORD in ${data.windowMinutes} min · Verlauf gleitend ${data.bucketMinutes} min · Tacho RBG ${data.rateMinutes} min / FT ${data.conveyorRateMinutes} min` +
     ` · Stand ${new Date().toLocaleTimeString('de-DE')}`;
 }
 
@@ -565,10 +570,12 @@ async function load() {
   const target = parseFloat($('target').value);
   const bucket = parseInt($('bucket').value, 10);
   const rate = parseInt($('rate').value, 10);
+  const rateFt = parseInt($('rateFt').value, 10);
   if (minutes > 0) query.set('minutes', Math.min(1440, minutes));
   if (target > 0) query.set('target', target);
   if (bucket > 0) query.set('bucket', Math.min(120, bucket));
   if (rate > 0) query.set('rate', Math.min(240, rate));
+  if (rateFt > 0) query.set('rateFt', Math.min(240, rateFt));
   try {
     const res = await fetch(API_BASE + '/api/utilization?' + query, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -579,7 +586,7 @@ async function load() {
   }
 }
 
-for (const id of ['minutes', 'target', 'bucket', 'rate']) $(id).addEventListener('change', load);
+for (const id of ['minutes', 'target', 'bucket', 'rate', 'rateFt']) $(id).addEventListener('change', load);
 load();
 // Häufiger abrufen: kleinere Schritte je Aktualisierung, die Überblendung macht daraus
 // eine fortlaufende Bewegung statt eines Sprungs pro Minute.

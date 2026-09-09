@@ -139,7 +139,7 @@ public static class ApiServer
                 "/api/point-history" => Ok(PointHistory(config,
                     RbgHours(q), RbgBucket(q, config), q("rp"), HistStamp(q, "from"), HistStamp(q, "to"))),
                 "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),
-                "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), SeriesStep(q, config))),
+                "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), ConveyorRate(q, config), SeriesStep(q, config))),
                 "/api/uph-history" => Ok(UphHistory(config, format,
                     HistHours(q), HistBucket(q, config), HistGroupBy(q), q("rp"),
                     HistStamp(q, "from"), HistStamp(q, "to"), HistRolling(q))),
@@ -167,14 +167,14 @@ public static class ApiServer
 
     static TelegramUtilization Utilization(
         KccConfig config, TelegramFormat format, int minutes, double target, int bucketMinutes,
-        int rateMinutes, int seriesStep)
+        int rateMinutes, int conveyorRateMinutes, int seriesStep)
     {
         using var store = new TelegramStore(config.Database);
         var w = ReadWindow(store, minutes);
         return TelegramUtilization.Compute(
             w.Rows, format, minutes, target, w.End, config.ResourcePoints, bucketMinutes, rateMinutes,
             config.DestinationLabels, config.GroupOrder, seriesStep, RbgOptions.From(config),
-            ConveyorOptions.From(config), config.CountTelegramType);
+            ConveyorOptions.From(config), config.CountTelegramType, conveyorRateMinutes);
     }
 
     static UphHistoryReport UphHistory(
@@ -353,6 +353,13 @@ public static class ApiServer
 
     static int Rate(Func<string, string?> q, KccConfig config) =>
         Clamp(q("rate"), fallback: config.UtilizationRateMinutes, min: 1, max: 240);
+
+    static int ConveyorRate(Func<string, string?> q, KccConfig config) =>
+        Clamp(q("rateFt"),
+            fallback: config.UtilizationConveyorRateMinutes > 0
+                ? config.UtilizationConveyorRateMinutes
+                : config.UtilizationRateMinutes,
+            min: 1, max: 240);
 
     static int SeriesStep(Func<string, string?> q, KccConfig config) =>
         Clamp(q("step"), fallback: config.UtilizationSeriesStepMinutes, min: 1, max: 30);

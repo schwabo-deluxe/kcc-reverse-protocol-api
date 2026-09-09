@@ -141,8 +141,11 @@ public sealed record TelegramUtilization
     /// <summary>Abtastschritt der Verlaufskurven in Minuten — ein Stützpunkt je Schritt.</summary>
     public required int SeriesStepMinutes { get; init; }
 
-    /// <summary>Trailing-Fenster in Minuten, aus dem <see cref="ResourcePointUtilization.Uph"/> hochgerechnet wird.</summary>
+    /// <summary>Trailing-Fenster in Minuten, aus dem die RBG-Tachos hochgerechnet werden.</summary>
     public required int RateMinutes { get; init; }
+
+    /// <summary>Trailing-Fenster in Minuten für die Fördertechnik-Tachos (Punkte ohne RBG-Verbindung).</summary>
+    public required int ConveyorRateMinutes { get; init; }
 
     public required IReadOnlyList<ResourcePointUtilization> Points { get; init; }
 
@@ -167,15 +170,18 @@ public sealed record TelegramUtilization
         int seriesStepMinutes = 1,
         RbgOptions? rbg = null,
         ConveyorOptions? conveyor = null,
-        string? countTelegramType = null)
+        string? countTelegramType = null,
+        int conveyorRateMinutes = 0)
     {
         var destMap = new DestinationMap(destinationLabels);
         var now = windowEnd;
         var rate = Math.Max(1, rateMinutes);
-        // Trailing-Fenster aller Kennzahlen: UPH, RBG-Spiele und Fördertechnik-Belegung werden
-        // daraus auf eine Stunde hochgerechnet, damit alle Tachos gleich schnell reagieren.
-        // Der Verlauf bleibt davon unberührt und zeigt weiter das ganze Fenster.
+        // Getrennte Trailing-Fenster: RBG-Tachos rechnen aus 'rate' hoch, Fördertechnik-Tachos
+        // aus 'convRate' (fällt ohne eigenen Wert auf 'rate' zurück). Der Verlauf bleibt von
+        // beiden unberührt und zeigt weiter das ganze Fenster.
+        var convRate = Math.Max(1, conveyorRateMinutes > 0 ? conveyorRateMinutes : rateMinutes);
         var rateFrom = now.AddMinutes(-rate);
+        var convRateFrom = now.AddMinutes(-convRate);
 
         // Nur Einträge mit Namen; je Name der erste gewinnt.
         var defs = (resourcePoints is { Count: > 0 } ? resourcePoints : DefaultResourcePoints)
@@ -195,6 +201,17 @@ public sealed record TelegramUtilization
             .ToList();
 
         var names = defs.Select(d => d.Name).ToList();
+
+        // Punkte ohne RBG-Verbindung sind Fördertechnikpunkte — sie bekommen das eigene
+        // Trailing-Fenster 'convRate' statt 'rate'.
+        var conveyorNames = new HashSet<string>(
+            conveyor is not null
+                ? defs.Where(d => string.IsNullOrWhiteSpace(d.Connection)).Select(d => d.Name)
+                : [],
+            StringComparer.OrdinalIgnoreCase);
+        DateTime RateFromFor(string name) => conveyorNames.Contains(name) ? convRateFrom : rateFrom;
+        double RateHoursFor(string name) => (conveyorNames.Contains(name) ? convRate : rate) / 60d;
+
         var messageCode = FieldIndex(format, "MessageCode");
         var resourcePoint = FieldIndex(format, "ResourcePoint");
         var errorCode = FieldIndex(format, "ErrorCode");
@@ -250,13 +267,12 @@ public sealed record TelegramUtilization
             var error = Field(fields, errorCode);
             stats[point] = (
                 current.Count + 1,
-                current.Recent + (telegram.DateTime > rateFrom ? 1 : 0),
+                current.Recent + (telegram.DateTime > RateFromFor(point) ? 1 : 0),
                 current.Errors + (error.Length > 0 && !RecordFilter.IsAllZero(error) ? 1 : 0),
                 current.Latest is { } latest && latest > telegram.DateTime ? latest : telegram.DateTime);
         }
 
         var winHours = winSteps * step / 60d;
-        var rateHours = rate / 60d;   // Basis: die letzten paar Minuten, auf 1 h hochgerechnet
 
         // Gleitende Summe über die letzten 'winSteps' Feinschritte, ein Stützpunkt je Schritt.
         List<UtilizationBucket> RollingSeries(int[] fine)
@@ -282,7 +298,7 @@ public sealed record TelegramUtilization
         {
             var name = d.Name;
             var s = stats[name];
-            var uph = s.Recent / rateHours;
+            var uph = s.Recent / RateHoursFor(name);
             var pointTarget = d.TargetUph is > 0 ? d.TargetUph.Value : targetUph;
 
             // Auslagerplatz mit RBG-Verbindung: die Spielauswertung ist die Kennzahl der Kachel
@@ -294,7 +310,7 @@ public sealed record TelegramUtilization
 
             // Fördertechnikpunkt (keine RBG-Verbindung): Belegung aus Ankunft und Verlassen.
             var conveyorStats = conveyor is not null && rbgStats is null
-                ? ConveyorReport.Compute(window, format, name, from, now, conveyor, bucketWidth, step, rateFrom)
+                ? ConveyorReport.Compute(window, format, name, from, now, conveyor, bucketWidth, step, convRateFrom)
                 : null;
 
             return new ResourcePointUtilization
@@ -341,7 +357,9 @@ public sealed record TelegramUtilization
             var members = defs.Where(d => d.GroupOrDefault == gName).Select(d => d.Name).ToList();
             var count = members.Sum(n => stats[n].Count);
             var recent = members.Sum(n => stats[n].Recent);
-            var uph = recent / rateHours;
+            // Reine Fördertechnik-Gruppe rechnet aus dem Fördertechnik-Fenster hoch, sonst aus 'rate'.
+            var grpHours = (members.Count > 0 && members.All(conveyorNames.Contains) ? convRate : rate) / 60d;
+            var uph = recent / grpHours;
             var sumBuckets = new int[fineCount];
             foreach (var n in members)
                 for (var i = 0; i < fineCount; i++)
@@ -373,6 +391,7 @@ public sealed record TelegramUtilization
             BucketMinutes = bucketWidth,
             SeriesStepMinutes = step,
             RateMinutes = rate,
+            ConveyorRateMinutes = convRate,
             Points = pointResults,
             Groups = groups,
         };
