@@ -45,8 +45,8 @@ public static class WallboardDashboard
 
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px;
                   padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
-          .t-name { font-size: clamp(11px, 1.25vh, 15px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-                    color: #cdd6e0; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .t-name { font-size: clamp(14px, 2vh, 22px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                    color: #e6e6e6; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
           /* Die Tachos (Wert im Bogen) füllen die freie Kachelhöhe, die Kurve ist klein und fix. */
@@ -56,9 +56,9 @@ public static class WallboardDashboard
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
 
-          .sub { flex: 0 0 auto; font-size: clamp(9px, 1.35vh, 12px); color: #9aa4b2; text-align: center;
+          .sub { flex: 0 0 auto; font-size: clamp(11px, 1.9vh, 17px); color: #9aa4b2; text-align: center;
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          .sub b { color: #e6e6e6; font-weight: 600; }
+          .sub b { color: #e6e6e6; font-weight: 700; }
 
           .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(22px, 5.5vh, 68px); overflow: visible; }
           /* preserveAspectRatio="none" streckt den Pfad ungleich — Strich sonst dick/verzerrt. */
