@@ -122,15 +122,18 @@ public static class WallboardDashboard
           };
           const [x1, y1] = pt(0, r), [x2, y2] = pt(Math.max(0.0001, f), r);
           const [mx, my] = pt(f, r);
-          const [t1x, t1y] = pt(Math.min(1, 100 / max), r + 8);
-          const [t2x, t2y] = pt(Math.min(1, 100 / max), r - 8);
+          // Marke bei 100 % nur zeigen, wenn die Skala darüber hinausreicht (Leistung).
+          const [t1x, t1y] = pt(100 / max, r + 8);
+          const [t2x, t2y] = pt(100 / max, r - 8);
+          const tick = max > 100
+            ? `<line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>`
+            : '';
           const val = f > 0
             ? `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round"/>`
             : '';
           return `<svg class="gauge" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid meet">
             <path class="track" d="M18 96 A82 82 0 0 1 182 96" fill="none" stroke-width="13" stroke-linecap="round"/>
-            ${val}
-            <line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>
+            ${val}${tick}
             <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="7.5" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
             <text x="100" y="86" text-anchor="middle" font-size="36" font-weight="800" fill="${stroke}"
                   style="font-variant-numeric:tabular-nums">${fmt(value)} %</text>
@@ -138,8 +141,10 @@ public static class WallboardDashboard
           </svg>`;
         }
 
-        const dial = (value, label, titleKey) =>
-          `<div class="gcell"${help(titleKey)}>${gauge(value, 150, label)}</div>`;
+        // max 100 für zeitbasierte Werte (Auslastung/Belegung, bei 100 % gedeckelt) — der Bogen
+        // ist dann bei 100 % voll. max 150 für die Leistung, die 100 % übersteigen kann.
+        const dial = (value, max, label, titleKey) =>
+          `<div class="gcell"${help(titleKey)}>${gauge(value, max, label)}</div>`;
 
         function spark(series, scaleMax, target, stroke) {
           const w = 240, h = 40, s = series || [];
@@ -165,21 +170,21 @@ public static class WallboardDashboard
 
           let gauges, sub, series, sMax, sTarget, stroke;
           if (r) {
-            gauges = dial(r.busyPercent, 'Auslastung', 'busy') + dial(r.percent, 'Leistung', 'load');
+            gauges = dial(r.busyPercent, 100, 'Auslastung', 'busy') + dial(r.percent, 150, 'Leistung', 'load');
             sub = `DS/ES <b>${rh(r.doubleCycles)}</b>/<b>${rh(r.singleCycles)}</b>·h · Ein/Aus <b>${rh(r.stores)}</b>/<b>${rh(r.retrievals)}</b> · Leerlauf <b>${dur(r.idleSeconds)}</b>`;
             series = r.series;
             sMax = Math.max(r.maxCyclesPerHour * 1.15, 1, ...r.series.map(b => b.uph * 1.1));
             sTarget = r.maxCyclesPerHour;
             stroke = color(r.percent);
           } else if (cv) {
-            gauges = dial(cv.busyPercent, 'Belegung', 'cbusy') + dial(p.percent, 'Leistung', 'load');
+            gauges = dial(cv.busyPercent, 100, 'Belegung', 'cbusy') + dial(p.percent, 150, 'Leistung', 'load');
             sub = `Ø belegt <b>${dur(cv.avgOccupiedSeconds)}</b> · Ø leer <b>${dur(cv.avgIdleSeconds)}</b> · <b>${fh(cv.orders)}</b>/h`;
             series = p.series;
             sMax = Math.max(p.targetUph, 1, ...p.series.map(b => b.uph));
             sTarget = p.targetUph;
             stroke = color(p.percent);
           } else {
-            gauges = dial(p.percent, 'Auslastung', null);
+            gauges = dial(p.percent, 150, 'Auslastung', null);
             sub = `<b>${fmt(p.uph)}</b> / ${fmt(p.targetUph)} UPH`;
             series = p.series;
             sMax = Math.max(p.targetUph, 1, ...p.series.map(b => b.uph));

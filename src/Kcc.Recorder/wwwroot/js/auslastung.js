@@ -39,14 +39,19 @@ const gArc = (frac, r) => {
 const gPrev = new Map();
 
 function gauge(value, max, stroke, cls, key) {
-  const [t1x, t1y] = GPT(Math.min(1, 100 / max), 88);
-  const [t2x, t2y] = GPT(Math.min(1, 100 / max), 72);
+  // Marke bei 100 % nur, wenn die Skala darüber hinausgeht (Leistung). Bei gedeckelten
+  // Werten (max 100) füllt der Bogen bei 100 % bis zum Ende.
+  const [t1x, t1y] = GPT(100 / max, 88);
+  const [t2x, t2y] = GPT(100 / max, 72);
+  const tick = max > 100
+    ? `<line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>`
+    : '';
   return `<svg class="gauge ${cls || ''}" viewBox="0 0 200 104"
                data-g-key="${key || ''}" data-g-value="${value}" data-g-max="${max}">
-    <path class="track" d="${gArc(1, 80)}" fill="none" stroke-width="13" stroke-linecap="round"/>
-    <path class="val" d="" fill="none" stroke="${stroke}" stroke-width="6" stroke-linecap="round"/>
-    <line class="tick" x1="${t1x.toFixed(1)}" y1="${t1y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" stroke-width="2.5"/>
-    <circle class="needle" r="7" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
+    <path class="track" d="${gArc(1, 80)}" fill="none" stroke-width="15" stroke-linecap="round"/>
+    <path class="val" d="" fill="none" stroke="${stroke}" stroke-width="10" stroke-linecap="round"/>
+    ${tick}
+    <circle class="needle" r="8" fill="${stroke}" stroke="#14171c" stroke-width="2.5"/>
   </svg>`;
 }
 
@@ -242,9 +247,9 @@ function render(data) {
 
   // Ein Tacho mit Beschriftung darunter. 'key' bindet ihn über die Aktualisierung
   // hinweg an denselben Punkt, damit der Zeiger überblenden kann statt zu springen.
-  const dial = (value, label, sub, titleKey, key) => `
+  const dial = (value, max, label, sub, titleKey, key) => `
     <div class="gauge-col"${help(titleKey)}>
-      ${gauge(value, 150, color(value), '', key)}
+      ${gauge(value, max, color(value), '', key)}
       <div class="pct" data-g-txt="${key}" style="color:${color(value)}">${fmt(value)} %</div>
       <div class="gcap">${label}</div>
       ${sub ? `<div class="gsub">${sub}</div>` : ''}
@@ -270,15 +275,15 @@ function render(data) {
     const c = p.conveyor;
     const dials = r
       ? `<div class="duo">
-           ${dial(r.busyPercent, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
-           ${dial(r.percent, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
+           ${dial(r.busyPercent, 100, 'Auslastung', `Leerlauf ${dur(r.idleSeconds)}`, 'busy', `${p.resourcePoint}:busy`)}
+           ${dial(r.percent, 150, 'Leistung', `${fmt(r.cyclesPerHour)} / ${r.maxCyclesPerHour} Spiele/h`, 'load', `${p.resourcePoint}:load`)}
          </div>`
       : c
       ? `<div class="duo">
-           ${dial(c.busyPercent, 'Belegung', `Ø belegt ${dur(c.avgOccupiedSeconds)}`, 'cbusy', `${p.resourcePoint}:busy`)}
-           ${dial(p.percent, 'Leistung', `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH`, 'load', `${p.resourcePoint}:uph`)}
+           ${dial(c.busyPercent, 100, 'Belegung', `Ø belegt ${dur(c.avgOccupiedSeconds)}`, 'cbusy', `${p.resourcePoint}:busy`)}
+           ${dial(p.percent, 150, 'Leistung', `${fmt(p.uph)} / ${fmt(p.targetUph)} UPH`, 'load', `${p.resourcePoint}:uph`)}
          </div>`
-      : dial(p.percent, '% vom Richtwert', '', null, `${p.resourcePoint}:uph`);
+      : dial(p.percent, 150, '% vom Richtwert', '', null, `${p.resourcePoint}:uph`);
     return `
     <div class="tile" data-rp="${p.resourcePoint}">
       <div class="tile-head">
