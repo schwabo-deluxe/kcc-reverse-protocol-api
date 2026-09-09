@@ -313,6 +313,14 @@ public sealed class KccConfig
     /// </summary>
     public int RbgHistoryRetentionDays { get; set; } = 365;
 
+    /// <summary>
+    /// Aufbewahrung der Ressourcenpunkt-Langzeitreihe (Belegung &amp; Leistung, zweiter Chart auf
+    /// <c>/verlauf</c>) in Tagen (Standard <c>365</c>). Aufgezeichnet werden nur die unter
+    /// <see cref="ResourcePoints"/> angelegten Punkte; die Rasterzeilen sind winzig (eine je
+    /// Raster und Punkt). <c>0</c>/negativ = unbegrenzt.
+    /// </summary>
+    public int PointHistoryRetentionDays { get; set; } = 365;
+
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;
 

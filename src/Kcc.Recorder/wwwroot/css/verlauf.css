@@ -2,7 +2,8 @@
 .ranges button { background: #10141a; color: #9aa4b2; border: 1px solid #2a2f37; border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
 .ranges button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 
-#area { height: 340px; }
+#area { height: 510px; }
+#rpChart { height: 340px; }
 
 .ratio { display: flex; width: 100%; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid #2a2f37; }
 .ratio span { display: block; height: 100%; }

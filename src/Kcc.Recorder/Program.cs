@@ -290,7 +290,8 @@ int UphRebuild(KccConfig config)
 HistorySampler NewUphSampler(KccConfig config, TelegramStore store) =>
     new(store, ResolveFormat(config), config.ResourcePoints, config.DestinationLabels,
         config.UphHistoryIntervalMinutes, config.UphHistoryRetentionDays, Log,
-        RbgOptions.From(config), config.RbgHistoryRetentionDays);
+        RbgOptions.From(config), config.RbgHistoryRetentionDays,
+        ConveyorOptions.From(config), config.PointHistoryRetentionDays);
 
 int Prune(KccConfig config, CommandLine cli)
 {
@@ -443,9 +444,10 @@ static void PrintUsage() => Console.WriteLine(
               [--json]
       backfill --from-id N [--to-id M] Ältere Telegramme nachladen
       prune   [--days N]               Telegramme älter als N Tage löschen (Standard: RetentionDays)
-      uph-rebuild                      UPH- und RBG-Historie (/verlauf, /rbg) aus den Telegrammen
-                                       neu aufbauen — nach 'backfill' oder Konfig-Änderung.
-                                       RBG-Rasterzeilen vor dem ältesten Telegramm bleiben erhalten
+      uph-rebuild                      UPH-, RBG- und Ressourcenpunkt-Historie (/verlauf, /rbg)
+                                       aus den Telegrammen neu aufbauen — nach 'backfill' oder
+                                       Konfig-Änderung. RBG- und Ressourcenpunkt-Rasterzeilen vor
+                                       dem ältesten Telegramm bleiben erhalten
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
       dump-dashboards [--out verz]     dashboard/kontur/wand.html + wwwroot schreiben

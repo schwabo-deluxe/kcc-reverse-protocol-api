@@ -216,6 +216,93 @@ public class HistorySamplerTests : IDisposable
         Assert.Contains(rows, r => r.Bucket == day.AddHours(8));       // neu verdichtet
     }
 
+    // ---- Ressourcenpunkt-Langzeitaufzeichnung (Belegung & Leistung) -----------------------------
+
+    static int FieldOffset(string name)
+    {
+        var p = 0;
+        foreach (var f in TelegramFormat.Default.Fields)
+        {
+            if (string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))
+                return p;
+            p += f.Length;
+        }
+        throw new ArgumentException(name);
+    }
+
+    static string ConvData(string mc, string rp)
+    {
+        var buf = new char[TelegramFormat.Default.Length];
+        Array.Fill(buf, '.');
+        void Put(string field, string v)
+        {
+            var a = FieldOffset(field);
+            for (var i = 0; i < v.Length && a + i < buf.Length; i++) buf[a + i] = v[i];
+        }
+        Put("TelegramType", "DM");
+        Put("MessageCode", mc);
+        Put("ResourcePoint", rp);
+        return new string(buf);
+    }
+
+    static HistorySampler PointSampler(TelegramStore store, int pointRetentionDays = 365) =>
+        new(store, TelegramFormat.Default,
+            [new ResourcePointConfig { Name = "EA21", TargetUph = 60 }],
+            null, intervalMinutes: 60, retentionDays: 28, _ => { },
+            rbg: null, rbgRetentionDays: 0,
+            ConveyorOptions.From(new KccConfig()), pointRetentionDays);
+
+    Telegram Conv(long id, DateTime at, string mc, string rp) =>
+        new(id, at, TelegramDirection.FromPlc, "L1", ConvData(mc, rp), null);
+
+    [Fact]
+    public void Verdichtet_Belegzeit_und_Auftraege_je_Ressourcenpunkt()
+    {
+        using var store = new TelegramStore(_path);
+        var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        store.Insert(
+        [
+            // Ankunft 08:10, Auftrag 08:20, Verlassen 08:30 → 20 min = 1200 s belegt im 08:00-Raster.
+            Conv(1, day.AddHours(8).AddMinutes(10), "ENDTSP", "EA21"),
+            Conv(2, day.AddHours(8).AddMinutes(20), "TSPORD", "EA21"),
+            Conv(3, day.AddHours(8).AddMinutes(30), "RPFREE", "EA21"),
+            Conv(4, day.AddHours(9).AddMinutes(5), "ENDTSP", "EA21"),   // laufendes Raster, unvollständig
+        ]);
+
+        PointSampler(store).SamplePointsNow();
+
+        var rows = store.ReadPointSamples(day, day.AddDays(1));
+        var r = Assert.Single(rows);
+        Assert.Equal(day.AddHours(8), r.Bucket);
+        Assert.Equal("EA21", r.ResourcePoint);
+        Assert.Equal(1200, r.BusySeconds, 0);
+        Assert.Equal(1, r.Orders);   // ein TSPORD
+    }
+
+    [Fact]
+    public void Rebuild_laesst_Ressourcenpunkt_Zeilen_vor_den_Rohtelegrammen_stehen()
+    {
+        using var store = new TelegramStore(_path);
+        var day = new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Unspecified);
+
+        var old = day.AddDays(-120);
+        store.ReplacePointSamplesFrom(old,
+            [new PointSampleRow { Bucket = old, ResourcePoint = "EA21", BusySeconds = 500, Orders = 9 }]);
+
+        store.Insert(
+        [
+            Conv(1, day.AddHours(8), "ENDTSP", "EA21"),
+            Conv(2, day.AddHours(8).AddMinutes(2), "RPFREE", "EA21"),
+            Conv(3, day.AddHours(9).AddMinutes(1), "ENDTSP", "EA21"),   // schiebt den rechten Rand über 08:00
+        ]);
+
+        PointSampler(store).Rebuild();
+
+        var rows = store.ReadPointSamples(old.AddDays(-1), day.AddDays(1));
+        Assert.Equal(9, rows.Single(r => r.Bucket == old).Orders);          // Langzeitreihe überlebt
+        Assert.Contains(rows, r => r.Bucket == day.AddHours(8));            // neu verdichtet
+    }
+
     public void Dispose()
     {
         foreach (var file in new[] { _path, _path + "-wal", _path + "-shm" })

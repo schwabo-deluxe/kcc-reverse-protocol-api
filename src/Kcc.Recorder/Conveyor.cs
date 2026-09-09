@@ -157,6 +157,20 @@ public static class ConveyorReport
         };
     }
 
+    /// <summary>
+    /// Belegungsintervalle (Ankunft <c>ENDTSP</c> → Verlassen <c>RPFREE</c>) des Punkts im
+    /// Fenster, auf <c>[from, to)</c> beschnitten. Grundlage der Ressourcenpunkt-Langzeitreihe
+    /// (<see cref="PointSampleRow"/>) — dort wird die Belegzeit den Rastern anteilig zugeschlagen.
+    /// </summary>
+    public static IReadOnlyList<(DateTime Start, DateTime End)> OccupancySpans(
+        IReadOnlyList<Telegram> window, TelegramFormat format, string resourcePoint,
+        DateTime from, DateTime to, ConveyorOptions options)
+    {
+        var events = Events(window, format, resourcePoint, options);
+        var (spans, _, _, _) = Walk(events, from, to);
+        return spans;
+    }
+
     /// <summary>Liest die Ereignisse des Punkts und führt die DM/AK-Doppel zusammen.</summary>
     static List<Ev> Events(
         IReadOnlyList<Telegram> window, TelegramFormat format, string resourcePoint,

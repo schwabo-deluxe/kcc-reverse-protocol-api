@@ -136,6 +136,8 @@ public static class ApiServer
                 "/rbg" or "/rbg.html" => StaticPage("rbg.html"),
                 "/api/rbg-history" => Ok(RbgHistory(config,
                     RbgHours(q), RbgBucket(q, config), HistStamp(q, "from"), HistStamp(q, "to"))),
+                "/api/point-history" => Ok(PointHistory(config,
+                    RbgHours(q), RbgBucket(q, config), q("rp"), HistStamp(q, "from"), HistStamp(q, "to"))),
                 "/api/kontur" => Ok(Contour(config, format, ContourMinutes(q, config))),
                 "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), SeriesStep(q, config))),
                 "/api/uph-history" => Ok(UphHistory(config, format,
@@ -221,6 +223,28 @@ public static class ApiServer
         return RbgHistoryReport.Compute(
             store.ReadRbgSamples(start, end), start, end, bucketMinutes,
             config.ResourcePoints, RbgCapacity.From(config));
+    }
+
+    /// <summary>
+    /// Langzeitverlauf von Belegung und Leistung je konfiguriertem Ressourcenpunkt aus der
+    /// eigenen Rasterreihe (<c>PointHistoryRetentionDays</c>), unabhängig von den Rohtelegrammen.
+    /// Speist den zweiten Chart auf <c>/verlauf</c> — auch für Fördertechnikpunkte ohne RBG.
+    /// </summary>
+    static PointHistoryReport PointHistory(
+        KccConfig config, int hours, int bucketMinutes, string? resourcePoint, DateTime? from, DateTime? to)
+    {
+        using var store = new TelegramStore(config.Database);
+        var newest = store.MaxPointBucket() ?? store.MaxTelegramTime()
+            ?? DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+
+        var end = to ?? newest.AddMinutes(Math.Max(1, config.UphHistoryIntervalMinutes));
+        var start = from ?? end.AddHours(-hours);
+        if (start >= end)
+            start = end.AddHours(-1);
+
+        return PointHistoryReport.Compute(
+            store.ReadPointSamples(start, end), start, end, bucketMinutes,
+            config.ResourcePoints, config.UtilizationTargetUph, resourcePoint);
     }
 
     static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)

@@ -112,34 +112,45 @@ function drawArea(data) {
   bindDragZoom(chart, $('area'));
 }
 
-// Zweiter Chart: Belegung (Fläche) und Leistung (Linie) des dem Ressourcenpunkt
-// zugeordneten RBG über denselben Zeitraum. Quelle ist die RBG-Langzeitreihe
-// (/api/rbg-history), die unabhängig von den Rohtelegrammen zurückreicht.
+// Zweiter Chart: Belegung (Fläche) und Leistung (Linie) des gewählten Ressourcenpunkts über
+// denselben Zeitraum. Ist dem Punkt ein RBG zugeordnet, kommt die Reihe aus /api/rbg-history
+// (Leistung gegen die Spielkapazität); sonst — auch für Fördertechnikpunkte — aus der
+// Ressourcenpunkt-Langzeitreihe /api/point-history (Leistung = Aufträge/h gegen den Richtwert).
+// Beide reichen unabhängig von den Rohtelegrammen zurück.
 const C_BUSY = '#4fa3ff', C_LOAD = '#ffb454', C_IDLE = '#3a4150';
 const rbgBucketFor = h => h <= 24 ? 5 : h <= 72 ? 15 : h <= 168 ? 30 : h <= 672 ? 240 : 1440;
 
 async function loadRpChart() {
   const rp = $('rp').value;
-  const conn = rp && current && current.resourcePointConnections
+  if (!rp) { $('rpCard').hidden = true; return; }
+  const conn = current && current.resourcePointConnections
     ? current.resourcePointConnections[rp] : null;
-  if (!conn) { $('rpCard').hidden = true; return; }
 
-  const q = new URLSearchParams({ hours: hours, bucket: rbgBucketFor(hours) });
+  const q = new URLSearchParams({ hours: hours, bucket: rbgBucketFor(hours), rp });
+  const path = conn ? '/api/rbg-history?' : '/api/point-history?';
   let d;
   try {
-    const res = await fetch(API_BASE + '/api/rbg-history?' + q, { cache: 'no-store' });
+    const res = await fetch(API_BASE + path + q, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     d = await res.json();
   } catch { $('rpCard').hidden = true; return; }
 
   const b = d.buckets || [];
-  const has = d.connections && d.connections.includes(conn);
-  const total = d.totals && d.totals.find(t => t.connection === conn);
-  const label = total && total.label && total.label !== conn ? `${total.label} · ${conn}` : conn;
-  $('h-rp').textContent = `Belegung & Leistung — ${label}`;
+  const key = conn || rp;
+  const idKey = conn ? 'connection' : 'resourcePoint';
+  const list = conn ? d.connections : d.resourcePoints;
+  const has = list && list.includes(key) && b.length;
+  const total = d.totals && d.totals.find(t => t[idKey] === key);
+  const label = total && total.label && total.label !== key ? `${total.label} · ${key}` : key;
+  $('h-rp').textContent = conn
+    ? `Belegung & Leistung — ${label} (RBG)`
+    : `Belegung & Leistung — ${label}`;
   $('rpCard').hidden = false;
 
   if (!rpChart) rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });
+
+  const busy = b.map(pt => [pt.at, (pt.busyPercent && pt.busyPercent[key]) ?? 0]);
+  const load = b.map(pt => [pt.at, (pt.loadPercent && pt.loadPercent[key]) ?? 0]);
 
   rpChart.setOption({
     ...baseOption(),
@@ -150,19 +161,16 @@ async function loadRpChart() {
     legend: { top: 0, right: 8, left: 52, textStyle: { color: '#cdd6e0', fontSize: 11 }, inactiveColor: '#5a6373' },
     tooltip: { trigger: 'axis', confine: true, backgroundColor: '#10141a', borderColor: '#2a2f37',
       textStyle: { color: '#e6e6e6', fontSize: 12 }, valueFormatter: v => fmt(v) + ' %' },
-    graphic: has && b.length ? [] : [{ type: 'text', left: 'center', top: 'middle',
-      style: { text: 'keine RBG-Historie im Zeitraum', fill: '#7a8494', fontSize: 13 } }],
+    graphic: has ? [] : [{ type: 'text', left: 'center', top: 'middle',
+      style: { text: 'keine Historie im Zeitraum', fill: '#7a8494', fontSize: 13 } }],
     series: [
       { name: 'Leerlauf', type: 'line', showSymbol: false, lineStyle: { opacity: 0 }, color: C_IDLE,
         areaStyle: { origin: 100, color: C_IDLE, opacity: 0.4 },
-        tooltip: { valueFormatter: v => fmt(100 - v) + ' % frei' },
-        data: b.map(pt => [pt.at, pt.busyPercent[conn] ?? 0]) },
+        tooltip: { valueFormatter: v => fmt(100 - v) + ' % frei' }, data: busy },
       { name: 'Belegung', type: 'line', showSymbol: false, color: C_BUSY,
-        lineStyle: { width: 1.6 }, areaStyle: { color: C_BUSY, opacity: 0.12 },
-        data: b.map(pt => [pt.at, pt.busyPercent[conn] ?? 0]) },
+        lineStyle: { width: 1.6 }, areaStyle: { color: C_BUSY, opacity: 0.12 }, data: busy },
       { name: 'Leistung', type: 'line', showSymbol: false, color: C_LOAD,
-        lineStyle: { width: 1.6 },
-        data: b.map(pt => [pt.at, pt.loadPercent[conn] ?? 0]) },
+        lineStyle: { width: 1.6 }, data: load },
     ],
   }, { notMerge: true });
   bindDragZoom(rpChart, $('rpChart'));

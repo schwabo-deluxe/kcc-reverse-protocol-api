@@ -67,6 +67,19 @@ public sealed class TelegramStore : IDisposable
             );
             """);
         Execute("CREATE INDEX IF NOT EXISTS ix_rbg_samples_bucket ON rbg_samples(Bucket);");
+        // Langzeitreihe je konfiguriertem Ressourcenpunkt (Belegzeit + Auftragsmenge) für den
+        // zweiten Chart auf /verlauf. Neue Tabelle — Bestandsdatenbanken bekommen sie hier und
+        // füllen sie über den HistorySampler bzw. 'kcc uph-rebuild' rückwirkend auf.
+        Execute("""
+            CREATE TABLE IF NOT EXISTS point_samples (
+                Bucket        TEXT    NOT NULL,
+                ResourcePoint TEXT    NOT NULL,
+                BusySeconds   REAL    NOT NULL,
+                Orders        INTEGER NOT NULL,
+                PRIMARY KEY (Bucket, ResourcePoint)
+            );
+            """);
+        Execute("CREATE INDEX IF NOT EXISTS ix_point_samples_bucket ON point_samples(Bucket);");
 
         // Bestandsdatenbanken tragen die Spalten noch unter früheren Namen. Umbenennen statt
         // neu anlegen — die RBG-Langzeitreihe reicht weiter zurück als die Rohtelegramme.
@@ -467,6 +480,104 @@ public sealed class TelegramStore : IDisposable
         return command.ExecuteScalar() is string s && s.Length > 0
             ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
             : null;
+    }
+
+    /// <summary>Jüngstes bereits verdichtetes Ressourcenpunkt-Raster, oder <c>null</c> solange nichts verdichtet wurde.</summary>
+    public DateTime? MaxPointBucket()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MAX(Bucket) FROM point_samples;";
+        return command.ExecuteScalar() is string s && s.Length > 0
+            ? DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+            : null;
+    }
+
+    public long PointSampleCount()
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM point_samples;";
+        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Ersetzt alle Ressourcenpunkt-Rasterzeilen ab <paramref name="from"/> (einschließlich) durch
+    /// <paramref name="rows"/>. Ältere Zeilen bleiben unangetastet — die Aufzeichnung überlebt
+    /// einen Neuaufbau, der weiter zurück keine Rohtelegramme mehr findet.
+    /// </summary>
+    public void ReplacePointSamplesFrom(DateTime from, IEnumerable<PointSampleRow> rows)
+    {
+        using var transaction = _connection.BeginTransaction();
+
+        using (var delete = _connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM point_samples WHERE Bucket >= $from;";
+            delete.Parameters.AddWithValue("$from", Stamp(from));
+            delete.ExecuteNonQuery();
+        }
+
+        using (var insert = _connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO point_samples (Bucket, ResourcePoint, BusySeconds, Orders)
+                VALUES ($bucket, $point, $busy, $orders)
+                ON CONFLICT(Bucket, ResourcePoint) DO UPDATE SET
+                    BusySeconds = excluded.BusySeconds, Orders = excluded.Orders;
+                """;
+            var bucket = insert.Parameters.Add("$bucket", SqliteType.Text);
+            var point = insert.Parameters.Add("$point", SqliteType.Text);
+            var busy = insert.Parameters.Add("$busy", SqliteType.Real);
+            var orders = insert.Parameters.Add("$orders", SqliteType.Integer);
+
+            foreach (var row in rows)
+            {
+                bucket.Value = Stamp(row.Bucket);
+                point.Value = row.ResourcePoint;
+                busy.Value = row.BusySeconds;
+                orders.Value = row.Orders;
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        transaction.Commit();
+    }
+
+    /// <summary>Löscht Ressourcenpunkt-Rasterzeilen vor dem Stichtag. Gibt die Anzahl zurück.</summary>
+    public int DeletePointSamplesOlderThan(DateTime cutoffExclusive)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM point_samples WHERE Bucket < $cutoff;";
+        command.Parameters.AddWithValue("$cutoff", Stamp(cutoffExclusive));
+        return command.ExecuteNonQuery();
+    }
+
+    /// <summary>Ressourcenpunkt-Rasterzeilen im Halbbereich <c>[from, to)</c>, aufsteigend.</summary>
+    public IReadOnlyList<PointSampleRow> ReadPointSamples(DateTime from, DateTime to)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT Bucket, ResourcePoint, BusySeconds, Orders FROM point_samples
+            WHERE Bucket >= $from AND Bucket < $to
+            ORDER BY Bucket;
+            """;
+        command.Parameters.AddWithValue("$from", Stamp(from));
+        command.Parameters.AddWithValue("$to", Stamp(to));
+
+        var list = new List<PointSampleRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(new PointSampleRow
+            {
+                Bucket = DateTime.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind),
+                ResourcePoint = reader.GetString(1),
+                BusySeconds = reader.GetDouble(2),
+                Orders = reader.GetInt32(3),
+            });
+        }
+        return list;
     }
 
     void Execute(string sql)
