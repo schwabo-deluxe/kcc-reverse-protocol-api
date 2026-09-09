@@ -63,10 +63,29 @@ function paintGauge(svg, value, max) {
 }
 
 // Blendet alle Tachos (und ihre Prozentzahl) vom letzten auf den neuen Wert über.
-function tweenGauges(ms) {
+// Kleine Sprünge kriechen langsam (SLOW), große laufen zügig durch (FAST) — dazwischen linear.
+const TWEEN_SLOW = 10000, TWEEN_FAST = 1500;
+const TWEEN_SMALL = 3, TWEEN_BIG = 30;   // Prozentpunkte Wertänderung
+function tweenDurationFor(maxDelta) {
+  const t = Math.min(1, Math.max(0, (maxDelta - TWEEN_SMALL) / (TWEEN_BIG - TWEEN_SMALL)));
+  return Math.round(TWEEN_SLOW + (TWEEN_FAST - TWEEN_SLOW) * t);
+}
+
+// Zusätzliche Glättung: der rohe Wert je Abruf springt (kurzes Trailing-Fenster, wenige
+// Ereignisse). Ein exponentieller gleitender Mittelwert dämpft den Sprung, bevor überblendet
+// wird — die Folge der Ziele wird eine weiche Kurve statt einer Treppe. Kleines Alpha = glatter,
+// aber träger; der Zeiger läuft dem echten Wert dann etwas hinterher.
+const TWEEN_ALPHA = 0.45;
+const gSmooth = new Map();
+
+function tweenGauges() {
   const items = [...document.querySelectorAll('svg.gauge[data-g-value]')].map(el => {
     const key = el.dataset.gKey;
-    const to = parseFloat(el.dataset.gValue) || 0;
+    const raw = parseFloat(el.dataset.gValue) || 0;
+    const to = key
+      ? (gSmooth.has(key) ? gSmooth.get(key) + (raw - gSmooth.get(key)) * TWEEN_ALPHA : raw)
+      : raw;
+    if (key) gSmooth.set(key, to);
     return {
       el, key, to,
       max: parseFloat(el.dataset.gMax) || 100,
@@ -93,7 +112,11 @@ function tweenGauges(ms) {
   const remember = () => { for (const it of items) if (it.key) gPrev.set(it.key, it.to); };
 
   // Beim ersten Aufbau (oder ohne Bewegung) direkt zeichnen statt zu animieren.
-  if (!items.some(it => Math.abs(it.to - it.from) > 0.05)) { paint(1); remember(); return; }
+  const maxDelta = Math.max(...items.map(it => Math.abs(it.to - it.from)));
+  if (maxDelta <= 0.05) { paint(1); remember(); return; }
+
+  // Dauer nach der größten Wertänderung aller Tachos: kleine Sprünge langsam, große zügig.
+  const ms = tweenDurationFor(maxDelta);
 
   // Sofort den Ausgangszustand zeichnen: das frische SVG hat noch keinen Bogen.
   paint(0);
@@ -310,7 +333,7 @@ function render(data) {
         <td>${p.latestAt ? new Date(p.latestAt).toLocaleTimeString('de-DE') : '–'}</td>
       </tr>`).join('')}`).join('');
 
-  tweenGauges(10000);
+  tweenGauges();
   layoutTiles();
 
   $('meta').classList.remove('err');
