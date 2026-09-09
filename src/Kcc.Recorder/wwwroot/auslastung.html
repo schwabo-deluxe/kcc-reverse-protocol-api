@@ -14,14 +14,14 @@
 <header>
   <h1>Auslastung (TSPORD)</h1>
   <label>Fenster (min) <input type="number" id="minutes" min="1" max="1440" title="Zeitraum der Verlaufskurven. Standard: UtilizationWindowMinutes"></label>
-  <label>Richtwert (UPH) <input type="number" id="target" min="1" title="Bezugsgröße für Punkte ohne eigenen TargetUph. Standard: UtilizationTargetUph"></label>
-  <label>Glättung (min) <input type="number" id="bucket" min="1" max="120" title="Breite des gleitenden Fensters der Verlaufskurve. Standard: UtilizationBucketMinutes"></label>
+  <label>Richtwert (UPH) <input type="number" id="target" min="1" title="Bezug für Punkte ohne eigenen TargetUph. Standard: UtilizationTargetUph"></label>
+  <label>Glättung (min) <input type="number" id="bucket" min="1" max="120" title="Fensterbreite der Verlaufskurve. Standard: UtilizationBucketMinutes"></label>
   <label>Tacho RBG (min) <input type="number" id="rate" min="1" max="240"
-    title="Trailing-Fenster der RBG-Tachos (Auslastung, Leistung, Spiele/h), auf 1 h hochgerechnet. Klein = reaktiv und sprunghaft, groß = träge und ruhig. Standard: UtilizationSRMRateMinutes"></label>
+    title="Trailing-Fenster der RBG-Tachos. Standard: UtilizationSRMRateMinutes"></label>
   <label>Tacho FT (min) <input type="number" id="rateFt" min="1" max="240"
-    title="Dasselbe für die Fördertechnik-Tachos (Punkte ohne RBG-Verbindung). Standard: UtilizationConveyorRateMinutes"></label>
+    title="Trailing-Fenster der Fördertechnik-Tachos. Standard: UtilizationConveyorRateMinutes"></label>
   <button type="button" class="hbtn" id="arrange"
-    title="Kacheln frei anordnen und skalieren; wird pro Browser gespeichert">Anordnen</button>
+    title="Kacheln anordnen und skalieren; pro Browser gespeichert">Anordnen</button>
   <button type="button" class="hbtn" id="resetLayout" hidden>Anordnung zurücksetzen</button>
   <div class="meta" id="meta">lädt …</div>
 </header>
