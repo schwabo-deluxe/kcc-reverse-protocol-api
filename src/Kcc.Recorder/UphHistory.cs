@@ -86,6 +86,13 @@ public sealed record UphHistoryReport
     /// <summary>Ressourcenpunkte, die im Fenster vorkommen (aufsteigend) — für die Auswahl.</summary>
     public required IReadOnlyList<string> ResourcePoints { get; init; }
 
+    /// <summary>
+    /// Ressourcenpunkt → zugeordnete RBG-Verbindung (nur Punkte mit gesetztem
+    /// <see cref="ResourcePointConfig.Connection"/>). Für diese lässt sich in <c>/verlauf</c>
+    /// zusätzlich der Langzeitverlauf von Belegung und Leistung aus <c>/api/rbg-history</c> zeigen.
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> ResourcePointConnections { get; init; }
+
     /// <summary>Reihenschlüssel im Fenster, absteigend nach Menge — die Reihenfolge der Bänder.</summary>
     public required IReadOnlyList<string> Keys { get; init; }
 
@@ -109,6 +116,11 @@ public sealed record UphHistoryReport
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
             .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().DisplayLabel, StringComparer.OrdinalIgnoreCase);
+
+        var rpConnections = (resourcePoints ?? [])
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Connection))
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Connection!.Trim(), StringComparer.OrdinalIgnoreCase);
 
         var byResourcePoint = groupBy == UphHistoryGroupBy.ResourcePoint;
         Func<UphSampleRow, string> keyOf = byResourcePoint ? r => r.ResourcePoint : r => r.Destination;
@@ -218,6 +230,7 @@ public sealed record UphHistoryReport
             GroupBy = byResourcePoint ? "resourcePoint" : "destination",
             ResourcePoint = rp,
             ResourcePoints = points.ToList(),
+            ResourcePointConnections = rpConnections,
             Keys = keyOrder,
             Buckets = buckets,
             Totals = totals,

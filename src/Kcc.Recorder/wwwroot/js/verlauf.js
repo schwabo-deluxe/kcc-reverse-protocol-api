@@ -24,13 +24,19 @@ function bucketFor(h) {
 }
 
 const chart = echarts.init($('area'), null, { renderer: 'canvas' });
-addEventListener('resize', () => chart.resize());
+let rpChart = null;   // zweiter Chart (Belegung & Leistung), erst bei Auswahl eines Ressourcenpunkts
+addEventListener('resize', () => { chart.resize(); rpChart && rpChart.resize(); });
 
 // Mit der Maus einen Zeitbereich aufziehen (X-Zoom), wie in der alten HTML-Version.
 // Dauerhaft aktiv; Doppelklick setzt zurück und schaltet es wieder scharf.
 const DRAG_ZOOM = { show: false, feature: { dataZoom: { yAxisIndex: 'none', filterMode: 'none' } } };
-const armDragZoom = () => chart.dispatchAction({ type: 'takeGlobalCursor', key: 'dataZoomSelect', dataZoomSelectActive: true });
-$('area').addEventListener('dblclick', () => { chart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }); armDragZoom(); });
+const armDragZoom = c => c.dispatchAction({ type: 'takeGlobalCursor', key: 'dataZoomSelect', dataZoomSelectActive: true });
+function bindDragZoom(c, el) {
+  armDragZoom(c);
+  if (el.dataset.zoomBound) return;
+  el.dataset.zoomBound = '1';
+  el.addEventListener('dblclick', () => { c.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }); armDragZoom(c); });
+}
 
 // Gemeinsames dunkles Grundgerüst — sparam die Serien/Achsen dazu.
 function baseOption() {
@@ -103,7 +109,63 @@ function drawArea(data) {
     }] : [],
     series,
   }, { notMerge: true });
-  armDragZoom();
+  bindDragZoom(chart, $('area'));
+}
+
+// Zweiter Chart: Belegung (Fläche) und Leistung (Linie) des dem Ressourcenpunkt
+// zugeordneten RBG über denselben Zeitraum. Quelle ist die RBG-Langzeitreihe
+// (/api/rbg-history), die unabhängig von den Rohtelegrammen zurückreicht.
+const C_BUSY = '#4fa3ff', C_LOAD = '#ffb454', C_IDLE = '#3a4150';
+const rbgBucketFor = h => h <= 24 ? 5 : h <= 72 ? 15 : h <= 168 ? 30 : h <= 672 ? 240 : 1440;
+
+async function loadRpChart() {
+  const rp = $('rp').value;
+  const conn = rp && current && current.resourcePointConnections
+    ? current.resourcePointConnections[rp] : null;
+  if (!conn) { $('rpCard').hidden = true; return; }
+
+  const q = new URLSearchParams({ hours: hours, bucket: rbgBucketFor(hours) });
+  let d;
+  try {
+    const res = await fetch(API_BASE + '/api/rbg-history?' + q, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    d = await res.json();
+  } catch { $('rpCard').hidden = true; return; }
+
+  const b = d.buckets || [];
+  const has = d.connections && d.connections.includes(conn);
+  const total = d.totals && d.totals.find(t => t.connection === conn);
+  const label = total && total.label && total.label !== conn ? `${total.label} · ${conn}` : conn;
+  $('h-rp').textContent = `Belegung & Leistung — ${label}`;
+  $('rpCard').hidden = false;
+
+  if (!rpChart) rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });
+
+  rpChart.setOption({
+    ...baseOption(),
+    toolbox: DRAG_ZOOM,
+    yAxis: { type: 'value', name: '%', min: 0, max: 105,
+      nameTextStyle: { color: '#7a8494' }, axisLabel: { color: '#7a8494' },
+      splitLine: { lineStyle: { color: '#232830' } } },
+    legend: { top: 0, right: 8, left: 52, textStyle: { color: '#cdd6e0', fontSize: 11 }, inactiveColor: '#5a6373' },
+    tooltip: { trigger: 'axis', confine: true, backgroundColor: '#10141a', borderColor: '#2a2f37',
+      textStyle: { color: '#e6e6e6', fontSize: 12 }, valueFormatter: v => fmt(v) + ' %' },
+    graphic: has && b.length ? [] : [{ type: 'text', left: 'center', top: 'middle',
+      style: { text: 'keine RBG-Historie im Zeitraum', fill: '#7a8494', fontSize: 13 } }],
+    series: [
+      { name: 'Leerlauf', type: 'line', showSymbol: false, lineStyle: { opacity: 0 }, color: C_IDLE,
+        areaStyle: { origin: 100, color: C_IDLE, opacity: 0.4 },
+        tooltip: { valueFormatter: v => fmt(100 - v) + ' % frei' },
+        data: b.map(pt => [pt.at, pt.busyPercent[conn] ?? 0]) },
+      { name: 'Belegung', type: 'line', showSymbol: false, color: C_BUSY,
+        lineStyle: { width: 1.6 }, areaStyle: { color: C_BUSY, opacity: 0.12 },
+        data: b.map(pt => [pt.at, pt.busyPercent[conn] ?? 0]) },
+      { name: 'Leistung', type: 'line', showSymbol: false, color: C_LOAD,
+        lineStyle: { width: 1.6 },
+        data: b.map(pt => [pt.at, pt.loadPercent[conn] ?? 0]) },
+    ],
+  }, { notMerge: true });
+  bindDragZoom(rpChart, $('rpChart'));
 }
 
 function drawRatio(data) {
@@ -125,7 +187,10 @@ function drawTable(data) {
     + `<tr><td><b>Summe</b></td><td></td><td><b>${data.totalOrders.toLocaleString('de-DE')}</b></td><td></td></tr>`;
 }
 
+let current = null;
+
 function render(data) {
+  current = data;
   const rp = $('rp');
   if (rp.options.length <= 1 && data.resourcePoints.length) {
     for (const p of data.resourcePoints) rp.add(new Option(p, p));
@@ -141,6 +206,7 @@ function render(data) {
   drawArea(data);
   drawRatio(data);
   drawTable(data);
+  loadRpChart();
 
   const from = new Date(data.from), to = new Date(data.to);
   $('meta').classList.remove('err');
