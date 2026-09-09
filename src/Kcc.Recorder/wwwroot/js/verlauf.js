@@ -27,6 +27,15 @@ const chart = echarts.init($('area'), null, { renderer: 'canvas' });
 let rpChart = null;   // zweiter Chart (Belegung & Leistung), erst bei Auswahl eines Ressourcenpunkts
 addEventListener('resize', () => { chart.resize(); rpChart && rpChart.resize(); });
 
+// Der 60-s-Refresh baut den Chart mit notMerge neu — dabei ginge ein vom Nutzer gesetzter
+// Zoom verloren. Vorher merken, nachher wiederherstellen, sofern nicht auf Vollbereich.
+function keepZoom(c, redraw) {
+  const prev = ((c.getOption() || {}).dataZoom || []).map(d => ({ start: d.start, end: d.end }));
+  redraw();
+  if (prev.some(d => (d.start ?? 0) > 0.01 || (d.end ?? 100) < 99.99))
+    c.setOption({ dataZoom: prev });
+}
+
 // Mit der Maus einen Zeitbereich aufziehen (X-Zoom), wie in der alten HTML-Version.
 // Dauerhaft aktiv; Doppelklick setzt zurück und schaltet es wieder scharf.
 const DRAG_ZOOM = { show: false, feature: { dataZoom: { yAxisIndex: 'none', filterMode: 'none' } } };
@@ -95,7 +104,7 @@ function drawArea(data) {
     data: data.buckets.map(b => [b.at, b.series[k] || 0]),
   }));
 
-  chart.setOption({
+  keepZoom(chart, () => chart.setOption({
     ...baseOption(),
     toolbox: DRAG_ZOOM,
     legend: {
@@ -108,7 +117,7 @@ function drawArea(data) {
       style: { text: 'keine Daten im Zeitraum', fill: '#7a8494', fontSize: 13 },
     }] : [],
     series,
-  }, { notMerge: true });
+  }, { notMerge: true }));
   bindDragZoom(chart, $('area'));
 }
 
@@ -156,7 +165,7 @@ async function loadRpChart() {
   const busy = b.map(pt => [pt.at, (pt.busyPercent && pt.busyPercent[key]) ?? 0]);
   const load = b.map(pt => [pt.at, (pt.loadPercent && pt.loadPercent[key]) ?? 0]);
 
-  rpChart.setOption({
+  keepZoom(rpChart, () => rpChart.setOption({
     ...baseOption(),
     toolbox: DRAG_ZOOM,
     yAxis: { type: 'value', name: '%', min: 0, max: 105,
@@ -176,7 +185,7 @@ async function loadRpChart() {
       { name: 'Leistung', type: 'line', showSymbol: false, color: C_LOAD,
         lineStyle: { width: 1.6 }, data: load },
     ],
-  }, { notMerge: true });
+  }, { notMerge: true }));
   bindDragZoom(rpChart, $('rpChart'));
 }
 

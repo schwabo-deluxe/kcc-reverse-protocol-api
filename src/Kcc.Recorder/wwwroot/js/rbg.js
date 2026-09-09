@@ -45,6 +45,15 @@ function armDragZoom(inst, el) {
   el.addEventListener('dblclick', () => { inst.dispatchAction({ type: 'dataZoom', start: 0, end: 100 }); arm(); });
 }
 
+// Der 5-min-Refresh baut die Charts mit notMerge neu — ohne das hier ginge ein gesetzter
+// Zoom dabei verloren. Vorher merken, nachher wiederherstellen (außer bei Vollbereich).
+function keepZoom(inst, redraw) {
+  const prev = ((inst.getOption() || {}).dataZoom || []).map(d => ({ start: d.start, end: d.end }));
+  redraw();
+  if (prev.some(d => (d.start ?? 0) > 0.01 || (d.end ?? 100) < 99.99))
+    inst.setOption({ dataZoom: prev });
+}
+
 function darkBase(extra) {
   return Object.assign({
     backgroundColor: 'transparent',
@@ -97,7 +106,7 @@ function drawMain() {
     }
   }
 
-  mainChart.setOption(darkBase({
+  keepZoom(mainChart, () => mainChart.setOption(darkBase({
     toolbox: dragZoom,
     grid: { left: 52, right: 16, top: 34, bottom: 60 },
     legend: {
@@ -130,7 +139,7 @@ function drawMain() {
     graphic: empty ? [{ type: 'text', left: 'center', top: 'middle',
       style: { text: 'keine Daten im Zeitraum', fill: '#7a8494', fontSize: 13 } }] : [],
     series,
-  }), { notMerge: true });
+  }), { notMerge: true }));
   armDragZoom(mainChart, $('chart'));
 
   $('chartTitle').textContent = metricTitle(metric);
