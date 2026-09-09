@@ -38,26 +38,27 @@ public static class WallboardDashboard
           .p-head .p-name { font-size: clamp(13px, 1.3vw, 17px); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
           .p-head .p-pct { font-size: clamp(13px, 1.3vw, 17px); font-weight: 700; font-variant-numeric: tabular-nums; }
           .p-head .p-sum { font-size: 12px; color: #9aa4b2; font-variant-numeric: tabular-nums; margin-left: auto; }
-          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 8px; display: grid; gap: 8px; }
+          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 10px; display: grid; gap: 10px; }
 
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px;
-                  padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
-          .t-name { font-size: clamp(11px, 1.15vw, 14px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #cdd6e0; }
+                  padding: 10px 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+                  justify-content: space-evenly; }
+          .t-name { font-size: clamp(12px, 1.3vh, 16px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #cdd6e0; flex: 0 0 auto; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
-          .duo { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
-          .gcell { flex: 1 1 0; min-width: 0; text-align: center; }
-          .gauge { display: block; width: min(100%, 168px); height: auto; margin: 0 auto; overflow: visible; }
+          .duo { display: flex; gap: 10px; justify-content: center; align-items: flex-start; flex: 0 1 auto; min-height: 0; }
+          .gcell { flex: 1 1 0; min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
+          .gauge { display: block; height: clamp(46px, 12vh, 132px); width: auto; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
-          .pct { font-weight: 800; font-size: clamp(16px, 2.1vw, 30px); line-height: 1; margin-top: 1px; font-variant-numeric: tabular-nums; }
-          .gcap { font-size: clamp(9px, .8vw, 11px); letter-spacing: .05em; text-transform: uppercase; color: #9aa4b2; }
+          .pct { font-weight: 800; font-size: clamp(19px, 4vh, 44px); line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
+          .gcap { font-size: clamp(9px, 1.15vh, 12px); letter-spacing: .05em; text-transform: uppercase; color: #9aa4b2; white-space: nowrap; }
 
-          .sub { font-size: clamp(10px, 1.05vw, 12.5px); color: #9aa4b2; text-align: center;
+          .sub { font-size: clamp(10px, 1.5vh, 13px); color: #9aa4b2; text-align: center; flex: 0 0 auto;
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .sub b { color: #e6e6e6; font-weight: 600; }
 
-          .spark { display: block; width: 100%; height: clamp(14px, 2.6vh, 26px); overflow: visible; margin-top: 1px; }
+          .spark { display: block; width: 100%; height: clamp(20px, 6vh, 68px); overflow: visible; flex: 0 0 auto; }
           .spark .grid { stroke: #2a2f37; stroke-width: 1; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
           .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -192,8 +193,9 @@ public static class WallboardDashboard
           $('wall').innerHTML = data.groups.map(g => {
             const pts = g.points.map(byName).filter(Boolean);
             const n = pts.length || 1;
-            const cols = Math.max(1, Math.min(n, Math.ceil(Math.sqrt(n * 1.6))));
-            const rows = Math.ceil(n / cols);
+            // Höchstens 3 Zeilen, sonst so quadratisch wie möglich.
+            const rows = Math.min(3, Math.ceil(n / 3)) || 1;
+            const cols = Math.ceil(n / rows);
             return `<section class="panel">
               <div class="p-head">
                 <span class="p-name">${g.name}</span>
