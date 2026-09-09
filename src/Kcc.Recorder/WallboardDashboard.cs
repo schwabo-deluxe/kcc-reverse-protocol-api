@@ -30,35 +30,39 @@ public static class WallboardDashboard
           header button { background: #1c2128; color: #e6e6e6; border: 1px solid #2a2f37; border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
           header button:hover { background: #242b34; }
 
-          .wall { flex: 1 1 auto; min-height: 0; display: flex; gap: 8px; padding: 8px; }
-          .panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+          /* Je Gruppe eine horizontale Bahn, Bahnen untereinander gestapelt. */
+          .wall { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+          .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
                    background: #171b21; border: 1px solid #2a2f37; border-radius: 10px; overflow: hidden; }
           .p-head { flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px;
                     padding: 7px 12px; border-bottom: 1px solid #2a2f37; background: #1b2029; }
-          .p-head .p-name { font-size: clamp(13px, 1.3vw, 17px); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-          .p-head .p-pct { font-size: clamp(13px, 1.3vw, 17px); font-weight: 700; font-variant-numeric: tabular-nums; }
+          .p-head .p-name { font-size: clamp(13px, 1.3vh, 17px); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+          .p-head .p-pct { font-size: clamp(13px, 1.3vh, 17px); font-weight: 700; font-variant-numeric: tabular-nums; }
           .p-head .p-sum { font-size: 12px; color: #9aa4b2; font-variant-numeric: tabular-nums; margin-left: auto; }
-          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 10px; display: grid; gap: 10px; }
+          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 10px;
+                    display: flex; gap: 10px; align-items: stretch; }
+          .p-body > .tile { flex: 1 1 0; min-width: 0; }
 
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px;
-                  padding: 10px 12px; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-                  justify-content: space-evenly; }
-          .t-name { font-size: clamp(12px, 1.3vh, 16px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #cdd6e0; flex: 0 0 auto; }
+                  padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: hidden; }
+          .t-name { font-size: clamp(11px, 1.25vh, 15px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                    color: #cdd6e0; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
-          .duo { display: flex; gap: 10px; justify-content: center; align-items: flex-start; flex: 0 1 auto; min-height: 0; }
-          .gcell { flex: 1 1 0; min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
-          .gauge { display: block; height: clamp(46px, 12vh, 132px); width: auto; overflow: visible; }
+          /* Die Tachos füllen die freie Kachelhöhe (gedeckelt), der Rest ist fix — kein Leerraum. */
+          .duo { display: flex; gap: 10px; justify-content: center; flex: 1 1 auto; min-height: 0; }
+          .gcell { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; min-height: 0; }
+          .gauge { flex: 1 1 auto; min-height: 0; min-width: 0; width: auto; max-width: 100%; max-height: 150px; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
-          .pct { font-weight: 800; font-size: clamp(19px, 4vh, 44px); line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
-          .gcap { font-size: clamp(9px, 1.15vh, 12px); letter-spacing: .05em; text-transform: uppercase; color: #9aa4b2; white-space: nowrap; }
+          .pct { flex: 0 0 auto; font-weight: 800; font-size: clamp(15px, 2.6vh, 28px); line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
+          .gcap { flex: 0 0 auto; font-size: clamp(8px, .95vh, 11px); letter-spacing: .05em; text-transform: uppercase; color: #9aa4b2; white-space: nowrap; }
 
-          .sub { font-size: clamp(10px, 1.5vh, 13px); color: #9aa4b2; text-align: center; flex: 0 0 auto;
+          .sub { flex: 0 0 auto; font-size: clamp(9px, 1.35vh, 12px); color: #9aa4b2; text-align: center;
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .sub b { color: #e6e6e6; font-weight: 600; }
 
-          .spark { display: block; width: 100%; height: clamp(20px, 6vh, 68px); overflow: visible; flex: 0 0 auto; }
+          .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(20px, 4vh, 46px); overflow: visible; }
           .spark .grid { stroke: #2a2f37; stroke-width: 1; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
           .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -67,9 +71,9 @@ public static class WallboardDashboard
           @media (orientation: portrait) {
             body { overflow: auto; }
             #app { height: auto; min-height: 100%; }
-            .wall { flex-direction: column; }
             .panel { flex: 0 0 auto; }
-            .p-body { overflow: visible; }
+            .p-body { flex-wrap: wrap; overflow: visible; }
+            .p-body > .tile { flex: 1 1 240px; min-height: 220px; }
           }
         </style>
         </head>
@@ -192,19 +196,13 @@ public static class WallboardDashboard
 
           $('wall').innerHTML = data.groups.map(g => {
             const pts = g.points.map(byName).filter(Boolean);
-            const n = pts.length || 1;
-            // Höchstens 3 Zeilen, sonst so quadratisch wie möglich.
-            const rows = Math.min(3, Math.ceil(n / 3)) || 1;
-            const cols = Math.ceil(n / rows);
             return `<section class="panel">
               <div class="p-head">
                 <span class="p-name">${g.name}</span>
                 <span class="p-pct" style="color:${color(g.percent)}">Ø ${fmt(g.percent)} %</span>
                 <span class="p-sum">${fmt(g.uph)} / ${fmt(g.targetUph)} UPH · ${g.count} ges.${g.errors ? ` · ${g.errors} Fehler` : ''}</span>
               </div>
-              <div class="p-body" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
-                ${pts.map(p => tile(p, data)).join('')}
-              </div>
+              <div class="p-body">${pts.map(p => tile(p, data)).join('')}</div>
             </section>`;
           }).join('');
 
