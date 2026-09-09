@@ -49,11 +49,10 @@ public static class WallboardDashboard
                     color: #cdd6e0; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
-          /* Tachos: Wert im Bogen, Breite = halbe Kachel, Höhe aus dem Seitenverhältnis.
-             Die Kurve darunter nimmt den restlichen Platz (kein Leerraum). */
-          .duo { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
-          .gcell { flex: 1 1 0; min-width: 0; display: flex; }
-          .gauge { width: 100%; height: auto; max-height: 200px; overflow: visible; }
+          /* Die Tachos (Wert im Bogen) füllen die freie Kachelhöhe, die Kurve ist klein und fix. */
+          .duo { display: flex; gap: 8px; justify-content: center; flex: 1 1 auto; min-height: 0; }
+          .gcell { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; }
+          .gauge { height: 100%; width: auto; max-width: 100%; margin: 0 auto; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
 
@@ -61,10 +60,11 @@ public static class WallboardDashboard
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .sub b { color: #e6e6e6; font-weight: 600; }
 
-          .spark { flex: 1 1 auto; display: block; width: 100%; min-height: 34px; max-height: 150px; overflow: visible; }
-          .spark .grid { stroke: #2a2f37; stroke-width: 1; }
-          .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; }
-          .spark .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+          .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(22px, 5.5vh, 68px); overflow: visible; }
+          /* preserveAspectRatio="none" streckt den Pfad ungleich — Strich sonst dick/verzerrt. */
+          .spark .grid { stroke: #2a2f37; stroke-width: 1; vector-effect: non-scaling-stroke; }
+          .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+          .spark .line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
           [title] { cursor: help; }
 
           @media (orientation: portrait) {
