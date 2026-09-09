@@ -20,33 +20,35 @@ public static class WallboardDashboard
           :root { color-scheme: dark; }
           * { box-sizing: border-box; }
           html, body { height: 100%; }
-          body { margin: 0; font: 14px/1.35 system-ui, sans-serif; background: #14171c; color: #e6e6e6; overflow: hidden; }
-          #app { display: flex; flex-direction: column; height: 100%; }
-          header { padding: 6px 14px; border-bottom: 1px solid #2a2f37; display: flex; gap: 12px; align-items: center; flex: 0 0 auto; }
-          header h1 { font-size: 14px; margin: 0; font-weight: 600; }
-          header .meta { color: #9aa4b2; font-size: 12px; font-variant-numeric: tabular-nums; }
-          header .meta.err { color: #ff6b6b; }
-          header .sp { margin-left: auto; }
-          header button { background: #1c2128; color: #e6e6e6; border: 1px solid #2a2f37; border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
-          header button:hover { background: #242b34; }
+          body { margin: 0; font: 14px/1.35 system-ui, sans-serif; background: #14171c; color: #e6e6e6;
+                 overflow: hidden; display: flex; flex-direction: column; }
+          /* Stand + Vollbildknopf rechts in der Navigationsleiste (per Skript eingehängt,
+             hinter die margin-left:auto-Versionsanzeige). */
+          .kcc-nav .wmeta { margin-left: 14px; color: #9aa4b2; font-size: 12px; font-variant-numeric: tabular-nums; align-self: center; }
+          .kcc-nav .wmeta.err { color: #ff6b6b; }
+          .kcc-nav .wfs { margin-left: 10px; background: #1c2128; color: #e6e6e6; border: 1px solid #2a2f37;
+                          border-radius: 6px; padding: 2px 8px; font: inherit; cursor: pointer; align-self: center; }
+          .kcc-nav .wfs:hover { background: #242b34; }
+
+          #app { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
           /* Je Gruppe eine horizontale Bahn, Bahnen untereinander gestapelt. */
-          .wall { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+          .wall { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px; }
           .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
                    background: #171b21; border: 1px solid #2a2f37; border-radius: 10px; overflow: hidden; }
           .p-head { flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px;
-                    padding: 7px 12px; border-bottom: 1px solid #2a2f37; background: #1b2029; }
-          .p-head .p-name { font-size: clamp(13px, 1.3vh, 17px); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-          .p-head .p-pct { font-size: clamp(13px, 1.3vh, 17px); font-weight: 700; font-variant-numeric: tabular-nums; }
+                    padding: 5px 12px; border-bottom: 1px solid #2a2f37; background: #1b2029; }
+          .p-head .p-name { font-size: clamp(12px, 1.25vh, 16px); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+          .p-head .p-pct { font-size: clamp(12px, 1.25vh, 16px); font-weight: 700; font-variant-numeric: tabular-nums; }
           .p-head .p-sum { font-size: 12px; color: #9aa4b2; font-variant-numeric: tabular-nums; margin-left: auto; }
-          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 10px;
-                    display: flex; gap: 10px; align-items: stretch; }
+          .p-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 8px;
+                    display: flex; gap: 8px; align-items: stretch; }
           .p-body > .tile { flex: 1 1 0; min-width: 0; }
 
           .tile { background: #1c2128; border: 1px solid #2a2f37; border-radius: 8px;
-                  padding: 7px 12px; display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden;
+                  padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden;
                   justify-content: center; }
-          .t-name { font-size: clamp(13px, 1.8vh, 19px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+          .t-name { font-size: clamp(12px, 1.55vh, 17px); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
                     color: #e6e6e6; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
@@ -54,15 +56,15 @@ public static class WallboardDashboard
              Inhalte, überschüssige Höhe wird zu gleichen Rändern — kein Beschneiden unten. */
           .duo { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; min-height: 0; }
           .gcell { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
-          .gauge { height: clamp(78px, 13vh, 138px); width: auto; max-width: 100%; overflow: visible; }
+          .gauge { height: clamp(66px, 11vh, 120px); width: auto; max-width: 100%; overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
 
-          .sub { flex: 0 0 auto; font-size: clamp(10px, 1.7vh, 15px); color: #9aa4b2; text-align: center;
+          .sub { flex: 0 0 auto; font-size: clamp(10px, 1.5vh, 14px); color: #9aa4b2; text-align: center;
                  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .sub b { color: #e6e6e6; font-weight: 700; }
 
-          .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(26px, 6.5vh, 82px); overflow: visible; }
+          .spark { flex: 0 0 auto; display: block; width: 100%; height: clamp(24px, 5.5vh, 70px); overflow: visible; }
           /* preserveAspectRatio="none" streckt den Pfad ungleich — Strich sonst dick/verzerrt. */
           .spark .grid { stroke: #2a2f37; stroke-width: 1; vector-effect: non-scaling-stroke; }
           .spark .target { stroke: #7a8494; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
@@ -71,7 +73,7 @@ public static class WallboardDashboard
 
           @media (orientation: portrait) {
             body { overflow: auto; }
-            #app { height: auto; min-height: 100%; }
+            #app { flex: 0 0 auto; }
             .panel { flex: 0 0 auto; }
             .p-body { flex-wrap: wrap; overflow: visible; }
             .p-body > .tile { flex: 1 1 240px; min-height: 220px; }
@@ -82,12 +84,6 @@ public static class WallboardDashboard
         <!--nav-->
         <!--rbghelp-->
         <div id="app">
-          <header>
-            <h1>Wandansicht</h1>
-            <span class="meta" id="orient"></span>
-            <span class="meta sp" id="meta">lädt …</span>
-            <button id="fs" type="button" title="Vollbild">⛶</button>
-          </header>
           <div class="wall" id="wall"></div>
         </div>
         <script>
@@ -99,6 +95,13 @@ public static class WallboardDashboard
 
         const H = window.RBG_HELP || {};
         const help = k => H[k] ? ` title="${String(H[k]).replace(/"/g, '&quot;')}"` : '';
+
+        // Stand-Anzeige und Vollbildknopf rechts in die Navigationsleiste hängen — die Seite
+        // hat keine eigene Kopfzeile mehr.
+        const nav = document.querySelector('.kcc-nav');
+        if (nav) nav.insertAdjacentHTML('beforeend',
+          '<span class="wmeta" id="meta">lädt …</span>' +
+          '<button class="wfs" id="fs" type="button" title="Vollbild">⛶</button>');
 
         function color(pct) {
           if (pct >= 95) return '#ff6b6b';
@@ -211,11 +214,6 @@ public static class WallboardDashboard
             `${data.totalOrders} TSPORD / ${data.windowMinutes} min · ${new Date().toLocaleTimeString('de-DE')}`;
         }
 
-        function showOrient() {
-          const land = window.matchMedia('(orientation: landscape)').matches;
-          $('orient').textContent = land ? '' : 'Hochformat — Bildschirm drehen';
-        }
-
         async function load() {
           try {
             const res = await fetch(API_BASE + '/api/utilization', { cache: 'no-store' });
@@ -227,12 +225,10 @@ public static class WallboardDashboard
           }
         }
 
-        $('fs').addEventListener('click', () => {
+        $('fs')?.addEventListener('click', () => {
           if (document.fullscreenElement) document.exitFullscreen();
           else document.documentElement.requestFullscreen?.();
         });
-        window.matchMedia('(orientation: landscape)').addEventListener('change', showOrient);
-        showOrient();
         load();
         setInterval(load, 60000);
         </script>
