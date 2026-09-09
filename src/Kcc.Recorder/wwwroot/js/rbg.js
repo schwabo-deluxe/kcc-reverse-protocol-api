@@ -146,6 +146,7 @@ function drawMinis() {
         <span class="ms">
           <span${help('busy')}>Auslastung <b style="color:${C_BUSY}">${fmt(t.avgBusyPercent)} %</b></span>
           <span${help('load')}>Leistung <b style="color:${C_LOAD}">${fmt(t.avgLoadPercent)} %</b></span>
+          <span${help('inout')}>Ein/Aus <b>${fmt(t.stores)}</b> / <b>${fmt(t.retrievals)}</b></span>
           <span${help('idle')}>Leerlauf <b>${dur(t.idleHours)}</b></span>
         </span>
       </div>
@@ -223,13 +224,24 @@ function bars() {
   const t = data.totals;
   const even = t.length ? 100 / t.length : 0;
   const max = Math.max(1, ...t.map(x => x.share));
-  $('bars').innerHTML = t.map(x => `
+  // Der Balken zeigt den Anteil am Gesamtdurchsatz, in sich aufgeteilt nach Ein- und
+  // Auslagerung — so ist je RBG sofort sichtbar, ob eine Richtung überwiegt.
+  $('bars').innerHTML = t.map(x => {
+    const w = (x.share / max * 100).toFixed(1);
+    const io = x.stores + x.retrievals;
+    const sw = io > 0 ? (x.stores / io * 100).toFixed(1) : '50';
+    const col = colorOf(x.connection);
+    return `
     <div class="nm">${x.label && x.label !== x.connection ? `${x.label}<br><small>${x.connection}</small>` : x.connection}</div>
-    <div class="track"${help('share')}>
-      <div class="fill" style="width:${(x.share / max * 100).toFixed(1)}%;background:${colorOf(x.connection)}"></div>
+    <div class="track"${help('inout')}>
+      <div class="split" style="width:${w}%">
+        <div class="seg" style="width:${sw}%;background:${col}" title="${fmt(x.stores)} Einlagerungen"></div>
+        <div class="seg" style="width:${(100 - sw).toFixed(1)}%;background:${col};opacity:.45" title="${fmt(x.retrievals)} Auslagerungen"></div>
+      </div>
       <div class="avg" style="left:${(even / max * 100).toFixed(1)}%"></div>
     </div>
-    <div class="val"><b>${fmt(x.share)} %</b> · ${fmt(x.avgCyclesPerHour)} Spiele/h · Ø ${fmt(x.avgBusyPercent)} % ausgelastet</div>`).join('');
+    <div class="val"><b>${fmt(x.share)} %</b> · ${fmt(x.stores)} Ein / ${fmt(x.retrievals)} Aus · ${fmt(x.avgCyclesPerHour)} Spiele/h</div>`;
+  }).join('');
 }
 
 function table() {
