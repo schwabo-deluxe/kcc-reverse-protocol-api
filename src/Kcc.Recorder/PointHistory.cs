@@ -66,6 +66,9 @@ public sealed record PointHistoryReport
     public required IReadOnlyList<PointHistoryBucket> Buckets { get; init; }
     public required IReadOnlyList<PointHistorySeries> Totals { get; init; }
 
+    /// <summary>Betriebsstunden im Zeitraum — Nenner der Durchschnitte, sonst die Kalenderdauer.</summary>
+    public required double OperatingHours { get; init; }
+
     public static PointHistoryReport Compute(
         IReadOnlyList<PointSampleRow> rows,
         DateTime from,
@@ -73,7 +76,8 @@ public sealed record PointHistoryReport
         int bucketMinutes,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         double defaultTargetUph = 0,
-        string? resourcePoint = null)
+        string? resourcePoint = null,
+        OperatingHoursConfig? operatingHours = null)
     {
         var defs = (resourcePoints ?? [])
             .Where(p => !string.IsNullOrWhiteSpace(p.Name))
@@ -142,8 +146,11 @@ public sealed record PointHistoryReport
             };
         }
 
-        var windowHours = Math.Max(1e-9, (to - from).TotalHours);
-        var windowSeconds = Math.Max(1e-9, (to - from).TotalSeconds);
+        // Nenner der Durchschnitte: Betriebszeit statt Kalenderzeit, wenn eine Hauptnutzungszeit
+        // gilt. Bewegung = jedes Raster mit Auftrag oder Belegzeit, über alle Punkte.
+        var activity = scoped.Where(r => r.Orders > 0 || r.BusySeconds > 0).Select(r => r.Bucket);
+        var windowSeconds = Math.Max(1e-9, OperatingWindow.EffectiveSeconds(from, to, activity, operatingHours));
+        var windowHours = Math.Max(1e-9, windowSeconds / 3600.0);
         var totals = points.Select(p =>
         {
             var target = TargetOf(p);
@@ -170,6 +177,7 @@ public sealed record PointHistoryReport
             ResourcePoints = points.ToList(),
             Buckets = buckets,
             Totals = totals,
+            OperatingHours = Math.Round(windowSeconds / 3600.0, 2),
         };
     }
 }

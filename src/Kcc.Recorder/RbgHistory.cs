@@ -127,13 +127,20 @@ public sealed record RbgHistoryReport
     public required string? Busiest { get; init; }
     public required string? Quietest { get; init; }
 
+    /// <summary>
+    /// Betriebsstunden im Zeitraum — Nenner der Durchschnitte, wenn eine Hauptnutzungszeit
+    /// konfiguriert ist. Ohne Nutzungszeit gleich der Kalenderdauer.
+    /// </summary>
+    public required double OperatingHours { get; init; }
+
     public static RbgHistoryReport Compute(
         IReadOnlyList<RbgSampleRow> rows,
         DateTime from,
         DateTime to,
         int bucketMinutes,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
-        RbgCapacity? defaultCapacity = null)
+        RbgCapacity? defaultCapacity = null,
+        OperatingHoursConfig? operatingHours = null)
     {
         var step = Math.Max(1, bucketMinutes);
         if (to <= from)
@@ -230,7 +237,11 @@ public sealed record RbgHistoryReport
             });
         }
 
-        var windowHours = Math.Max(1e-9, (to - from).TotalHours);
+        // Nenner der Durchschnitte: Betriebszeit statt Kalenderzeit, wenn eine Hauptnutzungszeit
+        // gilt. Bewegung = jedes Raster mit mindestens einem Transport, egal welche Verbindung.
+        var activity = used.Where(r => r.Stores + r.Retrievals > 0).Select(r => r.Bucket);
+        var effSeconds = Math.Max(1e-9, OperatingWindow.EffectiveSeconds(from, to, activity, operatingHours));
+        var windowHours = Math.Max(1e-9, effSeconds / 3600.0);
         var totalCycles = sums.Values.Sum(s => s.Cycles);
 
         var totals = connections.Select(c =>
@@ -252,9 +263,9 @@ public sealed record RbgHistoryReport
                 AvgCyclesPerHour = Math.Round(avgPerHour, 1),
                 PeakCyclesPerHour = cycles[c].Length == 0 ? 0 : Math.Round(cycles[c].Max() / bucketHours, 1),
                 AvgLoadPercent = max > 0 ? Math.Round(avgPerHour / max * 100, 1) : 0,
-                AvgBusyPercent = Math.Round(Math.Min(100, s.Busy / Math.Max(1e-9, (to - from).TotalSeconds) * 100), 1),
+                AvgBusyPercent = Math.Round(Math.Min(100, s.Busy / effSeconds * 100), 1),
                 ActiveHours = Math.Round(s.Active.Count * bucketHours, 2),
-                IdleHours = Math.Round(Math.Max(0, (to - from).TotalSeconds - s.Busy) / 3600, 2),
+                IdleHours = Math.Round(Math.Max(0, effSeconds - s.Busy) / 3600, 2),
                 Share = totalCycles > 0 ? Math.Round(s.Cycles / totalCycles * 100, 1) : 0,
                 LatestAt = s.Latest,
             };
@@ -282,6 +293,7 @@ public sealed record RbgHistoryReport
             SpreadPercent = spread,
             Busiest = moved.Count > 0 ? moved[0].Connection : null,
             Quietest = moved.Count > 1 ? moved[^1].Connection : null,
+            OperatingHours = Math.Round(effSeconds / 3600.0, 2),
         };
     }
 }

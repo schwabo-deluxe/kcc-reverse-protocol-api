@@ -142,9 +142,13 @@ async function loadRpChart() {
   const has = list && list.includes(key) && b.length;
   const total = d.totals && d.totals.find(t => t[idKey] === key);
   const label = total && total.label && total.label !== key ? `${total.label} · ${key}` : key;
-  $('h-rp').textContent = conn
+  // Betriebsstunden nur nennen, wenn eine Nutzungszeit greift (weicht von der Kalenderdauer ab).
+  const calH = (new Date(d.to) - new Date(d.from)) / 3.6e6;
+  const opTxt = d.operatingHours && Math.abs(d.operatingHours - calH) > 0.05
+    ? ` · Ø über ${fmt(d.operatingHours)} h Betrieb` : '';
+  $('h-rp').textContent = (conn
     ? `Belegung & Leistung — ${label} (RBG)`
-    : `Belegung & Leistung — ${label}`;
+    : `Belegung & Leistung — ${label}`) + opTxt;
   $('rpCard').hidden = false;
 
   if (!rpChart) rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });

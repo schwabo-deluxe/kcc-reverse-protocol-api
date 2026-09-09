@@ -109,6 +109,29 @@ public class RbgHistoryTests
     }
 
     [Fact]
+    public void Nutzungszeit_nimmt_die_Totzeiten_aus_dem_Nenner()
+    {
+        var rows = new List<RbgSampleRow>
+        {
+            new() { Bucket = T0, Connection = "RBG01", Stores = 10, Retrievals = 10, BusySeconds = 1800 },
+            new() { Bucket = T0.AddHours(1), Connection = "RBG01", Stores = 10, Retrievals = 10, BusySeconds = 1800 },
+        };
+        var cfg = new OperatingHoursConfig { Enabled = true, Start = "06:00", End = "15:15" };
+
+        // Fenster über den ganzen Tag; ohne Nutzungszeit verwässern ~22 stille Stunden alles.
+        var full = RbgHistoryReport.Compute(rows, T0, T0.AddHours(24), 60, Points());
+        var op = RbgHistoryReport.Compute(rows, T0, T0.AddHours(24), 60, Points(), operatingHours: cfg);
+
+        Assert.Equal(24, full.OperatingHours);
+        Assert.Equal(7.25, op.OperatingHours);   // Fenster ab 08:00 bis Betriebsschluss 15:15
+
+        var withOp = op.Totals.Single(t => t.Connection == "RBG01").AvgBusyPercent;
+        var withoutOp = full.Totals.Single(t => t.Connection == "RBG01").AvgBusyPercent;
+        Assert.True(withOp > withoutOp);
+        Assert.Equal(Math.Round(3600.0 / (7.25 * 3600) * 100, 1), withOp, 1);   // 3600 s belegt / 7,25 h
+    }
+
+    [Fact]
     public void Compute_vergleicht_die_Geraete_und_nennt_die_Spreizung()
     {
         // RBG01 fährt doppelt so viel wie RBG02.

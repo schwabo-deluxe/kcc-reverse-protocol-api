@@ -114,6 +114,25 @@ public sealed class ContourFlagConfig
 }
 
 /// <summary>
+/// Hauptnutzungszeit der Anlage. Für die Langzeit-Durchschnitte (<c>/rbg</c>, zweiter Chart auf
+/// <c>/verlauf</c>) zählt nur die Betriebszeit als Nenner, nicht der Kalenderzeitraum — sonst
+/// drücken Nächte, Wochenenden und Feiertage jeden Prozentwert nach unten. Ein Kalendertag ohne
+/// jede Bewegung zählt gar nicht; wird nach <see cref="End"/> noch gefahren, verlängert sich der
+/// Betrieb dieses Tages bis zur letzten Bewegung.
+/// </summary>
+public sealed class OperatingHoursConfig
+{
+    /// <summary><c>false</c> ⇒ es zählt wieder der volle Kalenderzeitraum.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Betriebsbeginn als <c>HH:mm</c> (Standard <c>06:00</c>).</summary>
+    public string Start { get; set; } = "06:00";
+
+    /// <summary>Regulärer Betriebsschluss als <c>HH:mm</c> (Standard <c>15:15</c>).</summary>
+    public string End { get; set; } = "15:15";
+}
+
+/// <summary>
 /// Gesamtkonfiguration. Wird aus <c>appsettings.json</c> gebunden und von lokaler Datei,
 /// Umgebungsvariablen und Kommandozeile überschrieben — siehe <see cref="Load"/>.
 /// </summary>
@@ -327,6 +346,12 @@ public sealed class KccConfig
     /// Raster und Punkt). <c>0</c>/negativ = unbegrenzt.
     /// </summary>
     public int PointHistoryRetentionDays { get; set; } = 365;
+
+    /// <summary>
+    /// Hauptnutzungszeit der Anlage. Nenner der Langzeit-Durchschnitte in <c>/rbg</c> und im
+    /// zweiten <c>/verlauf</c>-Chart ist dann die Betriebszeit statt des Kalenderzeitraums.
+    /// </summary>
+    public OperatingHoursConfig OperatingHours { get; set; } = new();
 
     /// <summary>Wartezeit zwischen zwei Abfragen, wenn der Recorder aufgeholt hat.</summary>
     public int PollIntervalSeconds { get; set; } = 3;

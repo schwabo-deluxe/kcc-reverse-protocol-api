@@ -281,10 +281,14 @@ function render(d) {
   const stamp = x => sameDay
     ? x.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
     : x.toLocaleDateString('de-DE');
+  // Betriebsstunden nur nennen, wenn sie von der Kalenderdauer abweichen (Nutzungszeit aktiv).
+  const calHours = (to - from) / 3.6e6;
+  const opTxt = d.operatingHours && Math.abs(d.operatingHours - calHours) > 0.05
+    ? ` · Betrieb ${fmt(d.operatingHours)} h (Totzeiten raus)` : '';
   $('meta').classList.remove('err');
   $('meta').textContent =
     `${from.toLocaleDateString('de-DE')} ${stamp(from)} – ${stamp(to)} · ` +
-    `Raster ${d.bucketMinutes} min · Stand ${new Date().toLocaleTimeString('de-DE')}`;
+    `Raster ${d.bucketMinutes} min${opTxt} · Stand ${new Date().toLocaleTimeString('de-DE')}`;
 }
 
 async function load() {

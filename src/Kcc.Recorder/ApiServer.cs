@@ -223,7 +223,7 @@ public static class ApiServer
 
         return RbgHistoryReport.Compute(
             store.ReadRbgSamples(start, end), start, end, bucketMinutes,
-            config.ResourcePoints, RbgCapacity.From(config));
+            config.ResourcePoints, RbgCapacity.From(config), config.OperatingHours);
     }
 
     /// <summary>
@@ -245,7 +245,7 @@ public static class ApiServer
 
         return PointHistoryReport.Compute(
             store.ReadPointSamples(start, end), start, end, bucketMinutes,
-            config.ResourcePoints, config.UtilizationTargetUph, resourcePoint);
+            config.ResourcePoints, config.UtilizationTargetUph, resourcePoint, config.OperatingHours);
     }
 
     static ContourReport Contour(KccConfig config, TelegramFormat format, int minutes)
