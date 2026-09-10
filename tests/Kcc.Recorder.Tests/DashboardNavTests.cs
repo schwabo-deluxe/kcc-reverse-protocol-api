@@ -15,7 +15,7 @@ public class DashboardNavTests
         Assert.Contains("<a href=\"/verlauf\" class=\"on\">Verlauf</a>", nav);
         Assert.Contains("<a href=\"/kontur\">Kontur</a>", nav);
         Assert.Contains("<a href=\"/rbg\">RBG</a>", nav);
-        Assert.Contains("<a href=\"/wand\">Wand</a>", nav);
+        Assert.Contains("<a href=\"/dashboard\">Dashboard</a>", nav);
     }
 
     [Fact]

@@ -55,7 +55,7 @@ public class WwwrootTests
     public void Nav_js_kennt_alle_sechs_Ansichten()
     {
         var js = Read("js/nav.js");
-        foreach (var href in new[] { "'/'", "'/auslastung'", "'/verlauf'", "'/kontur'", "'/rbg'", "'/wand'" })
+        foreach (var href in new[] { "'/'", "'/auslastung'", "'/verlauf'", "'/kontur'", "'/rbg'", "'/dashboard'" })
             Assert.Contains(href, js);
     }
 

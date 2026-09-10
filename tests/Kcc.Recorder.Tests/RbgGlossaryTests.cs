@@ -35,7 +35,7 @@ public class RbgGlossaryTests
     [Fact]
     public void Inject_ersetzt_den_Platzhalter_in_allen_RBG_Ansichten()
     {
-        // /auslastung und /rbg laden das Glossar als glossary.js; nur die Wandansicht injiziert
+        // /auslastung und /rbg laden das Glossar als glossary.js; nur das Dashboard injiziert
         // es noch serverseitig.
         foreach (var html in new[]
         {

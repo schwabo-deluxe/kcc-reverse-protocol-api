@@ -139,7 +139,8 @@ public static class ApiServer
                 "/auslastung" or "/auslastung.html" => StaticPage("auslastung.html"),
                 "/verlauf" or "/verlauf.html" => StaticPage("verlauf.html"),
                 "/kontur" or "/kontur.html" => Html(ContourDashboard.Html, "/kontur"),
-                "/wand" or "/wand.html" => Html(WallboardDashboard.Html, "/wand"),
+                "/dashboard" or "/dashboard.html" or "/wand" or "/wand.html"
+                    => Html(WallboardDashboard.Html, "/dashboard"),
                 "/rbg" or "/rbg.html" => StaticPage("rbg.html"),
                 "/api/rbg-history" => Ok(RbgHistory(config,
                     RbgHours(q), RbgBucket(q, config), HistStamp(q, "from"), HistStamp(q, "to"))),

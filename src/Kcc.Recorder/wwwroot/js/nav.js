@@ -7,11 +7,12 @@
     ['/verlauf', 'Verlauf'],
     ['/kontur', 'Kontur'],
     ['/rbg', 'RBG'],
-    ['/wand', 'Wand'],
+    ['/dashboard', 'Dashboard'],
   ];
 
   // Saubere URLs (/auslastung) wie auch die losen Dateien (/auslastung.html) treffen.
-  const path = (location.pathname.replace(/\.html$/, '') || '/');
+  let path = (location.pathname.replace(/\.html$/, '') || '/');
+  if (path === '/wand') path = '/dashboard';   // alter Pfad, weiterhin ausgeliefert
 
   const nav = document.createElement('nav');
   nav.className = 'kcc-nav';

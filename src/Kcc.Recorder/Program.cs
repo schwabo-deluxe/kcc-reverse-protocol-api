@@ -342,7 +342,7 @@ int DumpDashboards(CommandLine cli)
     {
         ("dashboard.html", Dashboard.Html),
         ("kontur.html", ContourDashboard.Html),
-        ("wand.html", WallboardDashboard.Html),
+        ("wallboard.html", WallboardDashboard.Html),
     };
     foreach (var (name, html) in files)
         File.WriteAllText(Path.Combine(dir, name),
@@ -450,7 +450,7 @@ static void PrintUsage() => Console.WriteLine(
                                        dem ältesten Telegramm bleiben erhalten
       export  --out datei.csv          Aufgezeichnete Telegramme als CSV ausgeben
               [--from ...] [--to ...]
-      dump-dashboards [--out verz]     dashboard/kontur/wand.html + wwwroot schreiben
+      dump-dashboards [--out verz]     dashboard/kontur/wallboard.html + wwwroot schreiben
 
     Optionen:
       --config datei    Zusätzliche JSON-Konfiguration (überschreibt appsettings.json)

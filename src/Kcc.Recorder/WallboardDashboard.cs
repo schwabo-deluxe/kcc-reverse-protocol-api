@@ -1,7 +1,7 @@
 namespace Kcc.Recorder;
 
 /// <summary>
-/// Wandansicht unter <c>/wand</c>: dieselben Daten wie <c>/auslastung</c> (<c>/api/utilization</c>),
+/// Dashboard unter <c>/dashboard</c> (früher <c>/wand</c>): dieselben Daten wie <c>/auslastung</c> (<c>/api/utilization</c>),
 /// als bildschirmfüllendes Dashboard ohne Scrollen. Je Gruppe eine Spalte, je Ressourcenpunkt eine
 /// Kachel mit zwei Tachos (RBG: Auslastung + Leistung, Fördertechnik: Belegung + Leistung) und einer
 /// kleinen Verlaufskurve. Spalten- und Zeilenzahl je Gruppe werden aus der Kachelzahl berechnet,
@@ -15,7 +15,7 @@ public static class WallboardDashboard
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Wandansicht Auslastung</title>
+        <title>Dashboard</title>
         <style>
           :root { color-scheme: dark; }
           * { box-sizing: border-box; }

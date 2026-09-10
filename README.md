@@ -165,7 +165,7 @@ Navigationsleiste (KPIs · Auslastung · Verlauf · Kontur).
 | `GET /rbg` | Langzeitvergleich der RBG. Spreizung `(meiste − wenigste Spiele) ÷ meiste`, Anteil je Gerät (Balken in Ein-/Auslagerung geteilt), Mehrlinien-Chart der Spiele/h bzw. Prozentwerte, je Gerät ein Mini-Chart mit Auslastung/Leistung/Leerlauf, Kennzahlentabelle. Zeiträume 24 h bis 1 Jahr aus `rbg_samples` — reicht weiter zurück als die Rohtelegramme |
 | `GET /api/rbg-history?hours=168&bucket=60` | Derselbe Vergleich als JSON. `hours` bis 8784 (1 Jahr) **oder** absolutes Fenster `from=…&to=…` (ISO, UTC); `bucket` = Stützpunktabstand in Minuten |
 | `GET /api/point-history?hours=168&bucket=30&rp=EA21` | Langzeitverlauf je Ressourcenpunkt aus `point_samples`: Belegungsgrad (belegte Zeit ÷ Raster) und Leistungsgrad (Aufträge/h ÷ Richtwert). Auch für Fördertechnikpunkte ohne RBG. `hours` **oder** `from=…&to=…`; `bucket` = Stützpunktabstand; `rp` grenzt auf einen Punkt ein |
-| `GET /wand` | Wandansicht derselben Daten (`/api/utilization`). Im Querformat je `Group` eine formatfüllende Spalte ohne Seiten-Scroll, im Hochformat gestapelt. Kompakte Kacheln mit Tacho, %, Verlauf; bei RBG zusätzlich Auslastung/Leistung/Spiele/Leerlauf. Vollbild-Schaltfläche |
+| `GET /dashboard` (Alias `/wand`) | Wandtaugliches Dashboard derselben Daten (`/api/utilization`). Je `Group` eine horizontale Bahn, je Ressourcenpunkt eine Kachel mit zwei Tachos (RBG: Auslastung + Leistung, Fördertechnik: Belegung + Leistung) und kleiner Verlaufskurve; alles skaliert mit dem Viewport, im Querformat ohne Scrollen. Vollbild-Schaltfläche in der Navileiste |
 | `GET /health` | Status, Version, DB-Pfad, Gesamtzahl, `lastSeenId`, jüngster Telegramm-Zeitstempel, Sekunden seit letztem Schreibvorgang, Server-Uhr |
 | `GET /api/version` | `{ "version": "0.3.0" }` — der Release-Tag, lokale Builds `dev`. Speist die Versionsanzeige rechts in der Navigationsleiste |
 
@@ -208,7 +208,7 @@ dotnet publish src/Kcc.Recorder/Kcc.Recorder.csproj -c Release -r win-x64 \
 Die EXE bündelt .NET und ASP.NET Core (für Kestrel), self-contained, ~90–100 MB.
 `RollForward=Major` erlaubt `dotnet test`/`run` auch neuere Runtimes; der Publish bleibt bei net8.
 Ein Tag `vX.Y.Z` startet den Release-Workflow: EXE bauen, ZIP (`kcc.exe`, `appsettings.json`,
-`README.md`, `dashboard.html`, `kontur.html`, `wand.html`, Ordner `wwwroot/`) samt Prüfsumme an
+`README.md`, `dashboard.html`, `kontur.html`, `wallboard.html`, Ordner `wwwroot/`) samt Prüfsumme an
 ein GitHub-Release hängen. Die Version aus dem Tag geht als `-p:Version=` in den Build und
 erscheint unter `/api/version` sowie in der Navigationsleiste.
 
@@ -216,7 +216,7 @@ erscheint unter `/api/version` sowie in der Navigationsleiste.
 `js/`, `vendor/`), ausgeliefert über `UseStaticFiles`. Der Ordner gehört neben die EXE — für diese
 Seiten reicht die EXE allein nicht. `/verlauf` und `/rbg` zeichnen mit ECharts (Apache-2.0,
 vendort unter `wwwroot/vendor/echarts.min.js`, ~1 MB); `js/nav.js` baut die Navigationsleiste,
-`js/glossary.js` trägt die Tooltip-Texte. `/`, `/kontur` und `/wand` sind weiterhin eingebettete
+`js/glossary.js` trägt die Tooltip-Texte. `/`, `/kontur` und `/dashboard` sind weiterhin eingebettete
 C#-Konstanten mit serverseitiger Injektion (`DashboardNav`, `RbgGlossary`);
 `kcc dump-dashboards [--out verz]` schreibt sie heraus und kopiert `wwwroot/` dazu.
 Als lose Datei geöffnet fragen die Seiten `http://localhost:8082` ab, überschreibbar mit

@@ -64,7 +64,7 @@ jobs:
           cd publish
           zip -r "../artifacts/kcc-${{ steps.version.outputs.version }}-win-x64.zip" \
             kcc.exe appsettings.json README.md \
-            dashboard.html kontur.html wand.html \
+            dashboard.html kontur.html wallboard.html \
             wwwroot
           cd ../artifacts
           sha256sum "kcc-${{ steps.version.outputs.version }}-win-x64.zip" > SHA256SUMS.txt
