@@ -76,10 +76,17 @@ public static class ApiServer
         var app = builder.Build();
         // Statische Dateien aus dem wwwroot-Ordner neben der EXE (CSS/JS und die
         // aufgetrennten Seiten). Greift vor dem Fallback-Handler unten.
-        app.UseStaticFiles();
+        // no-cache: der Browser prüft jede Datei per Revalidierung, sonst zeigt er nach einem
+        // Update alte JS/CSS, bis der Nutzer hart neu lädt.
+        app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
+        {
+            OnPrepareResponse = ctx =>
+                ctx.Context.Response.Headers["Cache-Control"] = "no-cache, must-revalidate",
+        });
         app.Run(async ctx =>
         {
             ctx.Response.Headers["Access-Control-Allow-Origin"] = "*";
+            ctx.Response.Headers["Cache-Control"] = "no-cache, must-revalidate";
             var (status, contentType, body) = Handle(
                 ctx.Request.Method, ctx.Request.Path.Value ?? "/",
                 key => ctx.Request.Query.TryGetValue(key, out var v) && v.Count > 0 ? v[0] : null,

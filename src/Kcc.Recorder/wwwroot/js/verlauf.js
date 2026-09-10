@@ -33,13 +33,20 @@ let sel = null;
 let syncing = false;
 
 // Absolutes Zeitfenster aus dem aktuellen Zoom eines Charts (null = voller Bereich).
+// c._range = [minMs, maxMs] der Rohdaten, beim Zeichnen gesetzt.
 function zoomWindow(c) {
   const dz = ((c.getOption() || {}).dataZoom || [])[0] || {};
   const s = dz.start ?? 0, e = dz.end ?? 100;
   if (s <= 0.05 && e >= 99.95) return null;
   if (dz.startValue != null && dz.endValue != null) return [+dz.startValue, +dz.endValue];
-  const ax = c.getModel().getComponent('xAxis', 0).axis.scale.getExtent();
-  return [ax[0] + (ax[1] - ax[0]) * s / 100, ax[0] + (ax[1] - ax[0]) * e / 100];
+  const r = c._range;
+  if (!r) return null;
+  return [r[0] + (r[1] - r[0]) * s / 100, r[0] + (r[1] - r[0]) * e / 100];
+}
+
+function setRange(c, buckets) {
+  const ts = (buckets || []).map(b => +new Date(b.at)).filter(Number.isFinite);
+  c._range = ts.length ? [Math.min(...ts), Math.max(...ts)] : null;
 }
 
 // Zoom auf einen Chart anwenden, ohne dessen dataZoom-Event als neue Nutzeraktion zu werten.
@@ -59,7 +66,7 @@ function onZoom(src) {
   syncing = false;
   renderTable();
 }
-chart.on('dataZoom', () => onZoom(chart));
+chart.on('datazoom', () => onZoom(chart));
 
 // Mit der Maus einen Zeitbereich aufziehen (X-Zoom), wie in der alten HTML-Version.
 // Dauerhaft aktiv; Doppelklick setzt zurück und schaltet es wieder scharf.
@@ -143,6 +150,7 @@ function drawArea(data) {
     }] : [],
     series,
   }, { notMerge: true });
+  setRange(chart, data.buckets);
   bindDragZoom(chart, $('area'));
   syncing = true; applyZoom(chart); syncing = false;   // Auswahl nach dem Neuaufbau wiederherstellen
 }
@@ -188,7 +196,7 @@ async function loadRpChart() {
 
   if (!rpChart) {
     rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });
-    rpChart.on('dataZoom', () => onZoom(rpChart));
+    rpChart.on('datazoom', () => onZoom(rpChart));
   }
 
   const busy = b.map(pt => [pt.at, (pt.busyPercent && pt.busyPercent[key]) ?? 0]);
@@ -215,6 +223,7 @@ async function loadRpChart() {
         lineStyle: { width: 1.6 }, data: load },
     ],
   }, { notMerge: true });
+  setRange(rpChart, b);
   bindDragZoom(rpChart, $('rpChart'));
   syncing = true; applyZoom(rpChart); syncing = false;   // gespiegelte Auswahl übernehmen
 }
