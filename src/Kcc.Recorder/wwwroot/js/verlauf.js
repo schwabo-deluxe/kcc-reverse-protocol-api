@@ -254,6 +254,57 @@ async function load() {
   }
 }
 
+// Druckreport: Auswahl + Zeitraum oben, Charts als PNG, Tabelle zum Schluss. Öffnet ein
+// eigenständiges Fenster und ruft print() — als PDF speicherbar.
+function openReport() {
+  if (!current) return;
+  const d = current;
+  const rp = $('rp').value;
+  const from = new Date(d.from), to = new Date(d.to);
+  const grid = d.rollingMinutes > 0 ? `gleitend ${d.rollingMinutes} min` : `Raster ${d.bucketMinutes} min`;
+  const png = c => c.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#0f1216' });
+  const mainPng = png(chart);
+  const rpPng = (rp && rpChart && !$('rpCard').hidden) ? png(rpChart) : null;
+
+  const rows = [...$('rows').querySelectorAll('tr')].map(tr =>
+    `<tr>${[...tr.children].map((td, i) => `<td${i ? ' class="n"' : ''}>${td.textContent.trim()}</td>`).join('')}</tr>`).join('');
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8">
+    <title>UPH-Verlauf – Report</title><style>
+      body { font: 13px/1.5 system-ui, sans-serif; color: #14171c; margin: 24px; }
+      h1 { font-size: 19px; margin: 0 0 4px; }
+      h2 { font-size: 14px; margin: 22px 0 6px; }
+      .meta { color: #555; font-size: 12px; margin-bottom: 16px; }
+      .meta b { color: #14171c; }
+      img { width: 100%; border: 1px solid #d0d4da; border-radius: 6px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+      th, td { border-bottom: 1px solid #d0d4da; padding: 5px 8px; text-align: left; }
+      td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+      thead th { border-bottom: 2px solid #14171c; }
+      @page { margin: 16mm; }
+    </style></head><body>
+    <h1>UPH-Verlauf – Report</h1>
+    <div class="meta">
+      <b>${esc(rp || 'alle Ressourcenpunkte')}</b> · Stapelung: ${d.groupBy === 'resourcePoint' ? 'Ressourcenpunkt' : 'Endziel'}<br>
+      Zeitraum <b>${from.toLocaleString('de-DE')}</b> – <b>${to.toLocaleString('de-DE')}</b> · ${grid}<br>
+      ${d.totalOrders.toLocaleString('de-DE')} Aufträge · erstellt ${new Date().toLocaleString('de-DE')}
+    </div>
+    <h2>${esc($('h-area').textContent)}</h2>
+    <img src="${mainPng}" alt="Verlauf">
+    ${rpPng ? `<h2>${esc($('h-rp').textContent)}</h2><img src="${rpPng}" alt="Belegung & Leistung">` : ''}
+    <h2>${esc($('h-table').textContent)}</h2>
+    <table>
+      <thead><tr><th>${esc($('h-key').textContent)}</th><th class="n">Ø UPH</th><th class="n">Aufträge</th><th class="n">Anteil</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>onload = () => { print(); }<\/script>
+  </body></html>`);
+  w.document.close();
+}
+$('report').addEventListener('click', openReport);
+
 $('ranges').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;

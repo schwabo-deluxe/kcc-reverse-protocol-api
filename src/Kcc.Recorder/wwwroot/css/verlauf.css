@@ -1,6 +1,8 @@
 .ranges { display: flex; gap: 4px; }
 .ranges button { background: #10141a; color: #9aa4b2; border: 1px solid #2a2f37; border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
 .ranges button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+.hbtn { background: #10141a; color: #9aa4b2; border: 1px solid #2a2f37; border-radius: 6px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.hbtn:hover { color: #e6e6e6; }
 
 #area { height: 510px; }
 #rpChart { height: 340px; }
