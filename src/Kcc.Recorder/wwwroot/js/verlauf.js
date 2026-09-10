@@ -58,13 +58,16 @@ function applyZoom(c) {
 }
 
 // Zoom in einem Chart → auf den anderen spiegeln und die Tabelle neu filtern.
+let tableTimer;
+function scheduleTable() { clearTimeout(tableTimer); tableTimer = setTimeout(renderTable, 200); }
+
 function onZoom(src) {
   if (syncing) return;
   sel = zoomWindow(src);
   syncing = true;
   applyZoom(src === chart ? rpChart : chart);
   syncing = false;
-  renderTable();
+  scheduleTable();
 }
 chart.on('datazoom', () => onZoom(chart));
 
@@ -236,50 +239,46 @@ function drawRatio(data) {
     `<div><i style="background:${colorFor(i)}"></i>${t.label} · ${fmt(t.share)} %</div>`).join('');
 }
 
-// Tabelle: ohne Auswahl die Fenstersummen vom Server; mit Chart-Auswahl aus den Rastern des
-// gewählten Zeitraums neu gerechnet. Im gleitenden Modus (8-h-Bereich) sind die Raster-Mengen
-// überlappende Trailing-Summen — dort bleibt die Tabelle bei den Fenstersummen.
-function renderTable() {
+// Tabelle: ohne Chart-Auswahl die Fenstersummen aus dem laufenden Datensatz; mit Auswahl eine
+// eigene Abfrage genau über den gewählten Zeitraum (feste Eimer, damit die Summen stimmen —
+// im gleitenden Modus wären die Rastermengen sonst überlappende Trailing-Summen).
+let tableReq = 0;
+
+function drawTotals(totals, sum, tag) {
+  const keyIdx = k => { const i = (current.keys || []).indexOf(k); return i < 0 ? 0 : i; };
+  $('rows').innerHTML = totals.map(t => `
+    <tr>
+      <td><span class="sw" style="background:${colorFor(keyIdx(t.key))}"></span>${t.label}</td>
+      <td>${fmt(t.avgUph)}</td>
+      <td>${t.orders.toLocaleString('de-DE')}</td>
+      <td>${fmt(t.share)} %</td>
+    </tr>`).join('')
+    + `<tr><td><b>Summe${tag}</b></td><td></td><td><b>${sum.toLocaleString('de-DE')}</b></td><td></td></tr>`;
+}
+
+async function renderTable() {
   const d = current;
   if (!d) return;
-  const rowsHtml = (list, sum, tag) =>
-    list.map(r => `
-      <tr>
-        <td><span class="sw" style="background:${colorFor(r.i)}"></span>${r.label}</td>
-        <td>${fmt(r.avgUph)}</td>
-        <td>${r.orders.toLocaleString('de-DE')}</td>
-        <td>${fmt(r.share)} %</td>
-      </tr>`).join('')
-    + `<tr><td><b>Summe${tag}</b></td><td></td><td><b>${sum.toLocaleString('de-DE')}</b></td><td></td></tr>`;
-
-  if (!sel || d.rollingMinutes > 0) {
-    $('rows').innerHTML = rowsHtml(
-      d.totals.map((t, i) => ({ ...t, i })), d.totalOrders,
-      (sel && d.rollingMinutes > 0) ? ' (Auswahl nicht möglich im gleitenden Modus)' : '');
-    return;
-  }
+  if (!sel) { drawTotals(d.totals, d.totalOrders, ''); return; }
 
   const [a, z] = sel;
-  const inSel = (d.buckets || []).filter(b => { const t = +new Date(b.at); return t >= a && t <= z; });
-  const spanH = Math.max(1e-9, (z - a) / 3.6e6);
-  const ord = {};
-  let total = 0;
-  for (const b of inSel)
-    for (const k in (b.orders || {})) { ord[k] = (ord[k] || 0) + b.orders[k]; total += b.orders[k]; }
-
-  const rows = (d.keys || [])
-    .map((k, i) => ({
-      i,
-      label: (d.totals.find(t => t.key === k)?.label) || k,
-      orders: ord[k] || 0,
-      avgUph: (ord[k] || 0) / spanH,
-      share: total ? (ord[k] || 0) / total * 100 : 0,
-    }))
-    .filter(r => r.orders > 0)
-    .sort((x, y) => y.orders - x.orders);
-
-  $('rows').innerHTML = rowsHtml(rows, total, ' (Auswahl)');
+  const q = new URLSearchParams({
+    groupBy: $('dim').value,
+    from: new Date(a).toISOString(),
+    to: new Date(z).toISOString(),
+    bucket: 5,
+  });
+  if ($('rp').value) q.set('rp', $('rp').value);
+  const my = ++tableReq;
+  try {
+    const r = await fetch(API_BASE + '/api/uph-history?' + q, { cache: 'no-store' });
+    if (!r.ok || my !== tableReq) return;
+    const s = await r.json();
+    if (my !== tableReq) return;
+    drawTotals(s.totals, s.totalOrders, ' (Auswahl)');
+  } catch { /* Auswahl-Abfrage fehlgeschlagen — Tabelle unverändert */ }
 }
+
 
 let current = null;
 
