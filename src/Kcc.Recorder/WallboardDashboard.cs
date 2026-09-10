@@ -52,11 +52,12 @@ public static class WallboardDashboard
                     color: #e6e6e6; flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .t-name .code { color: #7a8494; font-weight: 400; }
 
-          /* Tacho (Wert im Bogen): feste, viewport-relative Höhe. Die Kachel zentriert ihre
-             Inhalte, überschüssige Höhe wird zu gleichen Rändern — kein Beschneiden unten. */
-          .duo { display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; min-height: 0; }
-          .gcell { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
-          .gauge { height: clamp(66px, 11vh, 120px); width: auto; max-width: 100%; overflow: visible; }
+          /* Zwei Tachos übereinander — jeder nutzt die volle Kachelbreite und füllt die
+             verfügbare Höhe. */
+          .duo { display: flex; flex-direction: column; gap: 4px; justify-content: center;
+                 flex: 1 1 auto; min-height: 0; }
+          .gcell { flex: 1 1 0; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+          .gauge { height: 100%; width: auto; max-width: 100%; max-height: clamp(96px, 18vh, 190px); overflow: visible; }
           .gauge .track { stroke: #2a2f37; }
           .gauge .tick { stroke: #cdd6e0; }
 
