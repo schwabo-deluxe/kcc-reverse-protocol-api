@@ -4,10 +4,10 @@ namespace Kcc.Recorder;
 /// Rechnet den Anteil eines Zeitfensters aus, der auf die Hauptnutzungszeit der Anlage fällt —
 /// der Nenner der Langzeit-Durchschnitte. Regeln (<see cref="OperatingHoursConfig"/>):
 /// <list type="bullet">
-///   <item>Vor <c>Start</c> und nach <c>End</c> zählt nicht.</item>
 ///   <item>Ein Kalendertag ohne jede Bewegung im Fenster zählt gar nicht (Wochenende, Feiertag).</item>
-///   <item>Wird nach <c>End</c> noch gefahren, verlängert sich der Betrieb dieses Tages bis zur
-///         letzten Bewegung.</item>
+///   <item>Grundintervall je Tag mit Bewegung: <c>Start</c>–<c>End</c>.</item>
+///   <item>Wird davor oder danach gefahren, dehnt sich das Intervall bis zur ersten bzw. letzten
+///         Bewegung — die tatsächliche Betriebszeit wird nie kleiner als die Bewegungsspanne.</item>
 /// </list>
 /// </summary>
 public static class OperatingWindow
@@ -28,24 +28,26 @@ public static class OperatingWindow
             end <= start || start < TimeSpan.Zero || end > TimeSpan.FromHours(24))
             return full;
 
-        // Letzte Bewegung je Kalendertag im Fenster.
-        var lastByDay = new Dictionary<DateTime, DateTime>();
+        // Erste und letzte Bewegung je Kalendertag im Fenster.
+        var spanByDay = new Dictionary<DateTime, (DateTime First, DateTime Last)>();
         foreach (var a in activity)
         {
             if (a < from || a >= to)
                 continue;
             var day = a.Date;
-            if (!lastByDay.TryGetValue(day, out var prev) || a > prev)
-                lastByDay[day] = a;
+            if (!spanByDay.TryGetValue(day, out var sp))
+                spanByDay[day] = (a, a);
+            else
+                spanByDay[day] = (a < sp.First ? a : sp.First, a > sp.Last ? a : sp.Last);
         }
 
         double total = 0;
-        foreach (var (day, last) in lastByDay)
+        foreach (var (day, sp) in spanByDay)
         {
-            var s = Max(day + start, from);
-            var dayEnd = day + end;
-            if (last > dayEnd)      // nach Betriebsschluss noch gefahren
-                dayEnd = last;
+            // Grundintervall Start–End, aber mindestens die Bewegungsspanne dieses Tages
+            // (Früh-/Spätschicht außerhalb der Hauptnutzungszeit).
+            var s = Min(Max(day + start, from), sp.First);
+            var dayEnd = Max(day + end, sp.Last);
             var e = Min(dayEnd, to);
             if (e > s)
                 total += (e - s).TotalSeconds;

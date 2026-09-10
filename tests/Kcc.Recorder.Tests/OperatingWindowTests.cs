@@ -46,6 +46,19 @@ public class OperatingWindowTests
     }
 
     [Fact]
+    public void Bewegung_ganz_vor_Betriebsbeginn_ergibt_keine_Null()
+    {
+        // Frühschicht, 1-h-Fenster komplett vor 06:00 — darf nicht 0 werden (sonst
+        // explodieren die Durchschnitte). Betriebsintervall dehnt sich bis zur ersten Bewegung
+        // (04:05), Ende bleibt bei 15:15 → im Fenster [04:00, 05:00) sind das 55 min.
+        var sec = OperatingWindow.EffectiveSeconds(
+            Mon.AddHours(4), Mon.AddHours(5), [Mon.AddHours(4).AddMinutes(5), Mon.AddHours(4).AddMinutes(50)], Cfg);
+
+        Assert.Equal(55 * 60, sec, 0);
+        Assert.True(sec > 0);
+    }
+
+    [Fact]
     public void Fenster_schneidet_die_Betriebszeit_ab()
     {
         // Fenster beginnt erst 10:00 und endet 12:00 — nur dieser Ausschnitt der Betriebszeit.
