@@ -27,14 +27,39 @@ const chart = echarts.init($('area'), null, { renderer: 'canvas' });
 let rpChart = null;   // zweiter Chart (Belegung & Leistung), erst bei Auswahl eines Ressourcenpunkts
 addEventListener('resize', () => { chart.resize(); rpChart && rpChart.resize(); });
 
-// Der 60-s-Refresh baut den Chart mit notMerge neu — dabei ginge ein vom Nutzer gesetzter
-// Zoom verloren. Vorher merken, nachher wiederherstellen, sofern nicht auf Vollbereich.
-function keepZoom(c, redraw) {
-  const prev = ((c.getOption() || {}).dataZoom || []).map(d => ({ start: d.start, end: d.end }));
-  redraw();
-  if (prev.some(d => (d.start ?? 0) > 0.01 || (d.end ?? 100) < 99.99))
-    c.setOption({ dataZoom: prev });
+// Ausgewähltes Zeitfenster [startMs, endMs] oder null (voller Bereich). Ein Zoom in einem
+// Chart wird auf den anderen gespiegelt, die Tabelle zeigt dann nur diesen Ausschnitt.
+let sel = null;
+let syncing = false;
+
+// Absolutes Zeitfenster aus dem aktuellen Zoom eines Charts (null = voller Bereich).
+function zoomWindow(c) {
+  const dz = ((c.getOption() || {}).dataZoom || [])[0] || {};
+  const s = dz.start ?? 0, e = dz.end ?? 100;
+  if (s <= 0.05 && e >= 99.95) return null;
+  if (dz.startValue != null && dz.endValue != null) return [+dz.startValue, +dz.endValue];
+  const ax = c.getModel().getComponent('xAxis', 0).axis.scale.getExtent();
+  return [ax[0] + (ax[1] - ax[0]) * s / 100, ax[0] + (ax[1] - ax[0]) * e / 100];
 }
+
+// Zoom auf einen Chart anwenden, ohne dessen dataZoom-Event als neue Nutzeraktion zu werten.
+function applyZoom(c) {
+  if (!c) return;
+  c.dispatchAction(sel
+    ? { type: 'dataZoom', startValue: sel[0], endValue: sel[1] }
+    : { type: 'dataZoom', start: 0, end: 100 });
+}
+
+// Zoom in einem Chart → auf den anderen spiegeln und die Tabelle neu filtern.
+function onZoom(src) {
+  if (syncing) return;
+  sel = zoomWindow(src);
+  syncing = true;
+  applyZoom(src === chart ? rpChart : chart);
+  syncing = false;
+  renderTable();
+}
+chart.on('dataZoom', () => onZoom(chart));
 
 // Mit der Maus einen Zeitbereich aufziehen (X-Zoom), wie in der alten HTML-Version.
 // Dauerhaft aktiv; Doppelklick setzt zurück und schaltet es wieder scharf.
@@ -104,7 +129,7 @@ function drawArea(data) {
     data: data.buckets.map(b => [b.at, b.series[k] || 0]),
   }));
 
-  keepZoom(chart, () => chart.setOption({
+  chart.setOption({
     ...baseOption(),
     toolbox: DRAG_ZOOM,
     legend: {
@@ -117,8 +142,9 @@ function drawArea(data) {
       style: { text: 'keine Daten im Zeitraum', fill: '#7a8494', fontSize: 13 },
     }] : [],
     series,
-  }, { notMerge: true }));
+  }, { notMerge: true });
   bindDragZoom(chart, $('area'));
+  syncing = true; applyZoom(chart); syncing = false;   // Auswahl nach dem Neuaufbau wiederherstellen
 }
 
 // Zweiter Chart: Belegung (Fläche) und Leistung (Linie) des gewählten Ressourcenpunkts über
@@ -160,12 +186,15 @@ async function loadRpChart() {
     : `Belegung & Leistung — ${label}`) + opTxt;
   $('rpCard').hidden = false;
 
-  if (!rpChart) rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });
+  if (!rpChart) {
+    rpChart = echarts.init($('rpChart'), null, { renderer: 'canvas' });
+    rpChart.on('dataZoom', () => onZoom(rpChart));
+  }
 
   const busy = b.map(pt => [pt.at, (pt.busyPercent && pt.busyPercent[key]) ?? 0]);
   const load = b.map(pt => [pt.at, (pt.loadPercent && pt.loadPercent[key]) ?? 0]);
 
-  keepZoom(rpChart, () => rpChart.setOption({
+  rpChart.setOption({
     ...baseOption(),
     toolbox: DRAG_ZOOM,
     yAxis: { type: 'value', name: '%', min: 0, max: 105,
@@ -185,8 +214,9 @@ async function loadRpChart() {
       { name: 'Leistung', type: 'line', showSymbol: false, color: C_LOAD,
         lineStyle: { width: 1.6 }, data: load },
     ],
-  }, { notMerge: true }));
+  }, { notMerge: true });
   bindDragZoom(rpChart, $('rpChart'));
+  syncing = true; applyZoom(rpChart); syncing = false;   // gespiegelte Auswahl übernehmen
 }
 
 function drawRatio(data) {
@@ -197,15 +227,49 @@ function drawRatio(data) {
     `<div><i style="background:${colorFor(i)}"></i>${t.label} · ${fmt(t.share)} %</div>`).join('');
 }
 
-function drawTable(data) {
-  $('rows').innerHTML = data.totals.map((t, i) => `
-    <tr>
-      <td><span class="sw" style="background:${colorFor(i)}"></span>${t.label}</td>
-      <td>${fmt(t.avgUph)}</td>
-      <td>${t.orders.toLocaleString('de-DE')}</td>
-      <td>${fmt(t.share)} %</td>
-    </tr>`).join('')
-    + `<tr><td><b>Summe</b></td><td></td><td><b>${data.totalOrders.toLocaleString('de-DE')}</b></td><td></td></tr>`;
+// Tabelle: ohne Auswahl die Fenstersummen vom Server; mit Chart-Auswahl aus den Rastern des
+// gewählten Zeitraums neu gerechnet. Im gleitenden Modus (8-h-Bereich) sind die Raster-Mengen
+// überlappende Trailing-Summen — dort bleibt die Tabelle bei den Fenstersummen.
+function renderTable() {
+  const d = current;
+  if (!d) return;
+  const rowsHtml = (list, sum, tag) =>
+    list.map(r => `
+      <tr>
+        <td><span class="sw" style="background:${colorFor(r.i)}"></span>${r.label}</td>
+        <td>${fmt(r.avgUph)}</td>
+        <td>${r.orders.toLocaleString('de-DE')}</td>
+        <td>${fmt(r.share)} %</td>
+      </tr>`).join('')
+    + `<tr><td><b>Summe${tag}</b></td><td></td><td><b>${sum.toLocaleString('de-DE')}</b></td><td></td></tr>`;
+
+  if (!sel || d.rollingMinutes > 0) {
+    $('rows').innerHTML = rowsHtml(
+      d.totals.map((t, i) => ({ ...t, i })), d.totalOrders,
+      (sel && d.rollingMinutes > 0) ? ' (Auswahl nicht möglich im gleitenden Modus)' : '');
+    return;
+  }
+
+  const [a, z] = sel;
+  const inSel = (d.buckets || []).filter(b => { const t = +new Date(b.at); return t >= a && t <= z; });
+  const spanH = Math.max(1e-9, (z - a) / 3.6e6);
+  const ord = {};
+  let total = 0;
+  for (const b of inSel)
+    for (const k in (b.orders || {})) { ord[k] = (ord[k] || 0) + b.orders[k]; total += b.orders[k]; }
+
+  const rows = (d.keys || [])
+    .map((k, i) => ({
+      i,
+      label: (d.totals.find(t => t.key === k)?.label) || k,
+      orders: ord[k] || 0,
+      avgUph: (ord[k] || 0) / spanH,
+      share: total ? (ord[k] || 0) / total * 100 : 0,
+    }))
+    .filter(r => r.orders > 0)
+    .sort((x, y) => y.orders - x.orders);
+
+  $('rows').innerHTML = rowsHtml(rows, total, ' (Auswahl)');
 }
 
 let current = null;
@@ -226,7 +290,7 @@ function render(data) {
 
   drawArea(data);
   drawRatio(data);
-  drawTable(data);
+  renderTable();
   loadRpChart();
 
   const from = new Date(data.from), to = new Date(data.to);
