@@ -50,7 +50,29 @@ function applyMiniZoom() {
     inst.dispatchAction(w ? { type: 'dataZoom', startValue: w[0], endValue: w[1] } : { type: 'dataZoom', start: 0, end: 100 });
   syncingZoom = false;
 }
-mainChart.on('datazoom', applyMiniZoom);
+
+// Balken und Tabelle werten bei gesetztem Zoom nur den ausgewählten Zeitraum aus — eigene
+// Serverabfrage, da die Balken/Kennzahlen (Doppelspiele, Leerlauf, …) nicht aus den geladenen
+// Buckets zurückgerechnet werden können.
+let selReq = 0;
+async function applySelection() {
+  applyMiniZoom();
+  const w = mainZoomWindow();
+  const my = ++selReq;
+  if (!w) { verdict(); bars(); table(); return; }
+  const q = new URLSearchParams();
+  q.set('from', new Date(w[0]).toISOString());
+  q.set('to', new Date(w[1]).toISOString());
+  q.set('bucket', bucketFor(hours));
+  try {
+    const res = await fetch(`${API_BASE}/api/rbg-history?${q}`, { cache: 'no-store' });
+    if (!res.ok || my !== selReq) return;
+    const sel = await res.json();
+    if (my !== selReq) return;
+    verdict(sel); bars(sel); table(sel);
+  } catch { /* Auswahl-Abfrage fehlgeschlagen — unverändert lassen */ }
+}
+mainChart.on('datazoom', applySelection);
 
 // Aufziehen mit der Maus wählt einen Zeitbereich (X-Zoom), wie in der alten HTML-Version.
 // ECharts kann das dauerhaft aktiv halten (sonst bräuchte es erst einen Toolbox-Klick).
@@ -224,14 +246,15 @@ function drawMinis() {
   applyMiniZoom();
 }
 
-function verdict() {
-  const t = data.totals.filter(x => x.cycles > 0);
-  const spread = data.spreadPercent;
+function verdict(d) {
+  d = d || data;
+  const t = d.totals.filter(x => x.cycles > 0);
+  const spread = d.spreadPercent;
   const tone = spread >= 30 ? '#ff6b6b' : spread >= 15 ? '#ffb454' : '#5ccb7e';
   const say = t.length < 2
     ? 'Zu wenig Bewegung im Zeitraum für einen Vergleich.'
-    : `<b>${nameOf(data.busiest)}</b> fährt am meisten (${fmt(t[0].cycles)} Spiele), ` +
-      `<b>${nameOf(data.quietest)}</b> am wenigsten (${fmt(t[t.length - 1].cycles)} Spiele) — ` +
+    : `<b>${nameOf(d.busiest)}</b> fährt am meisten (${fmt(t[0].cycles)} Spiele), ` +
+      `<b>${nameOf(d.quietest)}</b> am wenigsten (${fmt(t[t.length - 1].cycles)} Spiele) — ` +
       `also ${fmt(spread)} % weniger.`;
   $('verdict').innerHTML = `
     <div${help('spread')}>
@@ -239,7 +262,7 @@ function verdict() {
       <div class="cap">Spreizung</div>
     </div>
     <div${help('cycles')}>
-      <div class="big">${fmt(data.totalCycles)}</div>
+      <div class="big">${fmt(d.totalCycles)}</div>
       <div class="cap">Spiele gesamt</div>
     </div>
     <div>
@@ -249,8 +272,9 @@ function verdict() {
     <div class="say">${say}</div>`;
 }
 
-function bars() {
-  const t = data.totals;
+function bars(d) {
+  d = d || data;
+  const t = d.totals;
   const even = t.length ? 100 / t.length : 0;
   const max = Math.max(1, ...t.map(x => x.share));
   // Der Balken zeigt den Anteil am Gesamtdurchsatz, in sich aufgeteilt nach Ein- und
@@ -273,7 +297,8 @@ function bars() {
   }).join('');
 }
 
-function table() {
+function table(d) {
+  d = d || data;
   $('head').innerHTML =
     `<th>RBG</th><th${help('inout')}>Ein</th><th${help('inout')}>Aus</th>` +
     `<th${help('double')}>Doppelspiele</th><th${help('single')}>Einzelspiele</th>` +
@@ -281,7 +306,7 @@ function table() {
     `<th${help('avgcycles')}>Ø Spiele/h</th><th${help('peak')}>Spitze</th>` +
     `<th${help('load')}>Ø Leistung</th><th${help('busy')}>Ø Auslastung</th>` +
     `<th${help('idle')}>Leerlauf</th><th${help('active')}>Aktive Std.</th>`;
-  $('rows').innerHTML = data.totals.map(t => `
+  $('rows').innerHTML = d.totals.map(t => `
     <tr>
       <td><span class="sw" style="background:${colorOf(t.connection)}"></span>${nameOf(t.connection)}</td>
       <td>${t.stores}</td><td>${t.retrievals}</td>
@@ -299,11 +324,9 @@ function table() {
 
 function render(d) {
   data = d;
-  verdict();
-  bars();
   drawMain();
   drawMinis();
-  table();
+  applySelection();
 
   const from = new Date(d.from), to = new Date(d.to);
   const sameDay = from.toDateString() === to.toDateString();
