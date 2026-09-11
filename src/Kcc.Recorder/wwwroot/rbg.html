@@ -42,7 +42,15 @@
     <div class="hint">Balken = Anteil an allen Spielen, geteilt in <b>Einlagerung</b> (voll) / <b>Auslagerung</b> (blass). Helle Linie = Gleichverteilung.</div>
   </div>
   <div class="card">
-    <h2 id="chartTitle">Verlauf</h2>
+    <div class="chdr">
+      <h2 id="chartTitle">Verlauf</h2>
+      <span class="seg-label">Raster</span>
+      <div class="seg" id="bucket">
+        <button data-b="5" class="on">5 min</button>
+        <button data-b="15">15 min</button>
+        <button data-b="30">30 min</button>
+      </div>
+    </div>
     <div id="chart" class="chart"></div>
     <div class="hint zoomhint">Im Chart ziehen zoomt hinein, Mausrad zoomt, der Balken unten verschiebt den Ausschnitt · Legende oben schaltet Geräte ab · Doppelklick setzt zurück</div>
   </div>

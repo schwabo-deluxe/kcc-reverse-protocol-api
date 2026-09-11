@@ -14,6 +14,7 @@ const C_BUSY = '#4fa3ff', C_LOAD = '#ffb454', C_IDLE = '#3a4150';
 
 let hours = 168;
 let metric = 'cyclesPerHour';
+let bucket = 5;   // Raster, per Knopf 5/15/30 min wählbar
 let data = null;
 
 const colorOf = c => PALETTE[(data ? data.connections.indexOf(c) : 0) % PALETTE.length];
@@ -25,9 +26,6 @@ const unitOf = m => (m === 'cyclesPerHour' ? '/h' : '%');
 const metricTitle = m => m === 'busyPercent' ? 'Verlauf Auslastungsgrad'
   : m === 'loadPercent' ? 'Verlauf Leistungsgrad' : 'Verlauf Spiele/h';
 const dur = h => (h >= 1 ? `${fmt(h)} h` : `${fmt(h * 60, 0)} min`);
-
-// Raster: fein genug zum Erkennen, grob genug für lange Zeiträume.
-const bucketFor = h => 5;
 
 const mainChart = echarts.init($('chart'), null, { renderer: 'canvas' });
 const minis = new Map();   // connection -> ECharts-Instanz
@@ -63,7 +61,7 @@ async function applySelection() {
   const q = new URLSearchParams();
   q.set('from', new Date(w[0]).toISOString());
   q.set('to', new Date(w[1]).toISOString());
-  q.set('bucket', bucketFor(hours));
+  q.set('bucket', bucket);
   try {
     const res = await fetch(`${API_BASE}/api/rbg-history?${q}`, { cache: 'no-store' });
     if (!res.ok || my !== selReq) return;
@@ -346,7 +344,7 @@ function render(d) {
 async function load() {
   const q = new URLSearchParams();
   q.set('hours', hours);
-  q.set('bucket', bucketFor(hours));
+  q.set('bucket', bucket);
   try {
     const res = await fetch(`${API_BASE}/api/rbg-history?${q}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -370,6 +368,13 @@ $('metric').addEventListener('click', e => {
   metric = btn.dataset.m;
   for (const b of $('metric').children) b.classList.toggle('on', b === btn);
   if (data) drawMain();
+});
+$('bucket').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  bucket = parseInt(btn.dataset.b, 10);
+  for (const b of $('bucket').children) b.classList.toggle('on', b === btn);
+  load();
 });
 
 load();

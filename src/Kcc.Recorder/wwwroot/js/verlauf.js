@@ -12,12 +12,8 @@ const API_BASE = (new URLSearchParams(location.search).get('api')
 
 let hours = 8;
 let rollingWin = 5;   // > 0: gleitendes Kurzzeit-Fenster (Minuten), sonst feste Eimer
-
-// Anzeigeraster je Zeitraum. Feinstmöglich ist die Rasterweite der Aufzeichnung
-// (UphHistoryIntervalMinutes, Standard 5 min); darüber wird zusammengefasst.
-function bucketFor(h) {
-  return 5;
-}
+let bucketMain = 5;   // Raster des Hauptcharts, per Knopf 5/15/30 min wählbar (nicht im gleitenden Modus)
+let bucketRp = 5;     // Raster des Belegung/Leistung-Charts
 
 const chart = echarts.init($('area'), null, { renderer: 'canvas' });
 let rpChart = null;   // zweiter Chart (Belegung & Leistung), erst bei Auswahl eines Ressourcenpunkts
@@ -160,7 +156,6 @@ function drawArea(data) {
 // Ressourcenpunkt-Langzeitreihe /api/point-history (Leistung = Aufträge/h gegen den Richtwert).
 // Beide reichen unabhängig von den Rohtelegrammen zurück.
 const C_BUSY = '#4fa3ff', C_LOAD = '#ffb454', C_IDLE = '#3a4150';
-const rbgBucketFor = h => h <= 24 ? 5 : h <= 72 ? 15 : h <= 168 ? 30 : h <= 672 ? 240 : 1440;
 
 async function loadRpChart() {
   const rp = $('rp').value;
@@ -168,7 +163,7 @@ async function loadRpChart() {
   const conn = current && current.resourcePointConnections
     ? current.resourcePointConnections[rp] : null;
 
-  const q = new URLSearchParams({ hours: hours, bucket: rbgBucketFor(hours), rp });
+  const q = new URLSearchParams({ hours: hours, bucket: bucketRp, rp });
   const path = conn ? '/api/rbg-history?' : '/api/point-history?';
   let d;
   try {
@@ -311,7 +306,7 @@ async function load() {
   if ($('rp').value) q.set('rp', $('rp').value);
   q.set('hours', hours);
   if (rollingWin > 0) { q.set('rolling', rollingWin); q.set('bucket', 1); }
-  else q.set('bucket', bucketFor(hours));
+  else q.set('bucket', bucketMain);
   try {
     const res = await fetch(API_BASE + '/api/uph-history?' + q, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -383,5 +378,19 @@ $('ranges').addEventListener('click', e => {
 });
 $('rp').addEventListener('change', load);
 $('dim').addEventListener('change', load);
+$('bucketMain').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  bucketMain = parseInt(btn.dataset.b, 10);
+  for (const b of $('bucketMain').children) b.classList.toggle('on', b === btn);
+  load();
+});
+$('bucketRp').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  bucketRp = parseInt(btn.dataset.b, 10);
+  for (const b of $('bucketRp').children) b.classList.toggle('on', b === btn);
+  loadRpChart();
+});
 load();
 setInterval(load, 60000);

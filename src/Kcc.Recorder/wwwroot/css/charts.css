@@ -21,6 +21,9 @@ select { background: #10141a; color: #e6e6e6; border: 1px solid #2a2f37; border-
 main { padding: 18px 20px 40px; max-width: 1400px; margin: 0 auto; }
 .card { background: #1c2128; border: 1px solid #2a2f37; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
 .card h2 { font-size: 13px; margin: 0 0 12px; color: #9aa4b2; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.chdr { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.chdr h2 { margin: 0; }
+.chdr .seg-label { margin-left: auto; }
 .hint { color: #7a8494; font-size: 12px; margin-top: 10px; }
 [title] { cursor: help; }
 
