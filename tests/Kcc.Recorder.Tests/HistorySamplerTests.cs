@@ -216,6 +216,24 @@ public class HistorySamplerTests : IDisposable
         Assert.Contains(rows, r => r.Bucket == day.AddHours(8));       // neu verdichtet
     }
 
+    [Fact]
+    public void Rebuild_verdichtet_RBG_Historie_ueber_die_kuerzere_UPH_Aufbewahrung_hinaus()
+    {
+        using var store = new TelegramStore(_path);
+        var newest = new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Unspecified);
+        var old = newest.AddDays(-40);   // außerhalb der 28-tägigen UPH-, innerhalb der 365-tägigen RBG-Aufbewahrung
+
+        var feed = new RbgFeed();
+        feed.Transport(old, old.AddMinutes(2), true, "RBG01");
+        feed.Transport(newest, newest.AddMinutes(2), true, "RBG01");
+        store.Insert(feed.Rows);
+
+        RbgSampler(store).Rebuild();
+
+        var rows = store.ReadRbgSamples(old.AddDays(-1), newest.AddDays(1));
+        Assert.Contains(rows, r => r.Bucket == old);   // wäre am UPH-Fenster (28 Tage) hängengeblieben
+    }
+
     // ---- Ressourcenpunkt-Langzeitaufzeichnung (Belegung & Leistung) -----------------------------
 
     static int FieldOffset(string name)
@@ -301,6 +319,26 @@ public class HistorySamplerTests : IDisposable
         var rows = store.ReadPointSamples(old.AddDays(-1), day.AddDays(1));
         Assert.Equal(9, rows.Single(r => r.Bucket == old).Orders);          // Langzeitreihe überlebt
         Assert.Contains(rows, r => r.Bucket == day.AddHours(8));            // neu verdichtet
+    }
+
+    [Fact]
+    public void Rebuild_verdichtet_Ressourcenpunkt_Historie_ueber_die_kuerzere_UPH_Aufbewahrung_hinaus()
+    {
+        using var store = new TelegramStore(_path);
+        var newest = new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Unspecified);
+        var old = newest.AddDays(-40);   // außerhalb der 28-tägigen UPH-, innerhalb der 365-tägigen Punkt-Aufbewahrung
+
+        store.Insert(
+        [
+            Conv(1, old, "ENDTSP", "EA21"),
+            Conv(2, old.AddMinutes(10), "RPFREE", "EA21"),
+            Conv(3, newest, "ENDTSP", "EA21"),
+        ]);
+
+        PointSampler(store).Rebuild();
+
+        var rows = store.ReadPointSamples(old.AddDays(-1), newest.AddDays(1));
+        Assert.Contains(rows, r => r.Bucket == old);   // wäre am UPH-Fenster (28 Tage) hängengeblieben
     }
 
     public void Dispose()

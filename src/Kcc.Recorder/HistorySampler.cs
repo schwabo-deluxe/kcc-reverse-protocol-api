@@ -166,8 +166,11 @@ public sealed class HistorySampler
     /// <summary>
     /// Baut die gesamte Historie aus den Rohtelegrammen neu auf — nötig, nachdem ältere
     /// Telegramme per <c>backfill</c> nachgeladen wurden, denn <see cref="SampleNow"/> rechnet
-    /// nur vorwärts ab dem zuletzt gespeicherten Raster. Fenster: das Kürzere aus
-    /// Aufbewahrungszeitraum und ältestem vorhandenen Telegramm.
+    /// nur vorwärts ab dem zuletzt gespeicherten Raster. Jede der drei Reihen bekommt ihr eigenes
+    /// Fenster aus ihrer eigenen Aufbewahrungszeit und dem ältesten vorhandenen Telegramm — RBG-
+    /// und Ressourcenpunkt-Historie halten üblicherweise deutlich länger vor als die UPH-Reihe
+    /// (<c>RbgHistoryRetentionDays</c>/<c>PointHistoryRetentionDays</c> vs. <c>UphHistoryRetentionDays</c>)
+    /// und dürfen deshalb nicht auf deren kürzeres Fenster begrenzt werden.
     /// </summary>
     public void Rebuild()
     {
@@ -177,39 +180,49 @@ public sealed class HistorySampler
 
         var step = TimeSpan.FromMinutes(_intervalMinutes);
         var completeUpTo = Floor(newest.Value, step);
-        var retentionStart = _retentionDays > 0
-            ? Floor(newest.Value.AddDays(-_retentionDays), step)
-            : DateTime.MinValue;
         var oldest = _store.MinTelegramTime() is { } min ? Floor(min, step) : completeUpTo;
-        var start = oldest > retentionStart ? oldest : retentionStart;
 
-        if (start >= completeUpTo)
-            return;
+        DateTime WindowStart(int retentionDays)
+        {
+            var retentionStart = retentionDays > 0
+                ? Floor(newest.Value.AddDays(-retentionDays), step)
+                : DateTime.MinValue;
+            return oldest > retentionStart ? oldest : retentionStart;
+        }
 
-        var rows = Aggregate(start, completeUpTo, step);
-        _store.ReplaceUphSamplesFrom(DateTime.MinValue, rows);   // alles verwerfen, komplett neu
-        _nextRun = DateTime.UtcNow.AddMinutes(_intervalMinutes);
+        var start = WindowStart(_retentionDays);
+        if (start < completeUpTo)
+        {
+            var rows = Aggregate(start, completeUpTo, step);
+            _store.ReplaceUphSamplesFrom(DateTime.MinValue, rows);   // alles verwerfen, komplett neu
+            _nextRun = DateTime.UtcNow.AddMinutes(_intervalMinutes);
 
-        _log($"UPH-Historie neu aufgebaut: {rows.Count} Rasterzeilen " +
-             $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+            _log($"UPH-Historie neu aufgebaut: {rows.Count} Rasterzeilen " +
+                 $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+        }
 
-        // Bei RBG- und Ressourcenpunkt-Reihe jeweils nur das Fenster mit Rohtelegrammen ersetzen:
-        // beide reichen typischerweise weiter zurück als die Telegramme und dürfen dabei nicht
-        // verloren gehen.
         if (SamplesRbg)
         {
-            var rbgRows = AggregateRbg(start, completeUpTo, step);
-            _store.ReplaceRbgSamplesFrom(start, rbgRows);
-            _log($"RBG-Historie neu aufgebaut: {rbgRows.Count} Rasterzeilen " +
-                 $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm} (ältere bleiben erhalten).");
+            var rbgStart = WindowStart(_rbgRetentionDays);
+            if (rbgStart < completeUpTo)
+            {
+                var rbgRows = AggregateRbg(rbgStart, completeUpTo, step);
+                _store.ReplaceRbgSamplesFrom(rbgStart, rbgRows);
+                _log($"RBG-Historie neu aufgebaut: {rbgRows.Count} Rasterzeilen " +
+                     $"{rbgStart:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+            }
         }
 
         if (SamplesPoints)
         {
-            var pointRows = AggregatePoints(start, completeUpTo, step);
-            _store.ReplacePointSamplesFrom(start, pointRows);
-            _log($"Ressourcenpunkt-Historie neu aufgebaut: {pointRows.Count} Rasterzeilen " +
-                 $"{start:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm} (ältere bleiben erhalten).");
+            var pointStart = WindowStart(_pointRetentionDays);
+            if (pointStart < completeUpTo)
+            {
+                var pointRows = AggregatePoints(pointStart, completeUpTo, step);
+                _store.ReplacePointSamplesFrom(pointStart, pointRows);
+                _log($"Ressourcenpunkt-Historie neu aufgebaut: {pointRows.Count} Rasterzeilen " +
+                     $"{pointStart:yyyy-MM-dd HH:mm}–{completeUpTo:yyyy-MM-dd HH:mm}.");
+            }
         }
     }
 
