@@ -38,11 +38,9 @@ public static class BuildInfo
 
     static DateTime? ResolveBuildDate()
     {
-        // Bei PublishSingleFile hat die Assembly selbst keinen Pfad (in die EXE gebündelt) —
-        // Environment.ProcessPath zeigt auf die tatsächliche kcc.exe-Datei auf der Platte.
+        // Bei PublishSingleFile hat Assembly.Location keinen Pfad (in die EXE gebündelt, meldet
+        // IL3000) — Environment.ProcessPath zeigt zuverlässig auf die kcc.exe-Datei auf der Platte.
         var path = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(path))
-            path = typeof(BuildInfo).Assembly.Location;
         if (string.IsNullOrEmpty(path))
             return null;
 
