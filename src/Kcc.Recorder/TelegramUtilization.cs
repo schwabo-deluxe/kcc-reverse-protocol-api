@@ -121,7 +121,7 @@ public sealed record TelegramUtilization
         new() { Name = "LD51", Group = "Fördertechnik" },
         new() { Name = "MFA1", Group = "Fördertechnik" },
         new() { Name = "ME71", Group = "Fördertechnik" },
-        new() { Name = "EB31", Group = "Fördertechnik" },
+        new() { Name = "AA81", Group = "Fördertechnik", Label = "Wareneingang EG" },
     ];
 
     public required int WindowMinutes { get; init; }
