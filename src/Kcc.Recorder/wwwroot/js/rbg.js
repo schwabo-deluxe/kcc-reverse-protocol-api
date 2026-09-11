@@ -31,21 +31,27 @@ const mainChart = echarts.init($('chart'), null, { renderer: 'canvas' });
 const minis = new Map();   // connection -> ECharts-Instanz
 addEventListener('resize', () => { mainChart.resize(); minis.forEach(c => c.resize()); });
 
-// Zeitfenster aus dem großen Chart auf alle kleinen Geräte-Charts spiegeln.
+// Zoom auf irgendeinem Chart (groß oder Mini) auf alle anderen spiegeln — arbeitet mit
+// absoluten Zeitstempeln, damit es auch bei unterschiedlichen Datenbereichen je Gerät passt.
 let syncingZoom = false;
-function mainZoomWindow() {
-  const dz = ((mainChart.getOption() || {}).dataZoom || [])[0] || {};
+let zoomWin = null;   // [startMs, endMs] oder null (voller Bereich)
+function chartZoomWindow(inst) {
+  const dz = ((inst.getOption() || {}).dataZoom || [])[0] || {};
   const s = dz.start ?? 0, e = dz.end ?? 100;
   if (s <= 0.05 && e >= 99.95) return null;
   if (dz.startValue != null && dz.endValue != null) return [+dz.startValue, +dz.endValue];
   return null;
 }
-function applyMiniZoom() {
+function applyZoomTo(inst) {
+  inst.dispatchAction(zoomWin
+    ? { type: 'dataZoom', startValue: zoomWin[0], endValue: zoomWin[1] }
+    : { type: 'dataZoom', start: 0, end: 100 });
+}
+function applyZoomAll(except) {
   if (syncingZoom) return;
   syncingZoom = true;
-  const w = mainZoomWindow();
-  for (const inst of minis.values())
-    inst.dispatchAction(w ? { type: 'dataZoom', startValue: w[0], endValue: w[1] } : { type: 'dataZoom', start: 0, end: 100 });
+  for (const inst of [mainChart, ...minis.values()])
+    if (inst !== except) applyZoomTo(inst);
   syncingZoom = false;
 }
 
@@ -54,13 +60,11 @@ function applyMiniZoom() {
 // Buckets zurückgerechnet werden können.
 let selReq = 0;
 async function applySelection() {
-  applyMiniZoom();
-  const w = mainZoomWindow();
   const my = ++selReq;
-  if (!w) { verdict(); bars(); table(); return; }
+  if (!zoomWin) { verdict(); bars(); table(); return; }
   const q = new URLSearchParams();
-  q.set('from', new Date(w[0]).toISOString());
-  q.set('to', new Date(w[1]).toISOString());
+  q.set('from', new Date(zoomWin[0]).toISOString());
+  q.set('to', new Date(zoomWin[1]).toISOString());
   q.set('bucket', bucket);
   try {
     const res = await fetch(`${API_BASE}/api/rbg-history?${q}`, { cache: 'no-store' });
@@ -70,7 +74,13 @@ async function applySelection() {
     verdict(sel); bars(sel); table(sel);
   } catch { /* Auswahl-Abfrage fehlgeschlagen — unverändert lassen */ }
 }
-mainChart.on('datazoom', applySelection);
+function onZoom(src) {
+  if (syncingZoom) return;
+  zoomWin = chartZoomWindow(src);
+  applyZoomAll(src);
+  applySelection();
+}
+mainChart.on('datazoom', () => onZoom(mainChart));
 
 // Aufziehen mit der Maus wählt einen Zeitbereich (X-Zoom), wie in der alten HTML-Version.
 // ECharts kann das dauerhaft aktiv halten (sonst bräuchte es erst einen Toolbox-Klick).
@@ -209,6 +219,7 @@ function drawMinis() {
     const plot = box.querySelector('.plot');
     const inst = echarts.init(plot, null, { renderer: 'canvas' });
     minis.set(c, inst);
+    inst.on('datazoom', () => onZoom(inst));
     inst.setOption(darkBase({
       toolbox: dragZoom,
       dataZoom: [{ type: 'inside', filterMode: 'none' }],
@@ -240,8 +251,8 @@ function drawMinis() {
       ],
     }), { notMerge: true });
     armDragZoom(inst, plot);
+    syncingZoom = true; applyZoomTo(inst); syncingZoom = false;
   }
-  applyMiniZoom();
 }
 
 function verdict(d) {
