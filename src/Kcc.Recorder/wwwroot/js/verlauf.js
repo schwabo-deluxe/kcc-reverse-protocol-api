@@ -12,6 +12,7 @@ const API_BASE = (new URLSearchParams(location.search).get('api')
 
 let hours = 8;
 let rollingWin = 5;   // > 0: gleitendes Kurzzeit-Fenster (Minuten), sonst feste Eimer
+let allPoints = false;   // false: nur unter ResourcePoints konfigurierte Punkte
 let bucketMain = 5;   // Raster des Hauptcharts, per Knopf 5/15/30 min wählbar (nicht im gleitenden Modus)
 let bucketRp = 5;     // Raster des Belegung/Leistung-Charts
 
@@ -260,6 +261,7 @@ async function renderTable() {
     bucket: 5,
   });
   if ($('rp').value) q.set('rp', $('rp').value);
+  if (allPoints) q.set('allPoints', '1');
   const my = ++tableReq;
   try {
     const r = await fetch(API_BASE + '/api/uph-history?' + q, { cache: 'no-store' });
@@ -276,9 +278,11 @@ let current = null;
 function render(data) {
   current = data;
   const rp = $('rp');
-  if (rp.options.length <= 1 && data.resourcePoints.length) {
-    for (const p of data.resourcePoints) rp.add(new Option(p, p));
-  }
+  const prevSelected = rp.value;
+  rp.innerHTML = '<option value="">alle</option>';
+  for (const p of data.resourcePoints) rp.add(new Option(p, p));
+  if ([...rp.options].some(o => o.value === prevSelected)) rp.value = prevSelected;
+
   const byRp = data.groupBy === 'resourcePoint';
   const noun = byRp ? 'Ressourcenpunkt' : 'Endziel';
   const nounPl = byRp ? 'Ressourcenpunkte' : 'Ziele';
@@ -305,6 +309,7 @@ async function load() {
   q.set('groupBy', $('dim').value);
   if ($('rp').value) q.set('rp', $('rp').value);
   q.set('hours', hours);
+  if (allPoints) q.set('allPoints', '1');
   if (rollingWin > 0) { q.set('rolling', rollingWin); q.set('bucket', 1); }
   else q.set('bucket', bucketMain);
   try {
@@ -368,16 +373,38 @@ function openReport() {
 }
 $('report').addEventListener('click', openReport);
 
+// Ab hier (> 3 M) automatisch gröber rastern, sonst wird eine 2-Jahres-Ansicht bei 5 min riesig.
+// Nach einem Zoom kann der Nutzer selbst wieder auf 5 min zurückstellen.
+const LONG_RANGE_HOURS = 2160;
+
+function selectBucket(containerId, minutes) {
+  const container = $(containerId);
+  for (const b of container.children)
+    b.classList.toggle('on', parseInt(b.dataset.b, 10) === minutes);
+  return minutes;
+}
+
 $('ranges').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;
   hours = parseInt(btn.dataset.h, 10);
   rollingWin = parseInt(btn.dataset.rolling, 10) || 0;
   for (const b of $('ranges').children) b.classList.toggle('on', b === btn);
+  if (hours > LONG_RANGE_HOURS) {
+    bucketMain = selectBucket('bucketMain', 30);
+    bucketRp = selectBucket('bucketRp', 30);
+  }
   load();
 });
 $('rp').addEventListener('change', load);
 $('dim').addEventListener('change', load);
+$('scope').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  allPoints = btn.dataset.scope === 'all';
+  for (const b of $('scope').children) b.classList.toggle('on', b === btn);
+  load();
+});
 $('bucketMain').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;

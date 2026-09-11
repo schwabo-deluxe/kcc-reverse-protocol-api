@@ -83,6 +83,12 @@ public sealed record UphHistoryReport
     /// <summary>Gefilterter Ressourcenpunkt oder <c>null</c> für „alle".</summary>
     public required string? ResourcePoint { get; init; }
 
+    /// <summary>
+    /// <c>true</c>: jeder Ressourcenpunkt aus den Rohdaten, auch nicht konfigurierte.
+    /// <c>false</c>: nur die unter <c>ResourcePoints</c> (appsettings) gelisteten.
+    /// </summary>
+    public required bool AllPoints { get; init; }
+
     /// <summary>Ressourcenpunkte, die im Fenster vorkommen (aufsteigend) — für die Auswahl.</summary>
     public required IReadOnlyList<string> ResourcePoints { get; init; }
 
@@ -109,7 +115,8 @@ public sealed record UphHistoryReport
         IReadOnlyDictionary<string, string>? destinationLabels = null,
         IReadOnlyList<ResourcePointConfig>? resourcePoints = null,
         string? resourcePoint = null,
-        int rollingWindowMinutes = 0)
+        int rollingWindowMinutes = 0,
+        bool allPoints = true)
     {
         var map = new DestinationMap(destinationLabels);
         var rpLabels = (resourcePoints ?? [])
@@ -132,9 +139,23 @@ public sealed record UphHistoryReport
         if (to <= from)
             to = from.AddMinutes(step);
 
+        // "Alle" (Default) zeigt jeden Punkt aus den Rohdaten, auch nicht in ResourcePoints
+        // gelistete; sonst nur die dort konfigurierten (fällt wie HistorySampler auf die
+        // eingebaute Liste zurück, wenn appsettings keine eigene mitgibt).
+        HashSet<string>? configured = null;
+        if (!allPoints)
+        {
+            var defs = resourcePoints is { Count: > 0 } ? resourcePoints : TelegramUtilization.DefaultResourcePoints;
+            configured = defs
+                .Select(p => p.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
         var rp = string.IsNullOrWhiteSpace(resourcePoint) ? null : resourcePoint.Trim();
         var scoped = rows
             .Where(r => r.Bucket >= from && r.Bucket < to)
+            .Where(r => configured is null || configured.Contains(r.ResourcePoint))
             .Where(r => rp is null || string.Equals(r.ResourcePoint, rp, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
@@ -229,6 +250,7 @@ public sealed record UphHistoryReport
             RollingMinutes = rolling,
             GroupBy = byResourcePoint ? "resourcePoint" : "destination",
             ResourcePoint = rp,
+            AllPoints = allPoints,
             ResourcePoints = points.ToList(),
             ResourcePointConnections = rpConnections,
             Keys = keyOrder,

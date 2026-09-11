@@ -31,6 +31,11 @@
     </select>
   </label>
   <label>Ressourcenpunkt <select id="rp"><option value="">alle</option></select></label>
+  <span class="seg-label">Punkte</span>
+  <div class="seg" id="scope" title="Nur die unter ResourcePoints konfigurierten Punkte zeigen, oder jeden Punkt aus den Rohdaten">
+    <button data-scope="configured" class="on">Eingestellte</button>
+    <button data-scope="all">Alle</button>
+  </div>
   <button type="button" class="hbtn" id="report" title="Druckansicht: Auswahl, Zeitraum, Charts und Tabelle">Report</button>
   <div class="meta" id="meta">lädt …</div>
 </header>

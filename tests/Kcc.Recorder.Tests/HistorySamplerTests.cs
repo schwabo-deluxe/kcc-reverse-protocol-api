@@ -21,7 +21,7 @@ public class HistorySamplerTests : IDisposable
             labels, intervalMinutes: 15, retentionDays: 28, _ => { });
 
     [Fact]
-    public void Verdichtet_nur_abgeschlossene_Raster_gelisteter_Punkte()
+    public void Verdichtet_nur_abgeschlossene_Raster()
     {
         using var store = new TelegramStore(_path);
         var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified);
@@ -30,9 +30,8 @@ public class HistorySamplerTests : IDisposable
             T(1, day.AddHours(8).AddMinutes(5), "MA72", "WA01"),
             T(2, day.AddHours(8).AddMinutes(10), "MA72", "WA01"),
             T(3, day.AddHours(8).AddMinutes(20), "MA72", "GA51"),
-            T(4, day.AddHours(8).AddMinutes(22), "ZZ99", "WA01"),          // nicht gelistet
-            T(5, day.AddHours(8).AddMinutes(24), "MA72", "WA01", "TSSTAT"), // anderer MessageCode
-            T(6, day.AddHours(9).AddMinutes(3), "MA72", "WA01"),           // laufendes Raster (unvollständig)
+            T(4, day.AddHours(8).AddMinutes(24), "MA72", "WA01", "TSSTAT"), // anderer MessageCode
+            T(5, day.AddHours(9).AddMinutes(3), "MA72", "WA01"),           // laufendes Raster (unvollständig)
         ]);
 
         Sampler(store).SampleNow();
@@ -43,6 +42,25 @@ public class HistorySamplerTests : IDisposable
             (rows[0].Bucket, rows[0].ResourcePoint, rows[0].Destination, rows[0].Orders));
         Assert.Equal((day.AddHours(8).AddMinutes(15), "MA72", "GA51", 1),
             (rows[1].Bucket, rows[1].ResourcePoint, rows[1].Destination, rows[1].Orders));
+    }
+
+    [Fact]
+    public void Verdichtet_auch_nicht_in_ResourcePoints_gelistete_Punkte()
+    {
+        // uph_samples enthält bewusst jeden Punkt aus den Rohdaten — /verlauf filtert erst zur
+        // Abfragezeit auf "nur eingestellte", damit "alle Ressourcenpunkte" auch über lange
+        // Zeiträume aus der Rollup-Tabelle bedient werden kann (nicht nur aus Rohtelegrammen).
+        using var store = new TelegramStore(_path);
+        var day = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        store.Insert([
+            T(1, day.AddHours(8).AddMinutes(5), "ZZ99", "WA01"),   // nicht in ResourcePoints
+            T(2, day.AddHours(8).AddMinutes(20), "MA72", "WA01"),  // schiebt den rechten Rand über 08:05
+        ]);
+
+        Sampler(store).SampleNow();
+
+        var rows = store.ReadUphSamples(day, day.AddDays(1));
+        Assert.Contains(rows, r => r.ResourcePoint == "ZZ99");
     }
 
     [Fact]

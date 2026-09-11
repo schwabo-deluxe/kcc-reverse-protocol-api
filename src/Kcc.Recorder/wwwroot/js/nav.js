@@ -30,7 +30,10 @@
       if (!v) return;
       const el = document.getElementById('kcc-ver');
       el.textContent = /^\d/.test(v) ? 'v' + v : v;
-      el.title = 'kcc ' + v;
+      const built = d.buildDate
+        ? ' · gebaut ' + new Date(d.buildDate).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+        : '';
+      el.title = 'kcc ' + v + built;
     })
     .catch(() => {});
 })();

@@ -78,6 +78,34 @@ public class UphHistoryReportTests
     }
 
     [Fact]
+    public void AllPoints_false_blendet_nicht_konfigurierte_Punkte_aus()
+    {
+        var report = UphHistoryReport.Compute(
+            [Row(0, "MA72", "WA01", 10), Row(0, "ZZ99", "WA01", 40)],
+            T0, T0.AddMinutes(60), bucketMinutes: 15,
+            resourcePoints: [new ResourcePointConfig { Name = "MA72" }],
+            allPoints: false);
+
+        Assert.Equal(["MA72"], report.ResourcePoints);
+        Assert.Equal(10, report.TotalOrders);
+        Assert.False(report.AllPoints);
+    }
+
+    [Fact]
+    public void AllPoints_true_zeigt_auch_nicht_konfigurierte_Punkte()
+    {
+        var report = UphHistoryReport.Compute(
+            [Row(0, "MA72", "WA01", 10), Row(0, "ZZ99", "WA01", 40)],
+            T0, T0.AddMinutes(60), bucketMinutes: 15,
+            resourcePoints: [new ResourcePointConfig { Name = "MA72" }],
+            allPoints: true);
+
+        Assert.Equal(["MA72", "ZZ99"], report.ResourcePoints);
+        Assert.Equal(50, report.TotalOrders);
+        Assert.True(report.AllPoints);
+    }
+
+    [Fact]
     public void Grenzt_auf_einen_Ressourcenpunkt_ein()
     {
         var report = UphHistoryReport.Compute(

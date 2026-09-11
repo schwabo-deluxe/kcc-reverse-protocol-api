@@ -11,6 +11,12 @@ public static class BuildInfo
     /// <summary>Kurzform ohne Build-Metadaten, z. B. <c>0.2.8</c>, sonst <c>dev</c>.</summary>
     public static string Version { get; } = Resolve();
 
+    /// <summary>
+    /// Datum der Build-Datei (Schreibzeit der DLL) — überlebt ein Kopieren der EXE, da Windows
+    /// dabei die „Geändert am"-Zeit erhält. <c>null</c>, wenn der Pfad nicht ermittelbar ist.
+    /// </summary>
+    public static DateTime? BuildDate { get; } = ResolveBuildDate();
+
     static string Resolve()
     {
         var asm = typeof(BuildInfo).Assembly;
@@ -28,5 +34,25 @@ public static class BuildInfo
         return ver is null || ver is { Major: 1, Minor: 0, Build: 0 }
             ? "dev"
             : $"{ver.Major}.{ver.Minor}.{ver.Build}";
+    }
+
+    static DateTime? ResolveBuildDate()
+    {
+        // Bei PublishSingleFile hat die Assembly selbst keinen Pfad (in die EXE gebündelt) —
+        // Environment.ProcessPath zeigt auf die tatsächliche kcc.exe-Datei auf der Platte.
+        var path = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(path))
+            path = typeof(BuildInfo).Assembly.Location;
+        if (string.IsNullOrEmpty(path))
+            return null;
+
+        try
+        {
+            return File.GetLastWriteTimeUtc(path);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

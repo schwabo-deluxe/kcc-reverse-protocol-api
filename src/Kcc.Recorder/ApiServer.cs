@@ -150,9 +150,9 @@ public static class ApiServer
                 "/api/utilization" => Ok(Utilization(config, format, UtilMinutes(q, config), Target(q, config), Bucket(q, config), Rate(q, config), ConveyorRate(q, config), SeriesStep(q, config))),
                 "/api/uph-history" => Ok(UphHistory(config, format,
                     HistHours(q), HistBucket(q, config), HistGroupBy(q), q("rp"),
-                    HistStamp(q, "from"), HistStamp(q, "to"), HistRolling(q))),
+                    HistStamp(q, "from"), HistStamp(q, "to"), HistRolling(q), HistAllPoints(q))),
                 "/health" => Ok(Health(config)),
-                "/api/version" => Ok(new { version = BuildInfo.Version }),
+                "/api/version" => Ok(new { version = BuildInfo.Version, buildDate = BuildInfo.BuildDate }),
                 "/api/kpis" => Ok(Kpis(config, format, Minutes(q, config))),
                 "/api/telegrams" => Ok(Telegrams(config, Minutes(q, config), Limit(q))),
                 "/api/fields" => Ok(Fields(config, format, Minutes(q, config), Limit(q))),
@@ -188,7 +188,7 @@ public static class ApiServer
     static UphHistoryReport UphHistory(
         KccConfig config, TelegramFormat format, int hours, int bucketMinutes,
         UphHistoryGroupBy groupBy, string? resourcePoint, DateTime? from, DateTime? to,
-        int rollingWindowMinutes)
+        int rollingWindowMinutes, bool allPoints)
     {
         using var store = new TelegramStore(config.Database);
         var newest = store.MaxTelegramTime()
@@ -209,7 +209,8 @@ public static class ApiServer
 
         return UphHistoryReport.Compute(
             rows, start, end, bucketMinutes, groupBy,
-            config.DestinationLabels, config.ResourcePoints, resourcePoint, rollingWindowMinutes);
+            config.DestinationLabels, config.ResourcePoints, resourcePoint, rollingWindowMinutes,
+            allPoints);
     }
 
     /// <summary>
@@ -319,6 +320,7 @@ public static class ApiServer
         {
             status = "ok",
             version = BuildInfo.Version,
+            buildDate = BuildInfo.BuildDate,
             database = Path.GetFullPath(config.Database),
             telegrams = store.Count(),
             lastSeenId = store.GetLastSeenId(),
@@ -374,7 +376,7 @@ public static class ApiServer
 
     // UPH-Historie: Zeitraum bis 4 Wochen, Anzeigeraster bis 1 Tag.
     static int HistHours(Func<string, string?> q) =>
-        Clamp(q("hours"), fallback: 168, min: 1, max: 24 * 28);
+        Clamp(q("hours"), fallback: 168, min: 1, max: 24 * 730);
 
     static int HistBucket(Func<string, string?> q, KccConfig config) =>
         Clamp(q("bucket"), fallback: config.UphHistoryIntervalMinutes, min: 1, max: 1440);
@@ -389,6 +391,12 @@ public static class ApiServer
 
     static int RbgBucket(Func<string, string?> q, KccConfig config) =>
         Clamp(q("bucket"), fallback: Math.Max(60, config.UphHistoryIntervalMinutes), min: 1, max: 1440);
+
+    // Default aus: nur die unter ResourcePoints konfigurierten Punkte (behebt, dass /verlauf im
+    // gleitenden 8h-Modus jeden in den Rohtelegrammen gesehenen Punkt zeigte).
+    static bool HistAllPoints(Func<string, string?> q) =>
+        string.Equals(q("allPoints"), "1", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(q("allPoints"), "true", StringComparison.OrdinalIgnoreCase);
 
     static UphHistoryGroupBy HistGroupBy(Func<string, string?> q) =>
         string.Equals(q("groupBy"), "resourcePoint", StringComparison.OrdinalIgnoreCase)

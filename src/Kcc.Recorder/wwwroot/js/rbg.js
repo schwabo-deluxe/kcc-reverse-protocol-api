@@ -366,11 +366,19 @@ async function load() {
   }
 }
 
+// Ab hier (> 3 M) automatisch gröber rastern, sonst wird eine 1-Jahres-Ansicht bei 5 min riesig.
+// Nach einem Zoom kann der Nutzer selbst wieder auf 5 min zurückstellen.
+const LONG_RANGE_HOURS = 2160;
+
 $('range').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn) return;
   hours = parseInt(btn.dataset.h, 10);
   for (const b of $('range').children) b.classList.toggle('on', b === btn);
+  if (hours > LONG_RANGE_HOURS) {
+    bucket = 30;
+    for (const b of $('bucket').children) b.classList.toggle('on', parseInt(b.dataset.b, 10) === 30);
+  }
   load();
 });
 $('metric').addEventListener('click', e => {

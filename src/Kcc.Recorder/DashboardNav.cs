@@ -27,9 +27,10 @@ public static class DashboardNav
 
         var ver = BuildInfo.Version;
         var verText = char.IsDigit(ver.FirstOrDefault()) ? "v" + ver : ver;
+        var buildText = BuildInfo.BuildDate is { } d ? $" · gebaut {d:yyyy-MM-dd HH:mm} UTC" : "";
 
         return "<nav class=\"kcc-nav\">" + items +
-            $"<span class=\"kcc-ver\" title=\"kcc {ver}\">{verText}</span></nav>" +
+            $"<span class=\"kcc-ver\" title=\"kcc {ver}{buildText}\">{verText}</span></nav>" +
             "<style>" +
             ".kcc-nav{display:flex;flex-wrap:wrap;gap:2px;padding:6px 12px;background:#10141a;" +
             "border-bottom:1px solid #2a2f37;font:13px system-ui,sans-serif}" +

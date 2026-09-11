@@ -356,8 +356,11 @@ public sealed class HistorySampler
             if (!Eq(Field(fields, messageCode), TelegramUtilization.MessageCode))
                 continue;
 
+            // Anders als bei AggregatePoints/AggregateRbg NICHT auf _points beschränkt: die
+            // UPH-Reihe soll auch nicht konfigurierte Punkte enthalten, damit /verlauf sie auf
+            // Wunsch ("alle Ressourcenpunkte") zeigen kann — Filterung passiert dort zur Abfragezeit.
             var point = Field(fields, resourcePoint);
-            if (point.Length == 0 || !_points.Contains(point))
+            if (point.Length == 0)
                 continue;
 
             var slot = (long)((telegram.DateTime - from).Ticks / step.Ticks);
