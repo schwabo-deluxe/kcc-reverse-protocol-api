@@ -190,7 +190,7 @@ async Task<int> RecordAsync(KccConfig config, CancellationToken ct)
     Log($"Zeichne auf nach {Path.GetFullPath(config.Database)} " +
         $"(bereits {store.Count()} Telegramme). Beenden mit Strg+C.");
     if (csv is not null)
-        Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.FilePath}");
+        Log($"Parallele CSV-Mitschrift (Data nach Layout zerlegt): {csv.Description}");
 
     var recorder = new TelegramRecorder(
         query: null!, store, filter, config, Log, csv, NewUphSampler(config, store));
@@ -265,7 +265,7 @@ async Task<int> BackfillAsync(KccConfig config, CommandLine cli, CancellationTok
     await using (connection)
     {
         if (csv is not null)
-            Log($"Parallele CSV-Mitschrift: {csv.FilePath}");
+            Log($"Parallele CSV-Mitschrift: {csv.Description}");
 
         var recorder = new TelegramRecorder(query, store, filter, config, Log, csv);
         await recorder.BackfillAsync(fromId, cli.GetLong("to-id"), ct);
@@ -390,9 +390,9 @@ int Export(KccConfig config, CommandLine cli)
     return 0;
 }
 
-static TelegramCsvWriter? OpenCsv(KccConfig config) =>
-    config.CsvPath is { Length: > 0 } path
-        ? new TelegramCsvWriter(path, new TelegramCsv(ResolveFormat(config)))
+static ITelegramCsvSink? OpenCsv(KccConfig config) =>
+    config.BackupCsvFolder is { Length: > 0 } folder
+        ? new MonthlyCsvWriter(folder, new TelegramCsv(ResolveFormat(config)))
         : null;
 
 static TelegramFormat ResolveFormat(KccConfig config) =>
@@ -436,7 +436,7 @@ static void PrintUsage() => Console.WriteLine(
     kcc — Mitschnitt der SPS-Telegramme einer Kardex MCC/KCC-Anlage.
 
     Aufruf ohne Argumente: Aufzeichnung und Lese-API + Dashboard laufen gemeinsam,
-    konfiguriert über appsettings.json (Record, Serve, ApiUrl, Database, CsvPath).
+    konfiguriert über appsettings.json (Record, Serve, ApiUrl, Database, BackupCsvFolder).
 
     Kommandos:
       login-test                       Verbindung und Anmeldung prüfen

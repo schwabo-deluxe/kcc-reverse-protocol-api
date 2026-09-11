@@ -64,7 +64,7 @@ und die Zugangsdaten in ein `appsettings.local.json` daneben schreiben:
 |---|---|
 | `Database` | SQLite-Datei (Standard: `kcc-telegrams.db`) |
 | `Record` / `Serve` | Was der Aufruf ohne Argumente startet: Aufzeichnung bzw. Lese-API + Dashboard (Standard: beides `true`) |
-| `CsvPath` | Wenn gesetzt, werden aufgezeichnete Telegramme im Normalbetrieb und bei `backfill` **zusätzlich** fortlaufend an diese CSV angehängt (Standard: `kcc-telegrams.csv`). `null` schaltet die CSV ab. |
+| `BackupCsvFolder` | Wenn gesetzt, werden aufgezeichnete Telegramme im Normalbetrieb und bei `backfill` **zusätzlich** als Backup archiviert: eine CSV je Kalendermonat (`kcc-telegrams-yyyy-MM.csv`) in diesem Ordner, einsortiert nach dem Zeitstempel des Telegramms — auch bei einem `backfill` alter Monate. `null` schaltet die CSV ab. |
 | `DataFormat` | Fixed-Width-Layout des `Data`-Blocks für die CSV-Spalten. `null` = eingebautes Standard-Layout. |
 | `WindowMinutes` | Zeitfenster des KPI-Dashboards (`/`) und der API ohne `minutes`-Parameter (Standard: `240`, also 4 Stunden) |
 | `StartupBackfillMinutes` | Beim ersten Start einmalig nachgeladene Zeitspanne, damit das Dashboard sofort Historie zeigt (Standard: `240`). `0` schaltet das ab. |

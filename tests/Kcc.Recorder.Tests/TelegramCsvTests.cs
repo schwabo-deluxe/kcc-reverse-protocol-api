@@ -79,4 +79,63 @@ public class TelegramCsvTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void MonthlyWriter_sortiert_nach_dem_Zeitstempel_des_Telegramms_nicht_nach_Systemzeit()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"kcc-csv-{Guid.NewGuid():N}");
+        try
+        {
+            var july = new DateTime(2026, 7, 20, 10, 0, 0, DateTimeKind.Utc);
+            var september = new DateTime(2026, 9, 2, 8, 0, 0, DateTimeKind.Utc);
+
+            using (var w = new MonthlyCsvWriter(dir, Csv))
+            {
+                // Ein Backfill alter Telegramme, während der Betrieb längst im September ist —
+                // beide müssen trotzdem in ihren jeweils eigenen Monat einsortiert werden.
+                w.Append([new Telegram(1, july, TelegramDirection.FromPlc, "L1", "0150-alt", null)]);
+                w.Append([new Telegram(2, september, TelegramDirection.FromPlc, "L1", "0150-neu", null)]);
+            }
+
+            var julyPath = Path.Combine(dir, "kcc-telegrams-2026-07.csv");
+            var septemberPath = Path.Combine(dir, "kcc-telegrams-2026-09.csv");
+            Assert.True(File.Exists(julyPath));
+            Assert.True(File.Exists(septemberPath));
+
+            var julyLines = File.ReadAllLines(julyPath);
+            Assert.Equal(Csv.Header, julyLines[0]);
+            Assert.StartsWith("1;", julyLines[1]);
+            Assert.Equal(2, julyLines.Length);
+
+            var septemberLines = File.ReadAllLines(septemberPath);
+            Assert.StartsWith("2;", septemberLines[1]);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MonthlyWriter_haengt_bei_erneutem_Schreiben_im_selben_Monat_an()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"kcc-csv-{Guid.NewGuid():N}");
+        try
+        {
+            var at = new DateTime(2026, 9, 2, 8, 0, 0, DateTimeKind.Utc);
+
+            using (var w = new MonthlyCsvWriter(dir, Csv))
+            {
+                w.Append([new Telegram(1, at, TelegramDirection.FromPlc, "L1", "eins", null)]);
+                w.Append([new Telegram(2, at, TelegramDirection.FromPlc, "L1", "zwei", null)]);
+            }
+
+            var lines = File.ReadAllLines(Path.Combine(dir, "kcc-telegrams-2026-09.csv"));
+            Assert.Equal(3, lines.Length);   // Kopf + 2 Zeilen, kein doppelter Kopf
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

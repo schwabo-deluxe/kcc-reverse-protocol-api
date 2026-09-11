@@ -148,10 +148,12 @@ public sealed class KccConfig
     public string Database { get; set; } = "kcc-telegrams.db";
 
     /// <summary>
-    /// Wenn gesetzt: aufgezeichnete Telegramme zusätzlich fortlaufend an diese CSV-Datei anhängen.
+    /// Wenn gesetzt: aufgezeichnete Telegramme zusätzlich als Backup-Archiv wegschreiben — eine
+    /// CSV je Kalendermonat (<c>kcc-telegrams-yyyy-MM.csv</c>) in diesem Ordner, nur Telegramme
+    /// mit Daten (Handshakes sind bereits durch den <see cref="Filter"/> ausgesiebt).
     /// <c>null</c> schaltet die CSV-Mitschrift ab.
     /// </summary>
-    public string? CsvPath { get; set; }
+    public string? BackupCsvFolder { get; set; }
 
     /// <summary>
     /// Fixed-Width-Layout des <c>Data</c>-Blocks für die CSV-Spalten (Syntax "Name,Länge,Typ|…").

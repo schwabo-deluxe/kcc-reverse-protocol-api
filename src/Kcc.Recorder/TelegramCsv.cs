@@ -47,11 +47,20 @@ public sealed class TelegramCsv
     }
 }
 
+/// <summary>Nimmt aufgezeichnete Telegramme entgegen und schreibt sie irgendwohin als CSV.</summary>
+public interface ITelegramCsvSink : IDisposable
+{
+    /// <summary>Für die Startmeldung: wohin geschrieben wird.</summary>
+    string Description { get; }
+
+    void Append(IEnumerable<Telegram> telegrams);
+}
+
 /// <summary>
 /// Hängt aufgezeichnete Telegramme fortlaufend an eine CSV-Datei an — parallel zur SQLite-Ablage.
 /// Öffnet die Datei im Anhänge-Modus; die Kopfzeile wird nur bei einer neuen/leeren Datei geschrieben.
 /// </summary>
-public sealed class TelegramCsvWriter : IDisposable
+public sealed class TelegramCsvWriter : ITelegramCsvSink
 {
     readonly TelegramCsv _csv;
     readonly StreamWriter _writer;
@@ -77,6 +86,7 @@ public sealed class TelegramCsvWriter : IDisposable
     }
 
     public string FilePath { get; }
+    public string Description => FilePath;
 
     public void Append(IEnumerable<Telegram> telegrams)
     {
@@ -85,4 +95,49 @@ public sealed class TelegramCsvWriter : IDisposable
     }
 
     public void Dispose() => _writer.Dispose();
+}
+
+/// <summary>
+/// Wie <see cref="TelegramCsvWriter"/>, aber eine Datei je Kalendermonat (nach
+/// <see cref="Telegram.DateTime"/>, nicht nach Systemzeit — damit ein Backfill alter Monate in
+/// deren eigene Datei einsortiert wird). Für Archiv-/Backup-Zwecke: einmal geschrieben, ändert
+/// sich eine Monatsdatei nicht mehr rückwirkend.
+/// </summary>
+public sealed class MonthlyCsvWriter : ITelegramCsvSink
+{
+    readonly string _folder;
+    readonly TelegramCsv _csv;
+    readonly Dictionary<(int Year, int Month), TelegramCsvWriter> _writers = [];
+
+    public MonthlyCsvWriter(string folder, TelegramCsv csv)
+    {
+        _folder = Path.GetFullPath(folder);
+        _csv = csv;
+        Directory.CreateDirectory(_folder);
+    }
+
+    public string Description => $"{_folder} (je Kalendermonat eine Datei)";
+
+    public void Append(IEnumerable<Telegram> telegrams)
+    {
+        foreach (var t in telegrams)
+            WriterFor(t.DateTime).Append([t]);
+    }
+
+    TelegramCsvWriter WriterFor(DateTime at)
+    {
+        var key = (at.Year, at.Month);
+        if (_writers.TryGetValue(key, out var writer))
+            return writer;
+
+        var path = Path.Combine(_folder, $"kcc-telegrams-{at:yyyy-MM}.csv");
+        return _writers[key] = new TelegramCsvWriter(path, _csv);
+    }
+
+    public void Dispose()
+    {
+        foreach (var writer in _writers.Values)
+            writer.Dispose();
+        _writers.Clear();
+    }
 }
