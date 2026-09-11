@@ -33,6 +33,25 @@ const mainChart = echarts.init($('chart'), null, { renderer: 'canvas' });
 const minis = new Map();   // connection -> ECharts-Instanz
 addEventListener('resize', () => { mainChart.resize(); minis.forEach(c => c.resize()); });
 
+// Zeitfenster aus dem großen Chart auf alle kleinen Geräte-Charts spiegeln.
+let syncingZoom = false;
+function mainZoomWindow() {
+  const dz = ((mainChart.getOption() || {}).dataZoom || [])[0] || {};
+  const s = dz.start ?? 0, e = dz.end ?? 100;
+  if (s <= 0.05 && e >= 99.95) return null;
+  if (dz.startValue != null && dz.endValue != null) return [+dz.startValue, +dz.endValue];
+  return null;
+}
+function applyMiniZoom() {
+  if (syncingZoom) return;
+  syncingZoom = true;
+  const w = mainZoomWindow();
+  for (const inst of minis.values())
+    inst.dispatchAction(w ? { type: 'dataZoom', startValue: w[0], endValue: w[1] } : { type: 'dataZoom', start: 0, end: 100 });
+  syncingZoom = false;
+}
+mainChart.on('datazoom', applyMiniZoom);
+
 // Aufziehen mit der Maus wählt einen Zeitbereich (X-Zoom), wie in der alten HTML-Version.
 // ECharts kann das dauerhaft aktiv halten (sonst bräuchte es erst einen Toolbox-Klick).
 // Doppelklick setzt zurück und schaltet das Aufziehen wieder scharf.
@@ -202,6 +221,7 @@ function drawMinis() {
     }), { notMerge: true });
     armDragZoom(inst, plot);
   }
+  applyMiniZoom();
 }
 
 function verdict() {
