@@ -27,7 +27,7 @@ const metricTitle = m => m === 'busyPercent' ? 'Verlauf Auslastungsgrad'
 const dur = h => (h >= 1 ? `${fmt(h)} h` : `${fmt(h * 60, 0)} min`);
 
 // Raster: fein genug zum Erkennen, grob genug für lange Zeiträume.
-const bucketFor = h => h <= 24 ? 5 : h <= 168 ? 10 : h <= 336 ? 15 : h <= 672 ? 20 : 30;
+const bucketFor = h => 5;
 
 const mainChart = echarts.init($('chart'), null, { renderer: 'canvas' });
 const minis = new Map();   // connection -> ECharts-Instanz

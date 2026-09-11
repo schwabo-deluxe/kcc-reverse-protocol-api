@@ -16,11 +16,7 @@ let rollingWin = 5;   // > 0: gleitendes Kurzzeit-Fenster (Minuten), sonst feste
 // Anzeigeraster je Zeitraum. Feinstmöglich ist die Rasterweite der Aufzeichnung
 // (UphHistoryIntervalMinutes, Standard 5 min); darüber wird zusammengefasst.
 function bucketFor(h) {
-  if (h <= 24) return 5;
-  if (h <= 72) return 10;
-  if (h <= 168) return 15;
-  if (h <= 336) return 20;
-  return 30;
+  return 5;
 }
 
 const chart = echarts.init($('area'), null, { renderer: 'canvas' });
